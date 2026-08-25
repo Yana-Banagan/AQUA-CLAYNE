@@ -9,14 +9,20 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('drivers', function (Blueprint $table) {
-            $table->uuid('id')->primary()->default(DB::raw('gen_random_uuid()'));
-            $table->foreignId('user_id')
+            $table->uuid('id')
+                ->primary()
+                ->default(DB::raw('gen_random_uuid()'));
+
+            $table->foreignUuid('user_id')
                 ->unique()
                 ->constrained('users')
                 ->onDelete('cascade');
+
             $table->string('license_number', 50)->nullable();
             $table->string('vehicle_plate', 20)->nullable();
-            $table->timestamp('created_at')->useCurrent();
+
+            $table->timestampTz('created_at')
+                ->useCurrent();
         });
     }
 
