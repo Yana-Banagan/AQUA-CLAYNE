@@ -11,7 +11,9 @@ class Driver extends Model
 {
     use HasUuids;
 
+    public $timestamps = false;
     protected $fillable = [
+        'id',
         'user_id',
         'license_number',
         'vehicle_plate',

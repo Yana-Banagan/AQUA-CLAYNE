@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 
 class LoginController extends Controller
 {
@@ -21,26 +22,33 @@ class LoginController extends Controller
             'password' => 'required|string',
         ]);
 
-        $user = User::where(
-            'email',
-            $credentials['email']
-        )->first();
+        $user = User::where('email', $credentials['email'])->first();
 
-        if (
-            !$user ||
-            !in_array($user->role, ['admin', 'staff']) ||
-            $user->status !== 'active'
-        ) {
+        if (!$user) {
             return back()->withErrors([
                 'email' => 'Invalid admin credentials.'
-            ]);
+            ])->withInput();
         }
 
-        if (!Auth::attempt($credentials)) {
+        if (!in_array($user->role, ['admin', 'staff'])) {
+            return back()->withErrors([
+                'email' => 'You are not authorized to access the admin panel.'
+            ])->withInput();
+        }
+
+        if ($user->status !== 'active') {
+            return back()->withErrors([
+                'email' => 'Your account is inactive.'
+            ])->withInput();
+        }
+
+        if (!Hash::check($credentials['password'], $user->password_hash)) {
             return back()->withErrors([
                 'email' => 'Invalid admin credentials.'
-            ]);
+            ])->withInput();
         }
+
+        Auth::login($user);
 
         $request->session()->regenerate();
 
