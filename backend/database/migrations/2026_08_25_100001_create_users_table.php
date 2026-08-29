@@ -2,22 +2,16 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        // Enable UUID generation in PostgreSQL
-        DB::statement('CREATE EXTENSION IF NOT EXISTS "pgcrypto"');
-
         Schema::create('users', function (Blueprint $table) {
-            $table->uuid('id')
-                ->primary()
-                ->default(DB::raw('gen_random_uuid()'));
+            // UUIDs are assigned by Laravel's HasUuids trait, avoiding a
+            // PostgreSQL extension requirement during deployment.
+            $table->uuid('id')->primary();
 
             $table->string('name', 150);
 
@@ -45,24 +39,10 @@ return new class extends Migration {
                 ->useCurrent();
         });
 
-        // Restrict allowed user roles
-        DB::statement("
-            ALTER TABLE users
-            ADD CONSTRAINT users_role_check
-            CHECK (role IN ('admin', 'customer', 'driver', 'staff'))
-        ");
-
-        // Restrict allowed user statuses
-        DB::statement("
-            ALTER TABLE users
-            ADD CONSTRAINT users_status_check
-            CHECK (status IN ('active', 'inactive'))
-        ");
+        DB::statement("ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'customer', 'driver', 'staff'))");
+        DB::statement("ALTER TABLE users ADD CONSTRAINT users_status_check CHECK (status IN ('active', 'inactive'))");
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('users');

@@ -1,0 +1,99 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+
+class AuthController extends Controller
+{
+    public function register(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'phone' => ['required', 'string', 'max:20'],
+        ]);
+
+        $user = User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'phone' => $validated['phone'],
+            'password_hash' => Hash::make($validated['password']),
+
+            // NEVER accept role from the request
+            'role' => 'customer',
+
+            'status' => 'active',
+        ]);
+
+        $token = $user->createToken('customer-mobile')->plainTextToken;
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'role' => $user->role,
+                'status' => $user->status,
+            ],
+            'token' => $token,
+        ], 201);
+    }
+
+    public function login(Request $request)
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
+        ]);
+
+        $user = User::where('email', $validated['email'])->first();
+
+        if (!$user || !Hash::check($validated['password'], $user->password_hash)) {
+            return response()->json([
+                'message' => 'Invalid credentials.'
+            ], 401);
+        }
+
+        if ($user->status !== 'active') {
+            return response()->json([
+                'message' => 'Your account is inactive. Please contact the administrator.'
+            ], 403);
+        }
+
+        $token = $user->createToken('api')->plainTextToken;
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'role' => $user->role,
+                'status' => $user->status,
+            ],
+            'token' => $token,
+        ]);
+    }
+
+    public function logout(Request $request)
+    {
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->json([
+            'message' => 'Logged out.'
+        ]);
+    }
+
+    public function me(Request $request)
+    {
+        return response()->json([
+            'user' => $request->user(),
+        ]);
+    }
+}
