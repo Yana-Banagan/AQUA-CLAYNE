@@ -32,7 +32,7 @@ class AuthController extends Controller
 
         $token = $user->createToken('customer-mobile')->plainTextToken;
 
-        return response()->json([
+        return $this->success([
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -42,7 +42,7 @@ class AuthController extends Controller
                 'status' => $user->status,
             ],
             'token' => $token,
-        ], 201);
+        ], 'Registration successful.', 201);
     }
 
     public function login(Request $request)
@@ -55,20 +55,22 @@ class AuthController extends Controller
         $user = User::where('email', $validated['email'])->first();
 
         if (!$user || !Hash::check($validated['password'], $user->password_hash)) {
-            return response()->json([
-                'message' => 'Invalid credentials.'
-            ], 401);
+            return $this->error(
+                'Invalid credentials.',
+                401
+            );
         }
 
         if ($user->status !== 'active') {
-            return response()->json([
-                'message' => 'Your account is inactive. Please contact the administrator.'
-            ], 403);
+            return $this->error(
+                'Your account is inactive. Please contact the administrator.',
+                403
+            );
         }
 
         $token = $user->createToken('api')->plainTextToken;
 
-        return response()->json([
+        return $this->success([
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -78,21 +80,22 @@ class AuthController extends Controller
                 'status' => $user->status,
             ],
             'token' => $token,
-        ]);
+        ], 'Login successful.');
     }
 
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
 
-        return response()->json([
-            'message' => 'Logged out.'
-        ]);
+        return $this->success(
+            null,
+            'Logged out.'
+        );
     }
 
     public function me(Request $request)
     {
-        return response()->json([
+        return $this->success([
             'user' => $request->user(),
         ]);
     }
