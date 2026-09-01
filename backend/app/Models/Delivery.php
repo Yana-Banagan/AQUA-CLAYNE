@@ -11,6 +11,8 @@ class Delivery extends Model
 {
     use HasUuids;
 
+    public $timestamps = false;
+
     protected $fillable = [
         'order_id',
         'driver_id',

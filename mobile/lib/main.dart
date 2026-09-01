@@ -10,6 +10,7 @@ import 'customer/data/address_repository.dart';
 import 'customer/data/order_repository.dart';
 
 import 'customer/screens/catalog_screen.dart';
+import 'driver/screens/driver_home_screen.dart';
 
 import 'customer/state/cart_provider.dart';
 
@@ -53,6 +54,9 @@ void main() {
           create: (context) => AddressRepository(context.read<ApiClient>()),
         ),
 
+        // ------------------------------------------------------------
+        // Order Repository
+        // ------------------------------------------------------------
         Provider<OrderRepository>(
           create: (context) => OrderRepository(context.read<ApiClient>()),
         ),
@@ -67,6 +71,10 @@ void main() {
     ),
   );
 }
+
+// ====================================================================
+// APP
+// ====================================================================
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -99,14 +107,31 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  String message = 'Please log in as a customer.';
+  String message = 'Please log in.';
+
   bool loading = false;
 
-  // ------------------------------------------------------------------
+  // ==================================================================
   // CUSTOMER LOGIN
-  // ------------------------------------------------------------------
+  // ==================================================================
 
   Future<void> loginAsCustomer() async {
+    await login(email: 'juan2@example.com', password: 'password123');
+  }
+
+  // ==================================================================
+  // DRIVER LOGIN
+  // ==================================================================
+
+  Future<void> loginAsDriver() async {
+    await login(email: 'testdriver123@example.com', password: 'password123');
+  }
+
+  // ==================================================================
+  // LOGIN
+  // ==================================================================
+
+  Future<void> login({required String email, required String password}) async {
     setState(() {
       loading = true;
       message = 'Logging in...';
@@ -115,20 +140,50 @@ class _HomePageState extends State<HomePage> {
     try {
       final authRepo = context.read<AuthRepository>();
 
-      final user = await authRepo.login('juan2@example.com', 'password123');
+      final user = await authRepo.login(email, password);
 
       if (!mounted) return;
 
+      final role = user['role']?.toString();
+
       setState(() {
         loading = false;
-        message = 'Logged in as ${user['role'] ?? 'customer'}';
+        message = 'Logged in as ${role ?? 'unknown'}';
       });
 
-      // Go to Catalog
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const CatalogScreen()),
-      );
+      // ==============================================================
+      // DRIVER
+      // ==============================================================
+
+      if (role == 'driver') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const DriverHomeScreen()),
+        );
+
+        return;
+      }
+
+      // ==============================================================
+      // CUSTOMER
+      // ==============================================================
+
+      if (role == 'customer') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const CatalogScreen()),
+        );
+
+        return;
+      }
+
+      // ==============================================================
+      // OTHER ROLES
+      // ==============================================================
+
+      setState(() {
+        message = 'Unsupported account role: $role';
+      });
     } on ApiException catch (e) {
       if (!mounted) return;
 
@@ -146,9 +201,9 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // ------------------------------------------------------------------
+  // ==================================================================
   // LOGOUT
-  // ------------------------------------------------------------------
+  // ==================================================================
 
   Future<void> logout() async {
     try {
@@ -174,9 +229,9 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // ------------------------------------------------------------------
+  // ==================================================================
   // BUILD
-  // ------------------------------------------------------------------
+  // ==================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -210,34 +265,46 @@ class _HomePageState extends State<HomePage> {
 
               const SizedBox(height: 30),
 
-              // Loading indicator
+              // ------------------------------------------------------
+              // Loading
+              // ------------------------------------------------------
               if (loading) const CircularProgressIndicator(),
 
-              // Login button
-              if (!loading)
+              // ------------------------------------------------------
+              // Login buttons
+              // ------------------------------------------------------
+              if (!loading) ...[
+                // Customer
                 SizedBox(
                   width: double.infinity,
-
                   child: ElevatedButton(
                     onPressed: loginAsCustomer,
-
                     child: const Text('Login as Customer'),
                   ),
                 ),
 
-              const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-              // Logout button
-              if (!loading)
+                // Driver
                 SizedBox(
                   width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: loginAsDriver,
+                    child: const Text('Login as Driver'),
+                  ),
+                ),
 
+                const SizedBox(height: 12),
+
+                // Logout
+                SizedBox(
+                  width: double.infinity,
                   child: OutlinedButton(
                     onPressed: logout,
-
                     child: const Text('Clear Login Session'),
                   ),
                 ),
+              ],
             ],
           ),
         ),

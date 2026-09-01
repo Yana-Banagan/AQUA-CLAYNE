@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\LoginController;
 use App\Http\Controllers\Admin\DriverController;
+use App\Http\Controllers\Admin\DeliveryAssignmentController;
 
 Route::get('/', function () {
     return view('admin.login');
@@ -21,12 +22,24 @@ Route::middleware(['auth', 'role:admin,staff'])
     ->name('admin.')
     ->group(function () {
 
+        // ----------------------------------------------------
+        // ADMIN DASHBOARD
+        // ----------------------------------------------------
+    
         Route::view('/dashboard', 'admin.dashboard')
             ->name('dashboard');
 
+        // ----------------------------------------------------
+        // ADMIN LOGOUT
+        // ----------------------------------------------------
+    
         Route::post('/logout', [LoginController::class, 'logout'])
             ->name('logout');
 
+        // ----------------------------------------------------
+        // DRIVER MANAGEMENT
+        // ----------------------------------------------------
+    
         Route::resource('drivers', DriverController::class)
             ->except(['show', 'destroy']);
 
@@ -34,4 +47,24 @@ Route::middleware(['auth', 'role:admin,staff'])
             '/drivers/{driver}/toggle-status',
             [DriverController::class, 'toggleStatus']
         )->name('drivers.toggle-status');
+
+        // ----------------------------------------------------
+        // DELIVERY ASSIGNMENT
+        // ----------------------------------------------------
+    
+        Route::get(
+            '/deliveries/assign',
+            [
+                DeliveryAssignmentController::class,
+                'index',
+            ]
+        )->name('deliveries.assign');
+
+        Route::post(
+            '/deliveries/assign',
+            [
+                DeliveryAssignmentController::class,
+                'store',
+            ]
+        )->name('deliveries.assign.store');
     });

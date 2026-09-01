@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\CustomerAddressController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\Driver\DeliveryController;
 
 Route::prefix('v1')->group(function () {
 
@@ -62,6 +63,33 @@ Route::prefix('v1')->group(function () {
             '/orders',
             [OrderController::class, 'index']
         );
+    });
+    // Driver routes
+    Route::middleware([
+        'auth:sanctum',
+        'role:driver'
+    ])->group(function () {
+
+        Route::get(
+            '/driver/deliveries',
+            [DeliveryController::class, 'index']
+        );
+
+        Route::get(
+            '/driver/deliveries/history',
+            [DeliveryController::class, 'history']
+        );
+
+        Route::get(
+            '/driver/deliveries/{delivery}',
+            [DeliveryController::class, 'show']
+        );
+
+        Route::patch(
+            '/driver/deliveries/{delivery}/status',
+            [DeliveryController::class, 'updateStatus']
+        );
+
     });
 
 });

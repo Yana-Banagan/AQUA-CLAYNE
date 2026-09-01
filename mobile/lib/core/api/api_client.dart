@@ -117,6 +117,32 @@ class ApiClient {
   }
 
   // ================================================================
+  // PATCH
+  // ================================================================
+
+  Future<dynamic> patch(
+    String path,
+    Map<String, dynamic> body, {
+    bool auth = true,
+  }) async {
+    try {
+      final response = await http
+          .patch(
+            Uri.parse('$baseUrl$path'),
+            headers: await _headers(auth: auth),
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      return _handle(response);
+    } on TimeoutException {
+      throw ApiException('Request timed out. Check your connection.');
+    } on SocketException {
+      throw ApiException('No internet connection.');
+    }
+  }
+
+  // ================================================================
   // DELETE
   // ================================================================
 
