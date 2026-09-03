@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/order_repository.dart';
+import '../../core/realtime/realtime_signals.dart';
 
 class OrderHistoryScreen extends StatefulWidget {
   const OrderHistoryScreen({super.key});
@@ -13,17 +15,43 @@ class OrderHistoryScreen extends StatefulWidget {
 class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   late Future<List<Map<String, dynamic>>> _future;
 
+  late RealtimeChannel _channel;
+
   @override
   void initState() {
     super.initState();
 
+    // Initial order history load
     _future = context.read<OrderRepository>().list();
+
+    // Listen for delivery status changes
+    //
+    // Driver status changes create a realtime delivery signal.
+    // Laravel also updates the corresponding order status.
+    _channel = RealtimeSignals.listenForEntity('delivery', _reload);
   }
 
   void _reload() {
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
       _future = context.read<OrderRepository>().list();
     });
+  }
+
+  Future<void> _refresh() async {
+    _reload();
+
+    await _future;
+  }
+
+  @override
+  void dispose() {
+    RealtimeSignals.stop(_channel);
+
+    super.dispose();
   }
 
   String _shortOrderId(dynamic value) {
@@ -81,7 +109,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Order History')),
-
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _future,
         builder: (context, snapshot) {
@@ -137,10 +164,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
             );
           }
 
-          // --------------------------------------------------
-          // ORDERS
-          // --------------------------------------------------
-
           final orders = snapshot.data ?? [];
 
           // --------------------------------------------------
@@ -149,10 +172,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
 
           if (orders.isEmpty) {
             return RefreshIndicator(
-              onRefresh: () async {
-                _reload();
-                await _future;
-              },
+              onRefresh: _refresh,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: const [
@@ -193,10 +213,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
           // --------------------------------------------------
 
           return RefreshIndicator(
-            onRefresh: () async {
-              _reload();
-              await _future;
-            },
+            onRefresh: _refresh,
             child: ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),

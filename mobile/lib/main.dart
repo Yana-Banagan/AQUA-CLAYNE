@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/api/api_client.dart';
 import 'core/repositories/auth_repository.dart';
@@ -14,7 +15,22 @@ import 'driver/screens/driver_home_screen.dart';
 
 import 'customer/state/cart_provider.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // ================================================================
+  // SUPABASE INITIALIZATION
+  // ================================================================
+
+  await Supabase.initialize(
+    url: 'https://evnhwmmwsnxizcoejqhz.supabase.co',
+    anonKey: 'YOUR_SUPABASE_ANON_KEY',
+  );
+
+  // ================================================================
+  // RUN APP
+  // ================================================================
+
   runApp(
     MultiProvider(
       providers: [

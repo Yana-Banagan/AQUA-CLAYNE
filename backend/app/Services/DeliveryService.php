@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Delivery;
 use App\Models\DeliveryStatusHistory;
+use App\Services\RealtimeEventService;
 use App\Models\Driver;
 use App\Models\Order;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,13 @@ class DeliveryService
                     'status' => 'assigned',
                     'note' => 'Assigned by admin',
                 ]);
+
+                app(RealtimeEventService::class)->emit(
+                    'delivery',
+                    $delivery->id,
+                    'assigned',
+                    $delivery->status
+                );
 
                 return $delivery;
             }
@@ -75,6 +83,13 @@ class DeliveryService
                     'status' => $status,
                     'note' => $note,
                 ]);
+
+                app(RealtimeEventService::class)->emit(
+                    'delivery',
+                    $delivery->id,
+                    'status_changed',
+                    $status
+                );
 
                 return $delivery->fresh();
             }

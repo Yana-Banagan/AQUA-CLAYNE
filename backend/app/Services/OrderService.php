@@ -78,6 +78,16 @@ class OrderService
                     $itemsData
                 );
 
+                // ----------------------------------------------------
+                // PHASE 9 — REALTIME EVENT
+                // ----------------------------------------------------
+                app(RealtimeEventService::class)->emit(
+                    'order',
+                    $order->id,
+                    'created',
+                    $order->status
+                );
+
                 return $order->load(
                     'items.product'
                 );

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/services/token_storage.dart';
+import '../../core/realtime/realtime_signals.dart';
 import '../data/delivery_repository.dart';
 import 'delivery_details_screen.dart';
 
@@ -18,19 +20,34 @@ class _AssignedDeliveriesScreenState extends State<AssignedDeliveriesScreen> {
 
   late Future<List<Map<String, dynamic>>> deliveriesFuture;
 
+  late RealtimeChannel _channel;
+
   @override
   void initState() {
     super.initState();
 
+    // Existing repository setup
     repository = DeliveryRepository(ApiClient(TokenStorage()));
 
+    // Initial load
     deliveriesFuture = repository.assigned();
+
+    // Listen for delivery realtime signals
+    _channel = RealtimeSignals.listenForEntity('delivery', _reload);
   }
 
-  Future<void> _refresh() async {
+  void _reload() {
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
       deliveriesFuture = repository.assigned();
     });
+  }
+
+  Future<void> _refresh() async {
+    _reload();
 
     await deliveriesFuture;
   }
@@ -47,6 +64,13 @@ class _AssignedDeliveriesScreenState extends State<AssignedDeliveriesScreen> {
     }
 
     return value.substring(0, 8);
+  }
+
+  @override
+  void dispose() {
+    RealtimeSignals.stop(_channel);
+
+    super.dispose();
   }
 
   @override
