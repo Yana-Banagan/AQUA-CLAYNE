@@ -63,6 +63,9 @@ Route::prefix('v1')->group(function () {
             '/orders',
             [OrderController::class, 'index']
         );
+
+        Route::get('/orders/{order}', [OrderController::class, 'show']);
+        Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel']);
     });
     // Driver routes
     Route::middleware([
@@ -89,6 +92,14 @@ Route::prefix('v1')->group(function () {
             '/driver/deliveries/{delivery}/status',
             [DeliveryController::class, 'updateStatus']
         );
+
+        Route::post(
+            '/driver/deliveries/{delivery}/proof',
+            [DeliveryController::class, 'uploadProof']
+        );
+
+        Route::post('/driver/deliveries/{delivery}/proof', [DeliveryController::class, 'uploadProof']);
+        Route::post('/driver/deliveries/{delivery}/collect-cash', [DeliveryController::class, 'collectCash']);
 
     });
 

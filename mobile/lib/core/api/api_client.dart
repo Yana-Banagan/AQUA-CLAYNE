@@ -26,6 +26,43 @@ class ApiClient {
   ApiClient(this.tokenStorage) : baseUrl = Env.apiBaseUrl;
 
   // ================================================================
+  // MULTIPART POST
+  // ================================================================
+
+  Future<dynamic> postMultipart(String path, Map<String, File> files) async {
+    final uri = Uri.parse('$baseUrl$path');
+
+    final request = http.MultipartRequest('POST', uri);
+
+    final headers = await _headers(auth: true);
+
+    // MultipartRequest creates its own multipart Content-Type.
+    headers.remove('Content-Type');
+
+    request.headers.addAll(headers);
+
+    for (final entry in files.entries) {
+      request.files.add(
+        await http.MultipartFile.fromPath(entry.key, entry.value.path),
+      );
+    }
+
+    try {
+      final streamed = await request.send().timeout(
+        const Duration(seconds: 20),
+      );
+
+      final response = await http.Response.fromStream(streamed);
+
+      return _handle(response);
+    } on TimeoutException {
+      throw ApiException('Upload timed out. Check your connection.');
+    } on SocketException {
+      throw ApiException('No internet connection.');
+    }
+  }
+
+  // ================================================================
   // HEADERS
   // ================================================================
 

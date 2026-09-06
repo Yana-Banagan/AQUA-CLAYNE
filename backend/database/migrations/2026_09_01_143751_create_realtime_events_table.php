@@ -9,9 +9,10 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('realtime_events', function (Blueprint $table) {
-            $table->uuid('id')->primary()->default(
-                DB::raw('gen_random_uuid()')
-            );
+            $id = $table->uuid('id')->primary();
+            if (DB::getDriverName() === 'pgsql') {
+                $id->default(DB::raw('gen_random_uuid()'));
+            }
 
             $table->string('entity_type', 20);
 
@@ -23,6 +24,10 @@ return new class extends Migration {
 
             $table->timestampTz('created_at')->useCurrent();
         });
+
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
 
         DB::statement("
             ALTER TABLE realtime_events
@@ -62,6 +67,11 @@ return new class extends Migration {
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            Schema::dropIfExists('realtime_events');
+            return;
+        }
+
         DB::statement("
             DO \$\$
             BEGIN

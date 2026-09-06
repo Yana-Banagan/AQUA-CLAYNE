@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\OrderStatusHistory;
+use App\Models\Payment;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 
@@ -26,21 +28,11 @@ class OrderService
                             $item['product_id']
                         );
 
-                    if (
-                        !$product->inventory ||
-                        $product->inventory
-                            ->quantity_on_hand
-                        < $item['quantity']
-                    ) {
+                    if (!$product->is_active) {
                         throw new \Exception(
-                            "Insufficient stock for {$product->name}."
+                            "{$product->name} is not available."
                         );
                     }
-
-                    $product->inventory->decrement(
-                        'quantity_on_hand',
-                        $item['quantity']
-                    );
 
                     $lineTotal =
                         $product->price *
@@ -70,6 +62,16 @@ class OrderService
                     'status' =>
                         'pending',
 
+                    'order_number' => 'ORD-' . now()->format('Ymd') . '-' . strtoupper(substr((string) \Illuminate\Support\Str::uuid(), 0, 8)),
+
+                    'container_ownership' => $data['container_ownership'],
+
+                    'expected_empty_gallons' => $data['expected_empty_gallons'],
+
+                    'payment_method' => $data['payment_method'],
+
+                    'notes' => $data['notes'] ?? null,
+
                     'total_amount' =>
                         $total,
                 ]);
@@ -77,6 +79,25 @@ class OrderService
                 $order->items()->createMany(
                     $itemsData
                 );
+
+                Payment::create([
+                    'order_id' => $order->id,
+                    'method' => $data['payment_method'],
+                    'amount' => $total,
+                    'status' => $data['payment_method'] === 'credit' ? 'verified' : 'pending',
+                    'paid_at' => $data['payment_method'] === 'credit' ? now() : null,
+                ]);
+
+                if ($data['payment_method'] === 'credit') {
+                    app(CreditService::class)->charge($customer, $order, (float) $total);
+                }
+
+                OrderStatusHistory::create([
+                    'order_id' => $order->id,
+                    'to_status' => 'pending',
+                    'changed_by' => $customer->user_id,
+                    'actor_role' => 'customer',
+                ]);
 
                 // ----------------------------------------------------
                 // PHASE 9 — REALTIME EVENT
@@ -89,7 +110,7 @@ class OrderService
                 );
 
                 return $order->load(
-                    'items.product'
+                    'items.product', 'payments', 'statusHistory'
                 );
             }
         );

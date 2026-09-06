@@ -9,6 +9,7 @@ import 'core/services/token_storage.dart';
 import 'customer/data/product_repository.dart';
 import 'customer/data/address_repository.dart';
 import 'customer/data/order_repository.dart';
+import 'driver/data/delivery_repository.dart';
 
 import 'customer/screens/catalog_screen.dart';
 import 'driver/screens/driver_home_screen.dart';
@@ -24,7 +25,7 @@ void main() async {
 
   await Supabase.initialize(
     url: 'https://evnhwmmwsnxizcoejqhz.supabase.co',
-    anonKey: 'YOUR_SUPABASE_ANON_KEY',
+    publishableKey: 'sb_publishable_HVLCXjrvWAJyezYy0qGolQ_Ep--J7Ni',
   );
 
   // ================================================================
@@ -78,11 +79,17 @@ void main() async {
         ),
 
         // ------------------------------------------------------------
+        // Delivery Repository
+        // ------------------------------------------------------------
+        Provider<DeliveryRepository>(
+          create: (context) => DeliveryRepository(context.read<ApiClient>()),
+        ),
+
+        // ------------------------------------------------------------
         // Local Cart State
         // ------------------------------------------------------------
         ChangeNotifierProvider<CartProvider>(create: (_) => CartProvider()),
       ],
-
       child: const MyApp(),
     ),
   );
@@ -205,16 +212,67 @@ class _HomePageState extends State<HomePage> {
 
       setState(() {
         loading = false;
-        message = e.message;
+
+        // Do not expose raw backend/database errors.
+        message = _friendlyApiError(e.message);
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
         loading = false;
-        message = 'Login failed.';
+        message = 'Unable to connect to the server. Please try again.';
       });
     }
+  }
+
+  // ==================================================================
+  // FRIENDLY API ERROR
+  // ==================================================================
+
+  String _friendlyApiError(String error) {
+    final lowerError = error.toLowerCase();
+
+    // --------------------------------------------------------------
+    // Database / PostgreSQL connection errors
+    // --------------------------------------------------------------
+    if (lowerError.contains('sqlstate') ||
+        lowerError.contains('postgres') ||
+        lowerError.contains('connection to server') ||
+        lowerError.contains('connection refused') ||
+        lowerError.contains('permission denied')) {
+      return 'Unable to connect to the server. Please try again.';
+    }
+
+    // --------------------------------------------------------------
+    // Authentication errors
+    // --------------------------------------------------------------
+    if (lowerError.contains('invalid credentials') ||
+        lowerError.contains('unauthorized') ||
+        lowerError.contains('authentication')) {
+      return 'Invalid email or password.';
+    }
+
+    // --------------------------------------------------------------
+    // Forbidden
+    // --------------------------------------------------------------
+    if (lowerError.contains('forbidden')) {
+      return 'You do not have permission to perform this action.';
+    }
+
+    // --------------------------------------------------------------
+    // Not found
+    // --------------------------------------------------------------
+    if (lowerError.contains('not found')) {
+      return 'The requested resource was not found.';
+    }
+
+    // --------------------------------------------------------------
+    // Generic API error
+    // --------------------------------------------------------------
+    return error.length > 150
+        ? 'Something went wrong. Please try again.'
+        : error;
   }
 
   // ==================================================================
@@ -234,7 +292,7 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
 
       setState(() {
-        message = e.message;
+        message = _friendlyApiError(e.message);
       });
     } catch (e) {
       if (!mounted) return;
@@ -254,75 +312,113 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Aqua Clayne')),
 
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+      // ================================================================
+      // SAFE AREA + SCROLL VIEW
+      //
+      // This fixes the RenderFlex overflow when the screen is small
+      // or when the keyboard changes the available height.
+      // ================================================================
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
 
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight - 48,
+                ),
 
-            children: [
-              const Icon(Icons.water_drop, size: 70),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
 
-              const SizedBox(height: 20),
+                  children: [
+                    // --------------------------------------------------
+                    // Logo
+                    // --------------------------------------------------
 
-              const Text(
-                'Aqua Clayne',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                    const Icon(Icons.water_drop, size: 70),
+
+                    const SizedBox(height: 20),
+
+                    // --------------------------------------------------
+                    // Application Name
+                    // --------------------------------------------------
+                    const Text(
+                      'Aqua Clayne',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // --------------------------------------------------
+                    // Login Message
+                    // --------------------------------------------------
+                    Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+
+                    const SizedBox(height: 30),
+
+                    // --------------------------------------------------
+                    // Loading
+                    // --------------------------------------------------
+                    if (loading) ...[
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 20),
+                      const Text('Please wait...', textAlign: TextAlign.center),
+                    ],
+
+                    // --------------------------------------------------
+                    // Login Buttons
+                    // --------------------------------------------------
+                    if (!loading) ...[
+                      // Customer
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: loginAsCustomer,
+                          child: const Text('Login as Customer'),
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Driver
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: loginAsDriver,
+                          child: const Text('Login as Driver'),
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Logout
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: logout,
+                          child: const Text('Clear Login Session'),
+                        ),
+                      ),
+                    ],
+
+                    // Extra bottom spacing for smaller screens.
+                    const SizedBox(height: 24),
+                  ],
+                ),
               ),
-
-              const SizedBox(height: 20),
-
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16),
-              ),
-
-              const SizedBox(height: 30),
-
-              // ------------------------------------------------------
-              // Loading
-              // ------------------------------------------------------
-              if (loading) const CircularProgressIndicator(),
-
-              // ------------------------------------------------------
-              // Login buttons
-              // ------------------------------------------------------
-              if (!loading) ...[
-                // Customer
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: loginAsCustomer,
-                    child: const Text('Login as Customer'),
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Driver
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: loginAsDriver,
-                    child: const Text('Login as Driver'),
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Logout
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: logout,
-                    child: const Text('Clear Login Session'),
-                  ),
-                ),
-              ],
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

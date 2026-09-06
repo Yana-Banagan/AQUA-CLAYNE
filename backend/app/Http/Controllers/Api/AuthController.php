@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 
 class AuthController extends Controller
 {
@@ -18,7 +19,8 @@ class AuthController extends Controller
             'phone' => ['required', 'string', 'max:20'],
         ]);
 
-        $user = User::create([
+        $user = DB::transaction(function () use ($validated) {
+            $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'phone' => $validated['phone'],
@@ -28,7 +30,10 @@ class AuthController extends Controller
             'role' => 'customer',
 
             'status' => 'active',
-        ]);
+            ]);
+            $user->customer()->create();
+            return $user;
+        });
 
         $token = $user->createToken('customer-mobile')->plainTextToken;
 

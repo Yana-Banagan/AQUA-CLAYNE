@@ -8,10 +8,14 @@ class OrderRepository {
   Future<Map<String, dynamic>> create(
     String addressId,
     List<Map<String, dynamic>> items,
+    int expectedEmptyGallons,
   ) async {
     final data = await api.post('/orders', {
       'address_id': addressId,
       'items': items,
+      'container_ownership': 'customer_owned',
+      'expected_empty_gallons': expectedEmptyGallons,
+      'payment_method': 'cash',
     }, auth: true);
 
     return Map<String, dynamic>.from(data);

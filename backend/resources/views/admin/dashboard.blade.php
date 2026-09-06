@@ -1,18 +1,10 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Admin Dashboard</title>
-</head>
-<body>
-
-<h1>Admin Dashboard</h1>
-
-<p>Welcome, {{ auth()->user()->name }}</p>
-
-<form method="POST" action="{{ route('admin.logout') }}">
-    @csrf
-    <button type="submit">Logout</button>
-</form>
-
-</body>
-</html>
+@extends('layouts.admin')
+@section('title', 'Dashboard')
+@section('content')
+<div class="page-header"><div><p class="eyebrow">Overview</p><h1>Dashboard</h1><p>Monitor AQUA CLAYNE operations and resolve priority tasks quickly.</p></div><div class="header-actions"><a href="{{ route('admin.deliveries.assign') }}" class="secondary-button">Assign deliveries</a><a href="#" class="primary-button">View reports</a></div></div>
+<section class="hero-card"><div><p class="eyebrow" style="color:#ddd1ff">AQUA CLAYNE</p><h2>Good morning, {{ strtok(auth()->user()->name ?? 'Admin', ' ') }} 👋</h2><p>Here is what is happening at your water refilling business today.</p><a href="#" class="secondary-button">View sales reports</a></div><div class="hero-stats"><div><span>Today's sales</span><strong>₱{{ number_format($stats['sales'], 2) }}</strong></div><div><span>New orders</span><strong>{{ $stats['pendingOrders'] }}</strong></div><div><span>Active deliveries</span><strong>{{ $stats['activeDeliveries'] }}</strong></div></div></section>
+<section class="stat-grid">@foreach ([['₱','Total Sales',$stats['sales'],'purple',true],['▣','Total Orders',$stats['orders'],'blue',false],['!','Pending Orders',$stats['pendingOrders'],'amber',false],['⌁','Active Deliveries',$stats['activeDeliveries'],'purple',false],['✓','Completed Today',$stats['completedDeliveries'],'green',false],['♙','Customers',$stats['customers'],'blue',false],['♜','Drivers',$stats['drivers'],'purple',false]] as [$icon, $label, $value, $color, $currency])<article class="stat-card"><div class="stat-icon {{ $color }}">{{ $icon }}</div><span>{{ $label }}</span><strong>{{ $currency ? '₱'.number_format($value, 2) : number_format($value) }}</strong><small>Live operational total</small></article>@endforeach</section>
+<section class="dashboard-grid"><div><article class="panel"><div class="panel-head"><h2>Sales overview</h2><div class="tabs"><span class="active">Week</span><span>Month</span><span>Year</span></div></div><div class="chart-area">@foreach ([42,68,52,84,61,93,75] as $height)<span class="chart-bar" style="height:{{ $height }}%"></span>@endforeach</div><div class="chart-labels"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div></article>
+<article class="panel" style="margin-top:20px"><div class="panel-head"><h2>Recent orders</h2><a href="#">View all orders</a></div><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Order</th><th>Customer</th><th>Amount</th><th>Payment</th><th>Status</th><th>Delivery</th></tr></thead><tbody>@forelse($recentOrders as $order)@php($statusClass = in_array($order->status, ['completed','delivered']) ? 'success' : (in_array($order->status, ['pending','processing']) ? 'warning' : 'info'))<tr><td class="order-cell"><strong>#{{ strtoupper(substr($order->id, 0, 8)) }}</strong><small>{{ $order->created_at?->format('M d, Y') }}</small></td><td class="customer-cell"><strong>{{ $order->customer?->user?->name ?? 'Unknown customer' }}</strong><small>{{ $order->items->count() }} item(s)</small></td><td>₱{{ number_format($order->total_amount, 2) }}</td><td><span class="status-badge status-neutral">Pending</span></td><td><span class="status-badge status-{{ $statusClass }}">{{ str_replace('_', ' ', $order->status) }}</span></td><td><span class="status-badge status-{{ $order->delivery ? 'info' : 'neutral' }}">{{ $order->delivery ? str_replace('_', ' ', $order->delivery->status) : 'Unassigned' }}</span></td></tr>@empty<tr><td colspan="6"><div class="empty-state"><span class="empty-icon">▣</span><strong>No orders found.</strong><br>Orders will appear here once customers place an order.</div></td></tr>@endforelse</tbody></table></div></article></div>
+<div><article class="panel"><div class="panel-head"><h2>Live activity</h2><a href="#">View all</a></div><div class="activity-list">@forelse($activity as $item)<div class="activity-item"><span class="activity-dot">▣</span><span><strong>{{ $item['title'] }}</strong><small>{{ $item['detail'] }} · {{ $item['time'] }}</small></span></div>@empty<div class="empty-state">No recent activity to display.</div>@endforelse</div></article><article class="panel" style="margin-top:20px"><div class="panel-head"><h2>Quick actions</h2></div><div class="quick-actions"><a class="quick-action" href="{{ route('admin.deliveries.assign') }}"><span>{{ $stats['pendingOrders'] }}</span>Assign pending deliveries<small>Match pending orders with drivers</small></a><a class="quick-action" href="{{ route('admin.drivers.index') }}"><span>{{ $stats['drivers'] }}</span>Manage drivers<small>Review availability and status</small></a><a class="quick-action" href="#"><span>₱</span>Verify payments<small>Review payment confirmations</small></a></div></article></div></section>
+@endsection

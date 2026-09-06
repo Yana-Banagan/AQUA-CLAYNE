@@ -9,7 +9,10 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('customer_addresses', function (Blueprint $table) {
-            $table->uuid('id')->primary()->default(DB::raw('gen_random_uuid()'));
+            $id = $table->uuid('id')->primary();
+            if (DB::getDriverName() === 'pgsql') {
+                $id->default(DB::raw('gen_random_uuid()'));
+            }
             $table->foreignUuid('customer_id')
                 ->constrained('customers')
                 ->onDelete('cascade');

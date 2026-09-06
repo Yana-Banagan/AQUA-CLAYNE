@@ -19,7 +19,7 @@ class DeliveryAssignmentController extends Controller
     {
         $pendingOrders = Order::whereIn(
             'status',
-            ['pending', 'confirmed']
+            ['confirmed']
         )
             ->with('customer.user')
             ->get();
@@ -64,7 +64,8 @@ class DeliveryAssignmentController extends Controller
 
         $this->deliveryService->assign(
             $order,
-            $driver
+            $driver,
+            $request->user()
         );
 
         return back()->with(

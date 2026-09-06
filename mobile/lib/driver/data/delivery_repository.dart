@@ -1,9 +1,30 @@
 import '../../core/api/api_client.dart';
 
+import 'dart:io';
+
 class DeliveryRepository {
   final ApiClient api;
 
   DeliveryRepository(this.api);
+
+  Future<Map<String, dynamic>> uploadProof(
+    String deliveryId,
+    File photo, {
+    File? signature,
+  }) async {
+    final files = <String, File>{'photo': photo};
+
+    if (signature != null) {
+      files['signature'] = signature;
+    }
+
+    final response = await api.postMultipart(
+      '/driver/deliveries/$deliveryId/proof',
+      files,
+    );
+
+    return Map<String, dynamic>.from(response);
+  }
 
   // ================================================================
   // ASSIGNED DELIVERIES

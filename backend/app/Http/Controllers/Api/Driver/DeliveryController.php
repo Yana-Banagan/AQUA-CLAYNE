@@ -7,6 +7,7 @@ use App\Models\Delivery;
 use App\Models\Driver;
 use App\Services\DeliveryService;
 use Illuminate\Http\Request;
+use App\Services\SupabaseStorageService;
 
 class DeliveryController extends Controller
 {
@@ -77,25 +78,40 @@ class DeliveryController extends Controller
      */
     public function show(
         Request $request,
-        Delivery $delivery
+        Delivery $delivery,
+        SupabaseStorageService $storage
     ) {
-        $driver = $this->driver($request);
-
         abort_if(
-            $delivery->driver_id !== $driver->id,
-            403,
-            'You are not authorized to access this delivery.'
+            $delivery->driver_id !== $this->driver($request)->id,
+            403
         );
 
-        $delivery->load([
-            'order.items.product',
-            'order.customer.user',
-            'order.address',
-        ]);
+        $data = $delivery
+            ->load(
+                'order.items.product',
+                'order.customer.user',
+                'order.address'
+            )
+            ->toArray();
 
-        return $this->success($delivery);
+        if ($delivery->proof_photo_url) {
+            $data['proof_photo_signed_url'] =
+                $storage->signedUrl(
+                    'delivery-proofs',
+                    $delivery->proof_photo_url
+                );
+        }
+
+        if ($delivery->signature_url) {
+            $data['signature_signed_url'] =
+                $storage->signedUrl(
+                    'delivery-proofs',
+                    $delivery->signature_url
+                );
+        }
+
+        return $this->success($data);
     }
-
     /**
      * Update delivery status.
      *
@@ -116,7 +132,7 @@ class DeliveryController extends Controller
         $data = $request->validate([
             'status' => [
                 'required',
-                'in:assigned,en_route,delivered,failed',
+                'in:en_route_for_pickup,picked_up,at_station,out_for_delivery,delivered,failed',
             ],
 
             'note' => [
@@ -134,9 +150,89 @@ class DeliveryController extends Controller
             $delivery,
             $data['status'],
             $data['note'] ?? null,
-            $data['eta'] ?? null
+            $data['eta'] ?? null,
+            $request->user()
         );
 
         return $this->success($updated);
+    }
+
+    public function uploadProof(
+        Request $request,
+        Delivery $delivery,
+        SupabaseStorageService $storage
+    ) {
+        abort_if(
+            $delivery->driver_id !== $this->driver($request)->id,
+            403
+        );
+
+        $request->validate([
+            'photo' => [
+                'required',
+                'image',
+                'mimes:jpeg,jpg,png',
+                'max:5120',
+            ],
+
+            'signature' => [
+                'nullable',
+                'image',
+                'mimes:jpeg,jpg,png',
+                'max:2048',
+            ],
+        ]);
+
+        $photo = $request->file('photo');
+
+        $photoPath = "{$delivery->id}/photo." . $photo->extension();
+
+        $storage->upload(
+            'delivery-proofs',
+            $photoPath,
+            file_get_contents($photo->getRealPath()),
+            $photo->getMimeType()
+        );
+
+        $signaturePath = null;
+
+        if ($request->hasFile('signature')) {
+            $signature = $request->file('signature');
+
+            $signaturePath =
+                "{$delivery->id}/signature." .
+                $signature->extension();
+
+            $storage->upload(
+                'delivery-proofs',
+                $signaturePath,
+                file_get_contents($signature->getRealPath()),
+                $signature->getMimeType()
+            );
+        }
+
+        $delivery->update([
+            'proof_photo_url' => $photoPath,
+            'signature_url' => $signaturePath,
+        ]);
+
+        return $this->success(
+            $delivery->fresh(),
+            'Proof uploaded'
+        );
+    }
+
+    public function collectCash(Request $request, Delivery $delivery)
+    {
+        $driver = $this->driver($request);
+        abort_if($delivery->driver_id !== $driver->id, 403, 'You are not authorized to update this delivery.');
+        if ($delivery->status !== 'out_for_delivery' || $delivery->order->payment_method !== 'cash')
+            return $this->error('Cash cannot be collected at this stage.', 422);
+        $data = $request->validate(['amount' => 'required|numeric|min:0']);
+        $payment = $delivery->order->payments()->where('method', 'cash')->latest()->firstOrFail();
+        if ((float) $data['amount'] < (float) $payment->amount)
+            return $this->error('The full cash amount is required.', 422);
+        $payment->update(['status' => 'paid', 'paid_at' => now()]);
+        return $this->success($payment, 'Cash payment recorded.');
     }
 }

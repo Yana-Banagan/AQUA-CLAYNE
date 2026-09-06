@@ -20,7 +20,12 @@ class Delivery extends Model
         'proof_photo_url',
         'signature_url',
         'status',
+        'delivered_at',
+        'failure_reason',
+        'customer_confirmed',
     ];
+
+    protected function casts(): array { return ['delivered_at' => 'datetime', 'customer_confirmed' => 'boolean']; }
 
     public function order(): BelongsTo
     {

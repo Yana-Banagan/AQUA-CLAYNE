@@ -4,9 +4,11 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\LoginController;
 use App\Http\Controllers\Admin\DriverController;
 use App\Http\Controllers\Admin\DeliveryAssignmentController;
+use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\RefillOperationController;
 
 Route::get('/', function () {
-    return view('admin.login');
+    return redirect()->route('admin.login');
 });
 
 Route::middleware('guest')->group(function () {
@@ -26,7 +28,7 @@ Route::middleware(['auth', 'role:admin,staff'])
         // ADMIN DASHBOARD
         // ----------------------------------------------------
     
-        Route::view('/dashboard', 'admin.dashboard')
+        Route::get('/dashboard', [DashboardController::class, 'index'])
             ->name('dashboard');
 
         // ----------------------------------------------------
@@ -67,4 +69,10 @@ Route::middleware(['auth', 'role:admin,staff'])
                 'store',
             ]
         )->name('deliveries.assign.store');
+
+        Route::post('/orders/{order}/transition', [RefillOperationController::class, 'transition'])->name('orders.transition');
+        Route::post('/orders/{order}/intake', [RefillOperationController::class, 'receive'])->name('orders.intake');
+        Route::post('/refill-queue/{order}/start', [RefillOperationController::class, 'start'])->name('refill-queue.start');
+        Route::post('/refill-queue/{order}/complete', [RefillOperationController::class, 'complete'])->name('refill-queue.complete');
+        Route::post('/refill-queue/{order}/priority', [RefillOperationController::class, 'priority'])->name('refill-queue.priority');
     });

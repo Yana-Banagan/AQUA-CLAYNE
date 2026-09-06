@@ -9,9 +9,10 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('customers', function (Blueprint $table) {
-            $table->uuid('id')
-                ->primary()
-                ->default(DB::raw('gen_random_uuid()'));
+            $id = $table->uuid('id')->primary();
+            if (DB::getDriverName() === 'pgsql') {
+                $id->default(DB::raw('gen_random_uuid()'));
+            }
 
             $table->foreignUuid('user_id')
                 ->unique()

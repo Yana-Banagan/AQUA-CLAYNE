@@ -17,7 +17,20 @@ class Order extends Model
         'address_id',
         'status',
         'total_amount',
+        'order_number',
+        'container_ownership',
+        'expected_empty_gallons',
+        'payment_method',
+        'notes',
+        'confirmed_at',
+        'cancelled_at',
+        'completed_at',
     ];
+
+    protected function casts(): array
+    {
+        return ['confirmed_at' => 'datetime', 'cancelled_at' => 'datetime', 'completed_at' => 'datetime'];
+    }
 
     public function customer(): BelongsTo
     {
@@ -48,4 +61,8 @@ class Order extends Model
     {
         return $this->hasMany(CreditTransaction::class);
     }
+
+    public function statusHistory(): HasMany { return $this->hasMany(OrderStatusHistory::class); }
+    public function containerIntake(): HasOne { return $this->hasOne(OrderContainerIntake::class); }
+    public function refillQueueEntry(): HasOne { return $this->hasOne(RefillQueueEntry::class); }
 }

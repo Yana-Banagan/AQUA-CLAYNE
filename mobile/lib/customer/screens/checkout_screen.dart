@@ -57,7 +57,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     });
 
     try {
-      final order = await orderRepository.create(addressId, items);
+      final expectedEmptyGallons = cart.items.fold<int>(
+        0,
+        (total, item) => total + item.quantity,
+      );
+      final order = await orderRepository.create(
+        addressId,
+        items,
+        expectedEmptyGallons,
+      );
 
       if (!mounted) return;
 
