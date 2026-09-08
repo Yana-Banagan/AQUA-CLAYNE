@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'core/api/api_client.dart';
 import 'core/repositories/auth_repository.dart';
 import 'core/services/token_storage.dart';
+import 'core/notifications/push_handler.dart';
 
 import 'customer/data/product_repository.dart';
 import 'customer/data/address_repository.dart';
@@ -16,8 +19,74 @@ import 'driver/screens/driver_home_screen.dart';
 
 import 'customer/state/cart_provider.dart';
 
-void main() async {
+// ====================================================================
+// FIREBASE BACKGROUND FCM HANDLER
+// ====================================================================
+//
+// Handles Firebase Cloud Messaging notifications when the application
+// is running in the background or terminated.
+//
+// IMPORTANT:
+// This must be a top-level function.
+//
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Firebase must be initialized before using Firebase services.
+  await Firebase.initializeApp();
+
+  debugPrint('Background FCM message received: ${message.messageId}');
+
+  debugPrint('FCM notification title: ${message.notification?.title}');
+
+  debugPrint('FCM notification body: ${message.notification?.body}');
+
+  debugPrint('FCM data: ${message.data}');
+}
+
+// ====================================================================
+// MAIN
+// ====================================================================
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ================================================================
+  // FIREBASE INITIALIZATION
+  // ================================================================
+
+  await Firebase.initializeApp();
+
+  // ================================================================
+  // REGISTER BACKGROUND FCM HANDLER
+  // ================================================================
+
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  // ================================================================
+  // REQUEST NOTIFICATION PERMISSION
+  // ================================================================
+
+  final notificationSettings = await FirebaseMessaging.instance
+      .requestPermission(alert: true, badge: true, sound: true);
+
+  debugPrint(
+    'FCM permission: '
+    '${notificationSettings.authorizationStatus}',
+  );
+
+  // ================================================================
+  // INITIALIZE PUSH HANDLER
+  // ================================================================
+  //
+  // Registers:
+  // - Foreground notification listener
+  // - Background notification tap listener
+  // - Terminated notification tap handling
+  // - Local notification channel
+  //
+
+  await PushHandler.initialize();
 
   // ================================================================
   // SUPABASE INITIALIZATION
@@ -38,6 +107,7 @@ void main() async {
         // ------------------------------------------------------------
         // Token Storage
         // ------------------------------------------------------------
+
         Provider<TokenStorage>(create: (_) => TokenStorage()),
 
         // ------------------------------------------------------------
@@ -105,7 +175,19 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      // ==============================================================
+      // GLOBAL NAVIGATOR KEY
+      // ==============================================================
+      //
+      // Push notifications do not have access to a Widget
+      // BuildContext. The navigator key allows PushHandler to
+      // navigate to screens when the user taps a notification.
+      //
+
+      navigatorKey: navigatorKey,
+
       title: 'Aqua Clayne',
+
       debugShowCheckedModeBanner: false,
 
       theme: ThemeData(
@@ -155,17 +237,70 @@ class _HomePageState extends State<HomePage> {
   // ==================================================================
 
   Future<void> login({required String email, required String password}) async {
+    // Get AuthRepository before the async gap.
+    //
+    // This prevents the "use_build_context_synchronously" warning
+    // when accessing Provider after an await.
+
+    final authRepo = context.read<AuthRepository>();
+
     setState(() {
       loading = true;
       message = 'Logging in...';
     });
 
     try {
-      final authRepo = context.read<AuthRepository>();
+      // ==============================================================
+      // STEP 1 — LOGIN THROUGH LARAVEL
+      // ==============================================================
 
       final user = await authRepo.login(email, password);
 
-      if (!mounted) return;
+      // ==============================================================
+      // STEP 2 — CHECK THAT SCREEN STILL EXISTS
+      // ==============================================================
+
+      if (!mounted) {
+        return;
+      }
+
+      // ==============================================================
+      // STEP 3 — REGISTER FCM TOKEN
+      // ==============================================================
+      //
+      // Login has already succeeded.
+      //
+      // Firebase
+      //     ↓
+      // FCM token
+      //     ↓
+      // Laravel /auth/fcm-token
+      //     ↓
+      // users.fcm_token
+      //
+      // If FCM registration fails, the user is still allowed to
+      // continue into the application.
+      //
+
+      try {
+        await authRepo.registerFcmToken();
+
+        debugPrint('FCM token successfully registered with Laravel.');
+      } catch (e) {
+        debugPrint('FCM token registration failed: $e');
+      }
+
+      // ==============================================================
+      // STEP 4 — CHECK SCREEN AGAIN
+      // ==============================================================
+
+      if (!mounted) {
+        return;
+      }
+
+      // ==============================================================
+      // STEP 5 — DETERMINE USER ROLE
+      // ==============================================================
 
       final role = user['role']?.toString();
 
@@ -205,10 +340,13 @@ class _HomePageState extends State<HomePage> {
       // ==============================================================
 
       setState(() {
+        loading = false;
         message = 'Unsupported account role: $role';
       });
     } on ApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         loading = false;
@@ -217,7 +355,9 @@ class _HomePageState extends State<HomePage> {
         message = _friendlyApiError(e.message);
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         loading = false;
@@ -236,6 +376,7 @@ class _HomePageState extends State<HomePage> {
     // --------------------------------------------------------------
     // Database / PostgreSQL connection errors
     // --------------------------------------------------------------
+
     if (lowerError.contains('sqlstate') ||
         lowerError.contains('postgres') ||
         lowerError.contains('connection to server') ||
@@ -247,6 +388,7 @@ class _HomePageState extends State<HomePage> {
     // --------------------------------------------------------------
     // Authentication errors
     // --------------------------------------------------------------
+
     if (lowerError.contains('invalid credentials') ||
         lowerError.contains('unauthorized') ||
         lowerError.contains('authentication')) {
@@ -256,6 +398,7 @@ class _HomePageState extends State<HomePage> {
     // --------------------------------------------------------------
     // Forbidden
     // --------------------------------------------------------------
+
     if (lowerError.contains('forbidden')) {
       return 'You do not have permission to perform this action.';
     }
@@ -263,6 +406,7 @@ class _HomePageState extends State<HomePage> {
     // --------------------------------------------------------------
     // Not found
     // --------------------------------------------------------------
+
     if (lowerError.contains('not found')) {
       return 'The requested resource was not found.';
     }
@@ -270,6 +414,7 @@ class _HomePageState extends State<HomePage> {
     // --------------------------------------------------------------
     // Generic API error
     // --------------------------------------------------------------
+
     return error.length > 150
         ? 'Something went wrong. Please try again.'
         : error;
@@ -280,22 +425,31 @@ class _HomePageState extends State<HomePage> {
   // ==================================================================
 
   Future<void> logout() async {
-    try {
-      await context.read<AuthRepository>().logout();
+    // Get repository before the async gap.
+    final authRepo = context.read<AuthRepository>();
 
-      if (!mounted) return;
+    try {
+      await authRepo.logout();
+
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         message = 'Logged out successfully.';
       });
     } on ApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         message = _friendlyApiError(e.message);
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         message = 'Logout failed.';
@@ -315,8 +469,8 @@ class _HomePageState extends State<HomePage> {
       // ================================================================
       // SAFE AREA + SCROLL VIEW
       //
-      // This fixes the RenderFlex overflow when the screen is small
-      // or when the keyboard changes the available height.
+      // Prevents RenderFlex overflow when the screen is small or
+      // when the keyboard changes the available height.
       // ================================================================
       body: SafeArea(
         child: LayoutBuilder(
@@ -372,7 +526,9 @@ class _HomePageState extends State<HomePage> {
                     // --------------------------------------------------
                     if (loading) ...[
                       const CircularProgressIndicator(),
+
                       const SizedBox(height: 20),
+
                       const Text('Please wait...', textAlign: TextAlign.center),
                     ],
 

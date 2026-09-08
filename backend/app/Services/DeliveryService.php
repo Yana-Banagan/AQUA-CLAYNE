@@ -13,6 +13,9 @@ use Illuminate\Validation\ValidationException;
 
 class DeliveryService
 {
+    /**
+     * Assign a confirmed order to an active driver.
+     */
     public function assign(
         Order $order,
         Driver $driver,
@@ -21,10 +24,12 @@ class DeliveryService
         return DB::transaction(
             function () use ($order, $driver, $actor) {
 
+                // Lock the order to prevent conflicting assignments.
                 $order = Order::query()
                     ->lockForUpdate()
                     ->findOrFail($order->id);
 
+                // Only confirmed orders can be assigned.
                 if ($order->status !== 'confirmed') {
                     throw ValidationException::withMessages([
                         'order' => [
@@ -33,6 +38,7 @@ class DeliveryService
                     ]);
                 }
 
+                // Driver must be active.
                 if ($driver->user->status !== 'active') {
                     throw ValidationException::withMessages([
                         'driver' => [
@@ -41,24 +47,31 @@ class DeliveryService
                     ]);
                 }
 
+                // Create delivery.
                 $delivery = Delivery::create([
                     'order_id' => $order->id,
                     'driver_id' => $driver->id,
                     'status' => 'assigned',
                 ]);
 
+                // Update order workflow.
                 app(OrderWorkflowService::class)->transition(
                     $order,
                     'assigned',
                     $actor
                 );
 
+                // Create delivery history.
                 DeliveryStatusHistory::create([
                     'delivery_id' => $delivery->id,
                     'status' => 'assigned',
                     'note' => 'Assigned by admin',
                 ]);
 
+                // ----------------------------------------------------
+                // PHASE 9 — SUPABASE REALTIME
+                // ----------------------------------------------------
+    
                 app(RealtimeEventService::class)->emit(
                     'delivery',
                     $delivery->id,
@@ -66,11 +79,28 @@ class DeliveryService
                     $delivery->status
                 );
 
+                // ----------------------------------------------------
+                // PHASE 11 — FCM NOTIFICATION TO DRIVER
+                // ----------------------------------------------------
+    
+                app(NotificationService::class)->sendToUser(
+                    $driver->user,
+                    'New Delivery Assigned',
+                    'You have a new delivery to complete.',
+                    [
+                        'entity_type' => 'delivery',
+                        'entity_id' => $delivery->id,
+                    ]
+                );
+
                 return $delivery;
             }
         );
     }
 
+    /**
+     * Update the status of an assigned delivery.
+     */
     public function updateStatus(
         Delivery $delivery,
         string $status,
@@ -81,10 +111,15 @@ class DeliveryService
         return DB::transaction(
             function () use ($delivery, $status, $note, $eta, $actor) {
 
+                // Lock the delivery to prevent conflicting updates.
                 $delivery = Delivery::query()
                     ->lockForUpdate()
                     ->findOrFail($delivery->id);
 
+                // ----------------------------------------------------
+                // ALLOWED DELIVERY STATUS TRANSITIONS
+                // ----------------------------------------------------
+    
                 $allowed = [
                     'assigned' => [
                         'en_route_for_pickup'
@@ -123,13 +158,15 @@ class DeliveryService
                     ]);
                 }
 
+                // Lock the related order.
                 $order = Order::query()
                     ->lockForUpdate()
                     ->findOrFail($delivery->order_id);
 
-                /*
-                 * PICKED UP
-                 */
+                // ----------------------------------------------------
+                // PICKED UP
+                // ----------------------------------------------------
+    
                 if ($status === 'picked_up') {
                     app(OrderWorkflowService::class)->transition(
                         $order,
@@ -139,9 +176,10 @@ class DeliveryService
                     );
                 }
 
-                /*
-                 * OUT FOR DELIVERY
-                 */
+                // ----------------------------------------------------
+                // OUT FOR DELIVERY
+                // ----------------------------------------------------
+    
                 if ($status === 'out_for_delivery') {
                     app(OrderWorkflowService::class)->transition(
                         $order,
@@ -150,9 +188,10 @@ class DeliveryService
                     );
                 }
 
-                /*
-                 * DELIVERED
-                 */
+                // ----------------------------------------------------
+                // DELIVERED
+                // ----------------------------------------------------
+    
                 if ($status === 'delivered') {
 
                     // Proof of delivery is required.
@@ -167,7 +206,10 @@ class DeliveryService
                     // Payment must already be paid or verified.
                     if (
                         !Payment::where('order_id', $order->id)
-                            ->whereIn('status', ['paid', 'verified'])
+                            ->whereIn(
+                                'status',
+                                ['paid', 'verified']
+                            )
                             ->exists()
                     ) {
                         throw ValidationException::withMessages([
@@ -212,9 +254,10 @@ class DeliveryService
                     );
                 }
 
-                /*
-                 * FAILED
-                 */
+                // ----------------------------------------------------
+                // FAILED
+                // ----------------------------------------------------
+    
                 if ($status === 'failed') {
 
                     $failureStatus =
@@ -230,9 +273,10 @@ class DeliveryService
                     );
                 }
 
-                /*
-                 * UPDATE DELIVERY
-                 */
+                // ----------------------------------------------------
+                // UPDATE DELIVERY
+                // ----------------------------------------------------
+    
                 $delivery->update([
                     'status' => $status,
 
@@ -249,24 +293,71 @@ class DeliveryService
                         : $delivery->failure_reason,
                 ]);
 
-                /*
-                 * STATUS HISTORY
-                 */
+                // ----------------------------------------------------
+                // STATUS HISTORY
+                // ----------------------------------------------------
+    
                 DeliveryStatusHistory::create([
                     'delivery_id' => $delivery->id,
                     'status' => $status,
                     'note' => $note,
                 ]);
 
-                /*
-                 * SUPABASE REALTIME SIGNAL
-                 */
+                // ----------------------------------------------------
+                // PHASE 9 — SUPABASE REALTIME SIGNAL
+                // ----------------------------------------------------
+    
                 app(RealtimeEventService::class)->emit(
                     'delivery',
                     $delivery->id,
                     'status_changed',
                     $status
                 );
+
+                // ----------------------------------------------------
+                // PHASE 11 — CUSTOMER NOTIFICATIONS
+                // ----------------------------------------------------
+    
+                $messages = [
+                    'out_for_delivery' => [
+                        'title' => 'Order Update',
+                        'body' => 'Your order is on the way!',
+                    ],
+
+                    'delivered' => [
+                        'title' => 'Order Update',
+                        'body' => 'Your order has been delivered.',
+                    ],
+
+                    'failed' => [
+                        'title' => 'Order Update',
+                        'body' => 'Delivery could not be completed. We will follow up shortly.',
+                    ],
+                ];
+
+                if (isset($messages[$status])) {
+
+                    // Refresh the order/customer relationship
+                    // so we are using the current data.
+                    $order = $order->fresh([
+                        'customer.user',
+                    ]);
+
+                    if (
+                        $order->customer &&
+                        $order->customer->user
+                    ) {
+                        app(NotificationService::class)->sendToUser(
+                            $order->customer->user,
+                            $messages[$status]['title'],
+                            $messages[$status]['body'],
+                            [
+                                'entity_type' => 'delivery',
+                                'entity_id' => $delivery->id,
+                            ]
+                        );
+                    }
+                }
 
                 return $delivery->fresh();
             }

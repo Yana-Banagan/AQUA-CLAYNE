@@ -34,6 +34,15 @@ Route::prefix('v1')->group(function () {
         'role:customer'
     ])->group(function () {
 
+        Route::middleware('auth:sanctum')->group(function () {
+
+            Route::post('/auth/fcm-token', [
+                AuthController::class,
+                'updateFcmToken'
+            ]);
+
+            // your other authenticated routes...
+        });
         Route::get(
             '/addresses',
             [CustomerAddressController::class, 'index']

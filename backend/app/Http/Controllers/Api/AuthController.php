@@ -21,15 +21,15 @@ class AuthController extends Controller
 
         $user = DB::transaction(function () use ($validated) {
             $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'phone' => $validated['phone'],
-            'password_hash' => Hash::make($validated['password']),
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'phone' => $validated['phone'],
+                'password_hash' => Hash::make($validated['password']),
 
-            // NEVER accept role from the request
-            'role' => 'customer',
+                // NEVER accept role from the request
+                'role' => 'customer',
 
-            'status' => 'active',
+                'status' => 'active',
             ]);
             $user->customer()->create();
             return $user;
@@ -103,5 +103,18 @@ class AuthController extends Controller
         return $this->success([
             'user' => $request->user(),
         ]);
+    }
+
+    public function updateFcmToken(Request $request)
+    {
+        $data = $request->validate([
+            'fcm_token' => 'required|string',
+        ]);
+
+        $request->user()->update([
+            'fcm_token' => $data['fcm_token'],
+        ]);
+
+        return $this->success(null, 'Token registered');
     }
 }

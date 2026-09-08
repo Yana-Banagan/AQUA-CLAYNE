@@ -1,6 +1,8 @@
 import '../api/api_client.dart';
 import '../services/token_storage.dart';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
+
 class AuthRepository {
   final ApiClient api;
   final TokenStorage tokenStorage;
@@ -36,5 +38,21 @@ class AuthRepository {
     await api.post('/auth/logout', {}, auth: true);
 
     await tokenStorage.deleteToken();
+  }
+
+  Future<void> registerFcmToken() async {
+    final token = await FirebaseMessaging.instance.getToken();
+
+    if (token != null && token.isNotEmpty) {
+      await api.post('/auth/fcm-token', {'fcm_token': token});
+    }
+  }
+
+  Future<void> registerFcmTokenValue(String token) async {
+    if (token.isEmpty) {
+      return;
+    }
+
+    await api.post('/auth/fcm-token', {'fcm_token': token});
   }
 }
