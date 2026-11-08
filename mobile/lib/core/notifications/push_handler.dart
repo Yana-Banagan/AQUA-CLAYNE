@@ -4,135 +4,90 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import '../../driver/screens/delivery_details_screen.dart';
+import '../../customer/screens/order_detail_screen.dart';
+import '../../customer/screens/complaint_detail_screen.dart';
+import '../../driver/screens/delivery_detail_screen.dart';
 
 // ====================================================================
 // GLOBAL NAVIGATOR KEY
 // ====================================================================
-//
-// FCM callbacks do not have access to a Widget BuildContext.
-// This key allows notifications to navigate through the application.
-//
-
+// FCM callbacks have no BuildContext — this key lets us navigate from
+// anywhere without a context.
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 // ====================================================================
-// FLUTTER LOCAL NOTIFICATIONS
+// LOCAL NOTIFICATIONS PLUGIN
 // ====================================================================
-
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
 // ====================================================================
 // PUSH HANDLER
 // ====================================================================
-
 class PushHandler {
   // ================================================================
   // ANDROID NOTIFICATION CHANNEL
   // ================================================================
-
   static const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'default_channel',
-    'Notifications',
-    description: 'Aqua Clayne notifications',
+    'aqua_clayne_channel',
+    'Aqua Clayne Notifications',
+    description: 'Order updates, driver assignments, and delivery alerts.',
     importance: Importance.high,
   );
 
   // ================================================================
-  // INITIALIZE PUSH NOTIFICATIONS
+  // INITIALIZE
   // ================================================================
-
   static Future<void> initialize() async {
-    // --------------------------------------------------------------
-    // Android initialization
-    // --------------------------------------------------------------
+    // Android init settings
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    const androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
-    );
-
-    const initializationSettings = InitializationSettings(
-      android: androidSettings,
-    );
-
-    // --------------------------------------------------------------
-    // Initialize local notifications
-    // --------------------------------------------------------------
+    const initSettings = InitializationSettings(android: androidSettings);
 
     await flutterLocalNotificationsPlugin.initialize(
-      initializationSettings,
+      initSettings,
       onDidReceiveNotificationResponse: (response) {
         final payload = response.payload;
-
-        if (payload == null || payload.isEmpty) {
-          return;
+        if (payload != null && payload.isNotEmpty) {
+          _handlePayload(payload);
         }
-
-        _handleLocalNotificationTap(payload);
       },
     );
 
-    // --------------------------------------------------------------
-    // Create Android notification channel
-    // --------------------------------------------------------------
-
+    // Create the Android notification channel
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
+            AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
 
-    // --------------------------------------------------------------
-    // FOREGROUND
-    // --------------------------------------------------------------
+    // Foreground — app is open
+    FirebaseMessaging.onMessage.listen(_handleForeground);
 
-    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-
-    // --------------------------------------------------------------
-    // BACKGROUND → USER TAPS NOTIFICATION
-    // --------------------------------------------------------------
-
+    // Background tap — app was in background, user tapped notification
     FirebaseMessaging.onMessageOpenedApp.listen(_handleTap);
 
-    // --------------------------------------------------------------
-    // TERMINATED → USER TAPS NOTIFICATION
-    // --------------------------------------------------------------
-
+    // Terminated tap — app was closed, user tapped notification
     final initial = await FirebaseMessaging.instance.getInitialMessage();
-
     if (initial != null) {
+      // Small delay to let the app fully mount before navigating
+      await Future.delayed(const Duration(milliseconds: 500));
       _handleTap(initial);
     }
   }
 
   // ================================================================
-  // FOREGROUND MESSAGE
+  // FOREGROUND MESSAGE — show as local notification
   // ================================================================
-
-  static Future<void> _handleForegroundMessage(RemoteMessage message) async {
+  static Future<void> _handleForeground(RemoteMessage message) async {
     final notification = message.notification;
+    if (notification == null) return;
 
-    if (notification == null) {
-      return;
-    }
-
-    // --------------------------------------------------------------
-    // Keep only the data required for navigation.
-    //
-    // This follows the Phase 11 payload design:
-    //
-    // entity_type
-    // entity_id
-    //
-    // We do NOT put customer information, address, payment,
-    // credit/debt, or order financial information in the payload.
-    // --------------------------------------------------------------
-
-    final payloadData = <String, String>{
+    // Build a safe navigation payload — only IDs, no PII
+    final payload = jsonEncode({
       'entity_type': message.data['entity_type']?.toString() ?? '',
       'entity_id': message.data['entity_id']?.toString() ?? '',
-    };
+    });
 
     await flutterLocalNotificationsPlugin.show(
       message.hashCode,
@@ -140,71 +95,93 @@ class PushHandler {
       notification.body,
       const NotificationDetails(
         android: AndroidNotificationDetails(
-          'default_channel',
-          'Notifications',
-          channelDescription: 'Aqua Clayne notifications',
+          'aqua_clayne_channel',
+          'Aqua Clayne Notifications',
+          channelDescription:
+              'Order updates, driver assignments, and delivery alerts.',
           importance: Importance.high,
           priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
         ),
       ),
-      payload: jsonEncode(payloadData),
+      payload: payload,
     );
   }
 
   // ================================================================
-  // LOCAL NOTIFICATION TAP
+  // TAP ON NOTIFICATION (background / terminated)
   // ================================================================
+  static void _handleTap(RemoteMessage message) {
+    final payload = jsonEncode({
+      'entity_type': message.data['entity_type']?.toString() ?? '',
+      'entity_id': message.data['entity_id']?.toString() ?? '',
+    });
+    _handlePayload(payload);
+  }
 
-  static void _handleLocalNotificationTap(String payload) {
+  // ================================================================
+  // NAVIGATE BASED ON PAYLOAD
+  //
+  // entity_type   →  Screen
+  // ─────────────────────────────────────────────────────────────────
+  // order         →  OrderDetailScreen   (customer)
+  // delivery      →  DeliveryDetailScreen (driver)
+  // complaint     →  ComplaintDetailScreen (customer)
+  // notification  →  no specific screen — just loads notification list
+  // ================================================================
+  static void _handlePayload(String payload) {
     try {
-      final decoded = jsonDecode(payload);
+      final decoded = jsonDecode(payload) as Map;
+      final entityType = decoded['entity_type']?.toString() ?? '';
+      final entityId = decoded['entity_id']?.toString() ?? '';
 
-      if (decoded is! Map) {
+      if (entityId.isEmpty) return;
+
+      final navigator = navigatorKey.currentState;
+      if (navigator == null) {
+        debugPrint(
+            '[PushHandler] Navigator not ready for entity_type=$entityType');
         return;
       }
 
-      final entityType = decoded['entity_type']?.toString();
+      switch (entityType) {
+        // ── Customer: order status update ────────────────────────
+        case 'order':
+          navigator.push(
+            MaterialPageRoute(
+              builder: (_) => OrderDetailScreen(
+                orderId: entityId,
+                showBottomNavigation: true,
+              ),
+            ),
+          );
+          break;
 
-      final entityId = decoded['entity_id']?.toString();
+        // ── Driver: delivery assignment / status change ──────────
+        case 'delivery':
+          navigator.push(
+            MaterialPageRoute(
+              builder: (_) => DeliveryDetailScreen(id: entityId),
+            ),
+          );
+          break;
 
-      if (entityType == 'delivery' && entityId != null && entityId.isNotEmpty) {
-        _openDelivery(entityId);
+        // ── Customer: complaint response ─────────────────────────
+        case 'complaint':
+          navigator.push(
+            MaterialPageRoute(
+              builder: (_) => ComplaintDetailScreen(id: entityId),
+            ),
+          );
+          break;
+
+        // ── Unknown / notification-only ──────────────────────────
+        default:
+          debugPrint(
+              '[PushHandler] Unhandled entity_type: $entityType — no navigation.');
       }
     } catch (e) {
-      debugPrint('Unable to process local notification payload: $e');
+      debugPrint('[PushHandler] Failed to handle payload: $e');
     }
-  }
-
-  // ================================================================
-  // FCM NOTIFICATION TAP
-  // ================================================================
-
-  static void _handleTap(RemoteMessage message) {
-    final entityType = message.data['entity_type']?.toString();
-
-    final entityId = message.data['entity_id']?.toString();
-
-    if (entityType == 'delivery' && entityId != null && entityId.isNotEmpty) {
-      _openDelivery(entityId);
-    }
-  }
-
-  // ================================================================
-  // OPEN DELIVERY DETAILS
-  // ================================================================
-
-  static void _openDelivery(String deliveryId) {
-    final navigator = navigatorKey.currentState;
-
-    if (navigator == null) {
-      debugPrint('Navigator is not ready. Unable to open delivery.');
-      return;
-    }
-
-    navigator.push(
-      MaterialPageRoute(
-        builder: (_) => DeliveryDetailsScreen(deliveryId: deliveryId),
-      ),
-    );
   }
 }

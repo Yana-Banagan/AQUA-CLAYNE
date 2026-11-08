@@ -18,6 +18,22 @@ class Payment extends Model
         'amount',
         'status',
         'paid_at',
+        'gateway',
+        'gateway_reference',
+        'gateway_checkout_session_id',
+        'gateway_checkout_idempotency_key',
+        'gateway_payment_intent_id',
+        'gateway_payment_id',
+        'gateway_fee',
+        'gateway_net_amount',
+        'failure_reason',
+    ];
+
+    protected $casts = [
+        'paid_at' => 'datetime',
+        'amount' => 'decimal:2',
+        'gateway_fee' => 'decimal:2',
+        'gateway_net_amount' => 'decimal:2',
     ];
 
     public function order(): BelongsTo

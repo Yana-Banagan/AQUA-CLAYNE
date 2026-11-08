@@ -15,9 +15,12 @@ class Order extends Model
     protected $fillable = [
         'customer_id',
         'address_id',
+        'delivery_method',
+        'delivery_fee',
         'status',
         'total_amount',
         'order_number',
+        'client_request_id',
         'container_ownership',
         'expected_empty_gallons',
         'payment_method',
@@ -29,7 +32,22 @@ class Order extends Model
 
     protected function casts(): array
     {
-        return ['confirmed_at' => 'datetime', 'cancelled_at' => 'datetime', 'completed_at' => 'datetime'];
+        return [
+            'delivery_fee' => 'decimal:2',
+            'confirmed_at' => 'datetime',
+            'cancelled_at' => 'datetime',
+            'completed_at' => 'datetime',
+        ];
+    }
+
+    public function isStationPickup(): bool
+    {
+        return ($this->delivery_method ?? 'home_delivery') === 'station_pickup';
+    }
+
+    public function isHomeDelivery(): bool
+    {
+        return !$this->isStationPickup();
     }
 
     public function customer(): BelongsTo
@@ -39,7 +57,10 @@ class Order extends Model
 
     public function address(): BelongsTo
     {
-        return $this->belongsTo(CustomerAddress::class, 'address_id');
+        return $this->belongsTo(
+            CustomerAddress::class,
+            'address_id'
+        );
     }
 
     public function items(): HasMany
@@ -47,9 +68,9 @@ class Order extends Model
         return $this->hasMany(OrderItem::class);
     }
 
-    public function payments(): HasMany
+    public function payment(): HasOne
     {
-        return $this->hasMany(Payment::class);
+        return $this->hasOne(Payment::class);
     }
 
     public function delivery(): HasOne
@@ -62,7 +83,33 @@ class Order extends Model
         return $this->hasMany(CreditTransaction::class);
     }
 
-    public function statusHistory(): HasMany { return $this->hasMany(OrderStatusHistory::class); }
-    public function containerIntake(): HasOne { return $this->hasOne(OrderContainerIntake::class); }
-    public function refillQueueEntry(): HasOne { return $this->hasOne(RefillQueueEntry::class); }
+    public function statusHistory(): HasMany
+    {
+        return $this->hasMany(OrderStatusHistory::class);
+    }
+
+    public function containerIntake(): HasOne
+    {
+        return $this->hasOne(OrderContainerIntake::class);
+    }
+
+    public function refillQueueEntry(): HasOne
+    {
+        return $this->hasOne(RefillQueueEntry::class);
+    }
+
+    public function pickupBatchItem(): HasOne
+    {
+        return $this->hasOne(PickupBatchItem::class);
+    }
+
+    public function deliveryStop(): HasOne
+    {
+        return $this->hasOne(DeliveryStop::class);
+    }
+
+    public function rfidTransactions(): HasMany
+    {
+        return $this->hasMany(RfidTransaction::class);
+    }
 }

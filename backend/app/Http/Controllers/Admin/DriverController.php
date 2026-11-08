@@ -27,27 +27,16 @@ class DriverController extends Controller
         );
     }
 
-    public function create()
-    {
-        return view('admin.drivers.create');
-    }
-
     public function store(StoreDriverRequest $request)
     {
-        $result = $this->driverService->create(
-            $request->validated()
+        $this->driverService->create(
+            $request->validated(),
+            $request->user()
         );
 
         return redirect()
             ->route('admin.drivers.index')
-            ->with(
-                'temp_password',
-                $result['temp_password']
-            )
-            ->with(
-                'driver_email',
-                $result['user']->email
-            );
+            ->with('success', 'Driver account created successfully.');
     }
 
     public function edit(Driver $driver)
@@ -86,7 +75,8 @@ class DriverController extends Controller
 
         $this->driverService->setStatus(
             $driver,
-            $newStatus
+            $newStatus,
+            request()->user()
         );
 
         return redirect()

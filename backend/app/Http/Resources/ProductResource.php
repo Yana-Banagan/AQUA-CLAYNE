@@ -15,6 +15,7 @@ class ProductResource extends JsonResource
             'description' => $this->description,
             'price' => $this->price,
             'image_url' => $this->image_url,
+            'product_type' => $this->product_type ?? 'refill',
             'in_stock' => $this->inventory?->quantity_on_hand > 0,
         ];
     }

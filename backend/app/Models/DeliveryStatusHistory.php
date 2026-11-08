@@ -20,6 +20,13 @@ class DeliveryStatusHistory extends Model
         'note',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'created_at' => 'datetime',
+        ];
+    }
+
     public function delivery(): BelongsTo
     {
         return $this->belongsTo(Delivery::class);

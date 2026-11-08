@@ -4,23 +4,21 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\Driver;
+use App\Models\AuditLog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 class DriverService
 {
-    public function create(array $data): array
+    public function create(array $data, ?User $actor = null): array
     {
-        return DB::transaction(function () use ($data) {
-
-            $tempPassword = Str::random(10);
+        return DB::transaction(function () use ($data, $actor) {
 
             $user = User::create([
                 'name' => $data['name'],
                 'email' => $data['email'],
                 'phone' => $data['phone'] ?? null,
-                'password_hash' => Hash::make($tempPassword),
+                'password_hash' => Hash::make($data['password']),
                 'role' => 'driver',
                 'status' => 'active',
             ]);
@@ -31,20 +29,34 @@ class DriverService
                 'vehicle_plate' => $data['vehicle_plate'] ?? null,
             ]);
 
+            AuditLog::create([
+                'actor_id' => $actor?->id,
+                'action' => 'driver.created',
+                'table_name' => 'drivers',
+                'record_id' => $driver->id,
+            ]);
+
             return [
                 'user' => $user,
                 'driver' => $driver,
-                'temp_password' => $tempPassword,
             ];
         });
     }
 
     public function setStatus(
         Driver $driver,
-        string $status
+        string $status,
+        ?User $actor = null
     ): void {
         $driver->user->update([
             'status' => $status
+        ]);
+
+        AuditLog::create([
+            'actor_id' => $actor?->id,
+            'action' => 'driver.status_changed',
+            'table_name' => 'drivers',
+            'record_id' => $driver->id,
         ]);
     }
 }

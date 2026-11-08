@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
 
-import '../../core/api/api_client.dart';
-import '../../core/services/token_storage.dart';
-import '../../core/realtime/realtime_signals.dart';
-import '../data/delivery_repository.dart';
+import '../providers/driver_delivery_provider.dart';
 import 'delivery_details_screen.dart';
 
 class AssignedDeliveriesScreen extends StatefulWidget {
@@ -16,61 +13,18 @@ class AssignedDeliveriesScreen extends StatefulWidget {
 }
 
 class _AssignedDeliveriesScreenState extends State<AssignedDeliveriesScreen> {
-  late final DeliveryRepository repository;
-
-  late Future<List<Map<String, dynamic>>> deliveriesFuture;
-
-  late RealtimeChannel _channel;
-
   @override
   void initState() {
     super.initState();
-
-    // Existing repository setup
-    repository = DeliveryRepository(ApiClient(TokenStorage()));
-
-    // Initial load
-    deliveriesFuture = repository.assigned();
-
-    // Listen for delivery realtime signals
-    _channel = RealtimeSignals.listenForEntity('delivery', _reload);
-  }
-
-  void _reload() {
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      deliveriesFuture = repository.assigned();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && context.read<DriverDeliveryProvider>().assigned.isEmpty) {
+        context.read<DriverDeliveryProvider>().loadAssigned();
+      }
     });
   }
 
   Future<void> _refresh() async {
-    _reload();
-
-    await deliveriesFuture;
-  }
-
-  String _shortId(dynamic id) {
-    if (id == null) {
-      return 'Unknown';
-    }
-
-    final value = id.toString();
-
-    if (value.length <= 8) {
-      return value;
-    }
-
-    return value.substring(0, 8);
-  }
-
-  @override
-  void dispose() {
-    RealtimeSignals.stop(_channel);
-
-    super.dispose();
+    await context.read<DriverDeliveryProvider>().loadAssigned();
   }
 
   @override
@@ -79,24 +33,21 @@ class _AssignedDeliveriesScreenState extends State<AssignedDeliveriesScreen> {
       appBar: AppBar(title: const Text('Assigned Deliveries')),
       body: RefreshIndicator(
         onRefresh: _refresh,
-        child: FutureBuilder<List<Map<String, dynamic>>>(
-          future: deliveriesFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
+        child: Consumer<DriverDeliveryProvider>(
+          builder: (context, provider, _) {
+            if (provider.loading && provider.assigned.isEmpty) {
               return const Center(child: CircularProgressIndicator());
             }
 
-            if (snapshot.hasError) {
+            if (provider.error != null && provider.assigned.isEmpty) {
               return Center(
                 child: Text(
-                  snapshot.error is ApiException
-                      ? (snapshot.error as ApiException).message
-                      : 'Unable to load deliveries.',
+                  provider.error ?? 'Unable to load deliveries.',
                 ),
               );
             }
 
-            final deliveries = snapshot.data ?? [];
+            final deliveries = provider.assigned;
 
             if (deliveries.isEmpty) {
               return const Center(
@@ -110,11 +61,7 @@ class _AssignedDeliveriesScreenState extends State<AssignedDeliveriesScreen> {
               itemBuilder: (context, index) {
                 final delivery = deliveries[index];
 
-                final deliveryId = delivery['id']?.toString();
-
-                final orderId = delivery['order_id'];
-
-                final status = delivery['status']?.toString() ?? 'unknown';
+                final deliveryId = delivery.id;
 
                 return Card(
                   margin: const EdgeInsets.symmetric(
@@ -125,10 +72,10 @@ class _AssignedDeliveriesScreenState extends State<AssignedDeliveriesScreen> {
                     leading: const CircleAvatar(
                       child: Icon(Icons.local_shipping),
                     ),
-                    title: Text('Order #${_shortId(orderId)}'),
-                    subtitle: Text('Status: $status'),
+                    title: Text('Order #${delivery.orderNumber}'),
+                    subtitle: Text('Status: ${delivery.status}'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: deliveryId == null
+                    onTap: deliveryId.isEmpty
                         ? null
                         : () async {
                             await Navigator.push(
@@ -141,7 +88,7 @@ class _AssignedDeliveriesScreenState extends State<AssignedDeliveriesScreen> {
                             );
 
                             if (mounted) {
-                              _refresh();
+                              await _refresh();
                             }
                           },
                   ),

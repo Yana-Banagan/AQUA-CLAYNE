@@ -16,7 +16,14 @@ class MaintenanceRecord extends Model
         'maintenance_id',
         'performed_by',
         'notes',
+        'cost',
+        'equipment_status',
         'performed_at',
+    ];
+
+    protected $casts = [
+        'cost' => 'decimal:2',
+        'performed_at' => 'datetime',
     ];
 
     public function maintenance(): BelongsTo

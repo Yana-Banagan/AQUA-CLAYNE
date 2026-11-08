@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
-
-import '../../core/api/api_client.dart';
-import '../../core/services/token_storage.dart';
-import '../data/delivery_repository.dart';
-import 'delivery_details_screen.dart';
+import 'package:provider/provider.dart';
+import '../../core/models/delivery_model.dart';
+import '../../core/theme/app_spacing.dart';
+import '../../core/theme/driver_colors.dart';
+import '../../driver/providers/driver_delivery_provider.dart';
+import '../../shared_widgets/driver_delivery_card.dart';
+import '../../shared_widgets/driver_scaffold.dart';
+import '../../shared_widgets/loading_view.dart';
+import 'delivery_detail_screen.dart';
 
 class DeliveryHistoryScreen extends StatefulWidget {
   const DeliveryHistoryScreen({super.key});
@@ -12,113 +16,216 @@ class DeliveryHistoryScreen extends StatefulWidget {
   State<DeliveryHistoryScreen> createState() => _DeliveryHistoryScreenState();
 }
 
-class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
-  late final DeliveryRepository repository;
-
-  late Future<List<Map<String, dynamic>>> historyFuture;
+class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabs;
 
   @override
   void initState() {
     super.initState();
-
-    repository = DeliveryRepository(ApiClient(TokenStorage()));
-
-    historyFuture = repository.history();
-  }
-
-  Future<void> _refresh() async {
-    setState(() {
-      historyFuture = repository.history();
+    _tabs = TabController(length: 3, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _load();
     });
-
-    await historyFuture;
   }
 
-  String _shortId(dynamic id) {
-    if (id == null) {
-      return 'Unknown';
-    }
+  Future<void> _load() async {
+    await context.read<DriverDeliveryProvider>().loadHistory();
+  }
 
-    final value = id.toString();
-
-    if (value.length <= 8) {
-      return value;
-    }
-
-    return value.substring(0, 8);
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Delivery History')),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: FutureBuilder<List<Map<String, dynamic>>>(
-          future: historyFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            if (snapshot.hasError) {
-              return Center(
-                child: Text(
-                  snapshot.error is ApiException
-                      ? (snapshot.error as ApiException).message
-                      : 'Unable to load delivery history.',
-                ),
-              );
-            }
-
-            final deliveries = snapshot.data ?? [];
-
-            if (deliveries.isEmpty) {
-              return const Center(child: Text('No completed deliveries yet.'));
-            }
-
-            return ListView.builder(
-              physics: const AlwaysScrollableScrollPhysics(),
-              itemCount: deliveries.length,
-              itemBuilder: (context, index) {
-                final delivery = deliveries[index];
-
-                final deliveryId = delivery['id']?.toString();
-
-                final orderId = delivery['order_id'];
-
-                final status = delivery['status']?.toString() ?? 'unknown';
-
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  child: ListTile(
-                    leading: Icon(
-                      status == 'delivered' ? Icons.check_circle : Icons.error,
-                    ),
-                    title: Text('Order #${_shortId(orderId)}'),
-                    subtitle: Text('Status: $status'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: deliveryId == null
-                        ? null
-                        : () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => DeliveryDetailsScreen(
-                                  deliveryId: deliveryId,
-                                ),
-                              ),
-                            );
-                          },
-                  ),
-                );
-              },
-            );
-          },
+    return DriverScaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Delivery History',
+          style: TextStyle(
+            color: DriverColors.primaryDark,
+            fontWeight: FontWeight.bold,
+          ),
         ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: DriverColors.primaryDark),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: DriverColors.cardTranslucent,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: DriverColors.borderLight),
+            ),
+            child: TabBar(
+              controller: _tabs,
+              labelColor: Colors.white,
+              unselectedLabelColor: DriverColors.textSecondary,
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicator: BoxDecoration(
+                color: DriverColors.primary,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              labelStyle: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+              ),
+              dividerColor: Colors.transparent,
+              tabs: const [
+                Tab(text: 'All Completed'),
+                Tab(text: 'Today'),
+                Tab(text: 'This Week'),
+              ],
+            ),
+          ),
+        ),
+      ),
+      body: Consumer<DriverDeliveryProvider>(
+        builder: (context, prov, _) {
+          if (prov.loading && prov.history.isEmpty) {
+            return const LoadingView(message: 'Loading delivery history...');
+          }
+
+          final now = DateTime.now();
+
+          final today = prov.history.where((d) {
+            try {
+              final dt = DateTime.parse(d.createdAt).toLocal();
+              return dt.year == now.year &&
+                  dt.month == now.month &&
+                  dt.day == now.day;
+            } catch (_) {
+              return false;
+            }
+          }).toList();
+
+          final weekStart = now.subtract(Duration(days: now.weekday - 1));
+          final thisWeek = prov.history.where((d) {
+            try {
+              final dt = DateTime.parse(d.createdAt).toLocal();
+              return dt.isAfter(weekStart.subtract(const Duration(seconds: 1)));
+            } catch (_) {
+              return false;
+            }
+          }).toList();
+
+          return TabBarView(
+            controller: _tabs,
+            children: [
+              _HistoryListTab(
+                deliveries: prov.history,
+                emptySubtitle: 'No completed deliveries on record yet.',
+                onRefresh: _load,
+              ),
+              _HistoryListTab(
+                deliveries: today,
+                emptySubtitle: 'No deliveries completed today yet.',
+                onRefresh: _load,
+              ),
+              _HistoryListTab(
+                deliveries: thisWeek,
+                emptySubtitle: 'No deliveries completed this week.',
+                onRefresh: _load,
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _HistoryListTab extends StatelessWidget {
+  final List<DeliveryModel> deliveries;
+  final String emptySubtitle;
+  final Future<void> Function() onRefresh;
+
+  const _HistoryListTab({
+    required this.deliveries,
+    required this.emptySubtitle,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (deliveries.isEmpty) {
+      return RefreshIndicator(
+        color: DriverColors.primary,
+        onRefresh: onRefresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: DriverColors.cardTranslucent,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: DriverColors.borderLight),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.history,
+                    size: 48,
+                    color: DriverColors.textMuted,
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'No completed deliveries yet',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: DriverColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    emptySubtitle,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: DriverColors.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      color: DriverColors.primary,
+      onRefresh: onRefresh,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(AppSpacing.standard),
+        itemCount: deliveries.length,
+        itemBuilder: (context, index) {
+          final d = deliveries[index];
+          return DriverDeliveryCard(
+            deliveryModel: d,
+            showNavigateButton: false,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => DeliveryDetailScreen(id: d.id),
+              ),
+            ).then((_) => onRefresh()),
+          );
+        },
       ),
     );
   }

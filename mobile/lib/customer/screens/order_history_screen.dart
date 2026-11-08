@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/order_repository.dart';
-import '../../core/realtime/realtime_signals.dart';
+import '../../core/services/realtime_service.dart';
 
 class OrderHistoryScreen extends StatefulWidget {
   const OrderHistoryScreen({super.key});
@@ -15,7 +14,7 @@ class OrderHistoryScreen extends StatefulWidget {
 class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   late Future<List<Map<String, dynamic>>> _future;
 
-  late RealtimeChannel _channel;
+  VoidCallback? _removeRealtimeListener;
 
   @override
   void initState() {
@@ -28,7 +27,10 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     //
     // Driver status changes create a realtime delivery signal.
     // Laravel also updates the corresponding order status.
-    _channel = RealtimeSignals.listenForEntity('delivery', _reload);
+    _removeRealtimeListener = context.read<RealtimeService>().listenToEntity(
+      entityType: 'delivery',
+      onSignal: _reload,
+    );
   }
 
   void _reload() {
@@ -49,7 +51,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
 
   @override
   void dispose() {
-    RealtimeSignals.stop(_channel);
+    _removeRealtimeListener?.call();
 
     super.dispose();
   }

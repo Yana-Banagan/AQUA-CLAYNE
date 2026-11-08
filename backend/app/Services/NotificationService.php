@@ -12,17 +12,6 @@ use Kreait\Firebase\Exception\Messaging\InvalidArgument;
 
 class NotificationService
 {
-    private $messaging;
-
-    public function __construct()
-    {
-        $this->messaging = (new Factory)
-            ->withServiceAccount(
-                config('services.firebase.credentials')
-            )
-            ->createMessaging();
-    }
-
     public function sendToUser(
         User $user,
         string $title,
@@ -33,17 +22,56 @@ class NotificationService
         // 1. Always save notification to database
         // ------------------------------------------------------------
 
-        Notification::create([
-            'user_id' => $user->id,
-            'title' => $title,
-            'body' => $body,
-        ]);
+        $entityType = $data['entity_type'] ?? null;
+        $entityId = $data['entity_id'] ?? null;
+
+        // The database has a unique key on (user_id, entity_type, entity_id).
+        // Reuse the matching notification for every entity type, not only
+        // orders. Otherwise, a second delivery update attempts a duplicate
+        // insert and prevents the enclosing delivery transaction from
+        // completing.
+        if (filled($entityType) && filled($entityId)) {
+            $notification = Notification::updateOrCreate(
+                [
+                    'user_id' => $user->id,
+                    'entity_type' => $entityType,
+                    'entity_id' => $entityId,
+                ],
+                [
+                    'title' => $title,
+                    'body' => $body,
+                    'is_read' => false,
+                    'created_at' => now(),
+                ]
+            );
+        } else {
+            $notification = Notification::create([
+                'user_id' => $user->id,
+                'title' => $title,
+                'body' => $body,
+                'entity_type' => $entityType,
+                'entity_id' => $entityId,
+            ]);
+        }
+
+        try {
+            app(RealtimeEventService::class)->emit(
+                'notification',
+                $notification->id,
+                'created'
+            );
+        } catch (\Throwable $e) {
+            // Database persistence is the source of truth. A realtime signal
+            // must never prevent the notification itself from being delivered.
+            report($e);
+        }
 
         // ------------------------------------------------------------
         // 2. If user has no FCM token, stop here
         // ------------------------------------------------------------
 
-        if (!$user->fcm_token) {
+        $credentials = config('services.firebase.credentials');
+        if (!$user->fcm_token || blank($credentials)) {
             return;
         }
 
@@ -52,6 +80,10 @@ class NotificationService
         // ------------------------------------------------------------
 
         try {
+            $messaging = (new Factory)
+                ->withServiceAccount($credentials)
+                ->createMessaging();
+
             $message = CloudMessage::new()
                 ->withToken($user->fcm_token)
                 ->withNotification(
@@ -62,7 +94,7 @@ class NotificationService
                 )
                 ->withData($data);
 
-            $this->messaging->send($message);
+            $messaging->send($message);
 
         } catch (NotFound | InvalidArgument $e) {
 
@@ -73,6 +105,8 @@ class NotificationService
             $user->update([
                 'fcm_token' => null,
             ]);
+        } catch (\Throwable $e) {
+            report($e);
         }
     }
 }

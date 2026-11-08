@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use App\Models\CreditAccount;
 
 class Customer extends Model
 {
@@ -17,6 +19,14 @@ class Customer extends Model
         'user_id',
         'birthdate',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'birthdate' => 'date',
+            'created_at' => 'datetime',
+        ];
+    }
 
     public function user(): BelongsTo
     {
@@ -33,9 +43,9 @@ class Customer extends Model
         return $this->hasMany(Order::class);
     }
 
-    public function creditAccounts(): HasMany
+    public function creditAccount(): HasOne
     {
-        return $this->hasMany(CreditAccount::class);
+        return $this->hasOne(CreditAccount::class);
     }
 
     public function complaints(): HasMany

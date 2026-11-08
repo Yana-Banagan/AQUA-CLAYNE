@@ -1,0 +1,1246 @@
+/* =============================================================================
+   AQUA CLAYNE Water Refilling Station Management System
+   Universal Admin & Staff Responsive Stylesheet (admin-responsive.css)
+   
+   Supports All 5 Viewport Tiers:
+   1. Large Desktop Monitors (1920px and above)
+   2. Standard Desktop Monitors (1366px–1919px)
+   3. Laptops (1024px–1365px)
+   4. Tablets (768px–1023px) — Collapsible Icon-Only Nav & Touch Optimized
+   5. Mobile Phones (320px–767px) — Off-Canvas Drawer & Stacked Layouts
+   + Extra-Compact Phones (<= 380px)
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   0. UNIVERSAL BASELINE & RESET CONSTRAINTS
+   ----------------------------------------------------------------------------- */
+html, body {
+    max-width: 100%;
+}
+body.dashboard-body {
+    overflow-x: clip;
+    min-height: 100vh;
+    min-height: 100dvh;
+}
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+/* Prevent any child section from creating unhandled horizontal scrolling */
+.dashboard-layout,
+.dashboard-main,
+.dashboard-content,
+.dashboard-content > *,
+.dashboard-content section,
+.dashboard-content article,
+.dashboard-content .panel,
+.dashboard-content .card,
+.dashboard-content .refill-queue-page,
+.dashboard-content .deliveries-page,
+.dashboard-content .orders-page {
+    min-width: 0;
+}
+
+/* Scalable media & embeddables */
+.dashboard-content img,
+.dashboard-content svg,
+.dashboard-content canvas,
+.dashboard-content video,
+.dashboard-content iframe {
+    max-width: 100%;
+}
+.dashboard-content img {
+    height: auto;
+}
+
+/* Accessible touch targets & tap behavior */
+button, .btn, .primary-button, .secondary-button, .table-action,
+input, select, textarea, .nav-link {
+    touch-action: manipulation;
+}
+
+/* -----------------------------------------------------------------------------
+   1. UNIVERSAL TABLE CONTAINERS (DATA MANAGEMENT ACROSS ALL MODULES)
+   Customers, Drivers, Products, Orders, Inventory, Maintenance,
+   Payments, Deliveries, Refill Queue, Reports
+   ----------------------------------------------------------------------------- */
+.dashboard-content .data-table-wrap,
+.dashboard-content .table-responsive,
+.dashboard-content .orders-table-wrapper,
+.dashboard-content .walk-in-orders-table-wrap,
+.dashboard-content .delivery-table-wrapper,
+.dashboard-content .active-mission-table-wrap,
+.dashboard-content .refill-table-wrapper,
+.dashboard-content .refill-table-wrap,
+.dashboard-content .chat-table-wrap,
+.panel > .data-table-wrap,
+.panel > .table-responsive {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto !important;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+    border-radius: 12px;
+}
+
+/* Elegant scrollbar styling for tables */
+.data-table-wrap::-webkit-scrollbar,
+.table-responsive::-webkit-scrollbar,
+.orders-table-wrapper::-webkit-scrollbar,
+.delivery-table-wrapper::-webkit-scrollbar,
+.refill-table-wrap::-webkit-scrollbar {
+    height: 6px;
+}
+.data-table-wrap::-webkit-scrollbar-thumb,
+.table-responsive::-webkit-scrollbar-thumb,
+.orders-table-wrapper::-webkit-scrollbar-thumb,
+.delivery-table-wrapper::-webkit-scrollbar-thumb,
+.refill-table-wrap::-webkit-scrollbar-thumb {
+    background: rgba(0, 102, 204, 0.28);
+    border-radius: 999px;
+}
+html[data-theme="dark"] .data-table-wrap::-webkit-scrollbar-thumb,
+html[data-theme="dark"] .table-responsive::-webkit-scrollbar-thumb,
+html[data-theme="dark"] .orders-table-wrapper::-webkit-scrollbar-thumb,
+html[data-theme="dark"] .delivery-table-wrapper::-webkit-scrollbar-thumb,
+html[data-theme="dark"] .refill-table-wrap::-webkit-scrollbar-thumb {
+    background: rgba(56, 189, 248, 0.35);
+}
+
+/* -----------------------------------------------------------------------------
+   2. UNIVERSAL CHART & VISUALIZATION CONTAINERS
+   ----------------------------------------------------------------------------- */
+.dashboard-content .chart-card,
+.dashboard-content .chart-container,
+.dashboard-content .chart-canvas-container,
+.dashboard-content .doughnut-container,
+.dashboard-content .chart-area {
+    min-width: 0;
+    max-width: 100%;
+    position: relative;
+}
+.dashboard-content canvas {
+    display: block;
+    max-width: 100%;
+}
+
+/* -----------------------------------------------------------------------------
+   3. UNIVERSAL MODAL DIALOGS & ACTION CONFIRMATIONS
+   Centered desktop, appropriately sized tablet, nearly full-width mobile
+   ----------------------------------------------------------------------------- */
+.modal-backdrop,
+.delivery-modal-backdrop,
+.modal-overlay,
+.dialog-backdrop,
+.action-confirm-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: grid;
+    place-items: center;
+    padding: max(16px, env(safe-area-inset-top)) 14px max(16px, env(safe-area-inset-bottom));
+    background: rgba(5, 23, 46, 0.65);
+    backdrop-filter: blur(5px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.modal-backdrop > .modal-card,
+.modal-backdrop > .modal-content,
+.modal-backdrop > .modal,
+.delivery-modal-backdrop > .delivery-modal,
+.delivery-modal-backdrop > .delivery-modal-card,
+.delivery-modal-backdrop > .modal-large,
+.modal-overlay > .modal-card,
+.dialog-backdrop > .dialog-card,
+.action-confirm-card,
+dialog.driver-register-dialog,
+.walk-in-order-modal {
+    width: min(100%, 680px);
+    max-width: 100%;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 16px;
+    box-shadow: 0 24px 70px rgba(3, 25, 52, 0.32);
+}
+
+/* =============================================================================
+   TIER 1: LARGE DESKTOP MONITORS (1920px and above)
+   ============================================================================= */
+@media (min-width: 1920px) {
+    .dashboard-content {
+        max-width: 1800px;
+        margin-inline: auto;
+        padding: 24px 32px;
+    }
+    .dashboard-content .stat-grid,
+    .dashboard-content .stats-grid,
+    .dashboard-content .metric-grid,
+    .dashboard-content .kpi-grid,
+    .dashboard-content .dashboard-stats {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 16px;
+    }
+    .dashboard-content .dashboard-bento-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+    }
+    .dashboard-content .ops-dispatch-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+    }
+    .dashboard-content .chart-canvas-container {
+        height: 280px;
+    }
+}
+
+/* =============================================================================
+   TIER 2: STANDARD DESKTOP MONITORS (1366px–1919px)
+   ============================================================================= */
+@media (min-width: 1366px) and (max-width: 1919px) {
+    .sidebar {
+        width: 275px;
+        min-width: 275px;
+        transform: translateX(0);
+    }
+    .dashboard-main {
+        margin-left: 275px;
+        width: calc(100% - 275px);
+    }
+    .menu-toggle-btn {
+        display: none !important;
+    }
+    .dashboard-content .stat-grid,
+    .dashboard-content .stats-grid,
+    .dashboard-content .metric-grid,
+    .dashboard-content .kpi-grid {
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 14px;
+    }
+    .dashboard-content .dashboard-bento-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+    }
+    .dashboard-content .chart-canvas-container {
+        height: 250px;
+    }
+}
+
+/* =============================================================================
+   TIER 3: LAPTOPS (1024px–1365px)
+   ============================================================================= */
+@media (min-width: 1024px) and (max-width: 1365px) {
+    .sidebar {
+        width: 260px;
+        min-width: 260px;
+        transform: translateX(0);
+    }
+    .dashboard-main {
+        margin-left: 260px;
+        width: calc(100% - 260px);
+    }
+    .menu-toggle-btn {
+        display: none !important;
+    }
+    .dashboard-content {
+        padding: 20px 22px;
+        gap: 18px;
+    }
+    .dashboard-content .stat-grid,
+    .dashboard-content .stats-grid,
+    .dashboard-content .metric-grid,
+    .dashboard-content .kpi-grid,
+    .dashboard-content .dashboard-stats {
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 12px;
+    }
+    .dashboard-content .dashboard-bento-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+    .dashboard-content .ops-dispatch-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .dashboard-content .two-column-grid,
+    .dashboard-content .detail-grid,
+    .dashboard-content .show-grid,
+    .dashboard-content .order-detail-layout,
+    .dashboard-content .customer-layout {
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+        gap: 18px;
+    }
+}
+
+/* =============================================================================
+   TIER 4: TABLETS (768px–1023px)
+   Collapsible Icon-Only Navigation (72px) with Expand/Collapse Toggle Button
+   ============================================================================= */
+@media (min-width: 768px) and (max-width: 1023px) {
+    /* Header Menu Toggle Button */
+    .menu-toggle-btn {
+        display: inline-flex !important;
+        width: 42px;
+        height: 42px;
+        min-width: 42px;
+        flex: 0 0 42px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        cursor: pointer;
+    }
+
+    /* 1. Default State: Icon-Only Collapsed Sidebar (72px) */
+    body:not(.sidebar-expanded) .sidebar {
+        width: 72px !important;
+        min-width: 72px !important;
+        transform: translateX(0) !important;
+        z-index: 50;
+        transition: width 0.22s ease-in-out;
+    }
+    body:not(.sidebar-expanded) .dashboard-main {
+        margin-left: 72px !important;
+        width: calc(100% - 72px) !important;
+        transition: margin-left 0.22s ease-in-out;
+    }
+    body:not(.sidebar-expanded) .sidebar-brand {
+        padding: 0 !important;
+        justify-content: center !important;
+    }
+    body:not(.sidebar-expanded) .brand-link {
+        justify-content: center !important;
+        gap: 0 !important;
+        width: 100% !important;
+    }
+    body:not(.sidebar-expanded) .brand-text-wrap {
+        display: none !important;
+    }
+    body:not(.sidebar-expanded) .sidebar-nav {
+        padding: 0.75rem 0.35rem !important;
+        align-items: center !important;
+        gap: 0.75rem !important;
+    }
+    body:not(.sidebar-expanded) .nav-group {
+        width: 100% !important;
+        align-items: center !important;
+        gap: 0.35rem !important;
+    }
+    body:not(.sidebar-expanded) .nav-group-title {
+        display: none !important;
+    }
+    body:not(.sidebar-expanded) .nav-link {
+        width: 48px !important;
+        height: 48px !important;
+        padding: 0 !important;
+        justify-content: center !important;
+        border-radius: 10px !important;
+        margin: 0 auto !important;
+        position: relative !important;
+    }
+    body:not(.sidebar-expanded) .nav-label {
+        display: none !important;
+    }
+    body:not(.sidebar-expanded) .nav-icon {
+        transform: none !important;
+        margin: 0 !important;
+    }
+    body:not(.sidebar-expanded) .nav-badge {
+        position: absolute !important;
+        top: 4px !important;
+        right: 4px !important;
+        padding: 2px 4px !important;
+        font-size: 9px !important;
+        min-width: 10px !important;
+        line-height: 1 !important;
+    }
+    body:not(.sidebar-expanded) .sidebar-footer {
+        padding: 0.75rem 0.35rem !important;
+        align-items: center !important;
+    }
+    body:not(.sidebar-expanded) .sidebar-user-card {
+        justify-content: center !important;
+        gap: 0 !important;
+    }
+    body:not(.sidebar-expanded) .user-info {
+        display: none !important;
+    }
+    body:not(.sidebar-expanded) .logout-btn {
+        width: 44px !important;
+        height: 44px !important;
+        padding: 0 !important;
+        justify-content: center !important;
+    }
+    body:not(.sidebar-expanded) .logout-btn span {
+        display: none !important;
+    }
+
+    /* 2. Expanded State on Tablet (When Operator Taps Toggle Button) */
+    body.sidebar-expanded .sidebar {
+        width: 275px !important;
+        min-width: 275px !important;
+        transform: translateX(0) !important;
+        z-index: 1200 !important;
+        box-shadow: 4px 0 32px rgba(3, 40, 80, 0.38) !important;
+        transition: width 0.22s ease-in-out;
+    }
+    body.sidebar-expanded .sidebar-brand {
+        padding: 0 1.25rem !important;
+        justify-content: flex-start !important;
+    }
+    body.sidebar-expanded .brand-link {
+        justify-content: flex-start !important;
+        gap: 0.75rem !important;
+    }
+    body.sidebar-expanded .brand-text-wrap {
+        display: flex !important;
+    }
+    body.sidebar-expanded .sidebar-nav {
+        padding: 1rem 0.75rem !important;
+        align-items: stretch !important;
+        gap: 1.25rem !important;
+    }
+    body.sidebar-expanded .nav-group {
+        align-items: stretch !important;
+    }
+    body.sidebar-expanded .nav-group-title {
+        display: block !important;
+    }
+    body.sidebar-expanded .nav-link {
+        width: auto !important;
+        height: auto !important;
+        padding: 0.6rem 0.75rem !important;
+        justify-content: flex-start !important;
+    }
+    body.sidebar-expanded .nav-label {
+        display: block !important;
+    }
+    body.sidebar-expanded .nav-badge {
+        position: static !important;
+        font-size: 0.7rem !important;
+        padding: 0.15rem 0.5rem !important;
+    }
+    body.sidebar-expanded .sidebar-footer {
+        padding: 0.85rem 1rem !important;
+        align-items: stretch !important;
+    }
+    body.sidebar-expanded .sidebar-user-card {
+        justify-content: flex-start !important;
+        gap: 0.75rem !important;
+    }
+    body.sidebar-expanded .user-info {
+        display: flex !important;
+    }
+    body.sidebar-expanded .logout-btn {
+        width: 100% !important;
+        height: auto !important;
+        padding: 0.5rem 0.75rem !important;
+        justify-content: center !important;
+    }
+    body.sidebar-expanded .logout-btn span {
+        display: inline !important;
+    }
+    body.sidebar-expanded .sidebar-backdrop.active {
+        display: block !important;
+        position: fixed !important;
+        inset: 0 !important;
+        background: rgba(4, 20, 39, 0.55) !important;
+        backdrop-filter: blur(4px) !important;
+        z-index: 1190 !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+
+    /* Tablet Content & Grids */
+    .dashboard-content {
+        padding: 18px 20px;
+        gap: 16px;
+    }
+    .dashboard-content .stat-grid,
+    .dashboard-content .stats-grid,
+    .dashboard-content .metric-grid,
+    .dashboard-content .kpi-grid,
+    .dashboard-content .dashboard-stats,
+    .dashboard-content .delivery-stats,
+    .dashboard-content .refill-kpi-grid,
+    .dashboard-content .refill-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 12px !important;
+    }
+    .dashboard-content .dashboard-bento-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 14px !important;
+    }
+    .dashboard-content .ops-dispatch-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    .dashboard-content .charts-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+    }
+    .dashboard-content .chart-canvas-container {
+        height: 220px;
+    }
+    .dashboard-content .two-column-grid,
+    .dashboard-content .detail-grid,
+    .dashboard-content .show-grid,
+    .dashboard-content .form-grid,
+    .dashboard-content .settings-grid,
+    .dashboard-content .report-grid,
+    .dashboard-content .customer-detail-grid,
+    .dashboard-content .delivery-content-grid,
+    .dashboard-content .refill-operations-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 16px;
+    }
+    .dashboard-content .page-header {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    /* Tablet Tables */
+    .dashboard-content .data-table-wrap table,
+    .dashboard-content .table-responsive table,
+    .dashboard-content .orders-table-wrapper table,
+    .dashboard-content .walk-in-orders-table-wrap table,
+    .dashboard-content .delivery-table-wrapper table,
+    .dashboard-content .active-mission-table-wrap table,
+    .dashboard-content .refill-table-wrapper table,
+    .dashboard-content .refill-table-wrap table {
+        width: max-content;
+        min-width: 620px;
+    }
+    .dashboard-content .data-table th,
+    .dashboard-content .data-table td,
+    .dashboard-content .table th,
+    .dashboard-content .table td,
+    .dashboard-content .orders-table th,
+    .dashboard-content .orders-table td,
+    .dashboard-content .delivery-table th,
+    .dashboard-content .delivery-table td,
+    .dashboard-content .refill-table th,
+    .dashboard-content .refill-table td {
+        padding: 10px 14px;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+    .dashboard-content .data-table td .row-actions,
+    .dashboard-content .table td .row-actions,
+    .dashboard-content .data-table td .table-action,
+    .dashboard-content .table td .table-action {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 38px;
+        padding: 6px 12px;
+    }
+
+    /* Tablet Modals */
+    .modal-backdrop > .modal-card,
+    .modal-backdrop > .modal-content,
+    .modal-backdrop > .modal,
+    .delivery-modal-backdrop > .delivery-modal,
+    .delivery-modal-backdrop > .delivery-modal-card,
+    .delivery-modal-backdrop > .modal-large,
+    .modal-overlay > .modal-card,
+    .dialog-backdrop > .dialog-card,
+    .action-confirm-card,
+    dialog.driver-register-dialog {
+        width: min(92%, 640px) !important;
+        max-height: calc(100vh - 40px);
+        max-height: calc(100dvh - 40px);
+    }
+}
+
+/* =============================================================================
+   TIER 5: MOBILE PHONES (320px–767px)
+   Off-Canvas Slide-Out Navigation Drawer, Compact Header, Non-Overlapping Controls,
+   Touch Friendly Tables, and Stacked Operational Cards
+   ============================================================================= */
+@media (max-width: 767px) {
+    /* 1. Mobile Off-Canvas Sidebar Drawer */
+    .sidebar {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: min(290px, 85vw) !important;
+        min-width: 0 !important;
+        height: 100vh !important;
+        height: 100dvh !important;
+        z-index: 1200 !important;
+        transform: translateX(-100%) !important;
+        transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        box-shadow: 4px 0 28px rgba(3, 40, 80, 0.32) !important;
+    }
+    .sidebar.open {
+        transform: translateX(0) !important;
+    }
+    .sidebar-backdrop {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background: rgba(4, 20, 39, 0.65) !important;
+        backdrop-filter: blur(4px) !important;
+        z-index: 1190 !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        transition: opacity 0.24s ease, visibility 0.24s ease !important;
+    }
+    .sidebar-backdrop.active {
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+    .dashboard-main {
+        margin-left: 0 !important;
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    /* 2. Compact Header & Non-Overlapping Controls */
+    .dashboard-header {
+        min-height: 56px !important;
+        height: 56px !important;
+        padding: 0 10px !important;
+        gap: 6px !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+    }
+    .header-left {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        min-width: 0 !important;
+        flex: 1 1 auto !important;
+    }
+    .menu-toggle-btn {
+        display: inline-flex !important;
+        width: 40px !important;
+        height: 40px !important;
+        min-width: 40px !important;
+        flex: 0 0 40px !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 9px !important;
+    }
+    .header-page-title {
+        min-width: 0 !important;
+        max-width: min(38vw, 210px) !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+        font-size: clamp(14px, 4vw, 17px) !important;
+        line-height: 1.2 !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        color: var(--text-heading) !important;
+    }
+    .header-right {
+        display: flex !important;
+        align-items: center !important;
+        gap: 3px !important;
+        flex: 0 0 auto !important;
+        min-width: 0 !important;
+    }
+    .header-icon-btn,
+    .theme-toggle-btn {
+        width: 38px !important;
+        height: 38px !important;
+        min-width: 38px !important;
+        flex: 0 0 38px !important;
+    }
+    .header-user-btn {
+        min-width: 38px !important;
+        height: 38px !important;
+        padding: 2px !important;
+    }
+    .header-user-text,
+    .header-user-btn .dropdown-chevron,
+    .station-live-badge {
+        display: none !important;
+    }
+    .header-user-avatar {
+        width: 34px !important;
+        height: 34px !important;
+    }
+
+    /* Fixed Viewport Dropdown Menus */
+    .dropdown-menu {
+        max-width: calc(100vw - 20px) !important;
+    }
+    .notif-dropdown {
+        position: fixed !important;
+        top: 60px !important;
+        right: 10px !important;
+        left: 10px !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: min(72dvh, 500px) !important;
+        overflow-y: auto !important;
+        border-radius: 14px !important;
+        box-shadow: 0 16px 48px rgba(3, 40, 80, 0.28) !important;
+        z-index: 1500 !important;
+    }
+    .profile-dropdown {
+        position: fixed !important;
+        top: 60px !important;
+        right: 10px !important;
+        width: min(280px, calc(100vw - 20px)) !important;
+        border-radius: 14px !important;
+        box-shadow: 0 16px 48px rgba(3, 40, 80, 0.28) !important;
+        z-index: 1500 !important;
+    }
+
+    /* 3. Mobile Workspace Layout & Spacing */
+    .dashboard-content {
+        width: 100% !important;
+        padding: 12px 10px calc(20px + env(safe-area-inset-bottom)) !important;
+        gap: 12px !important;
+    }
+    .dashboard-content .page-header {
+        min-height: 0 !important;
+        padding: 16px 14px !important;
+        border-radius: 14px !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+    }
+    .dashboard-content .page-header h1 {
+        font-size: clamp(20px, 6vw, 26px) !important;
+        overflow-wrap: anywhere !important;
+        line-height: 1.25 !important;
+    }
+    .dashboard-content .page-header .header-actions {
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    .dashboard-content .page-header .header-actions > * {
+        width: 100% !important;
+        min-height: 42px !important;
+        justify-content: center !important;
+        text-align: center !important;
+    }
+
+    /* 4. Mobile KPI Grid (2 Columns) */
+    .dashboard-content .stat-grid,
+    .dashboard-content .stats-grid,
+    .dashboard-content .metric-grid,
+    .dashboard-content .kpi-grid,
+    .dashboard-content .dashboard-stats,
+    .dashboard-content .delivery-stats,
+    .dashboard-content .refill-kpi-grid,
+    .dashboard-content .refill-stats {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+    }
+    .dashboard-content .stat-card,
+    .dashboard-content .delivery-stat-card,
+    .dashboard-content .refill-card.kpi-card {
+        min-width: 0 !important;
+        min-height: 88px !important;
+        padding: 10px 8px !important;
+        border-radius: 12px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+    }
+    .dashboard-content .stat-card .stat-number,
+    .dashboard-content .stat-card .stat-value,
+    .dashboard-content .delivery-stat-card .stat-number,
+    .dashboard-content .refill-card .kpi-value {
+        font-size: clamp(19px, 6vw, 24px) !important;
+        font-weight: 800 !important;
+        line-height: 1.2 !important;
+        overflow-wrap: anywhere !important;
+    }
+    .dashboard-content .stat-card .stat-label,
+    .dashboard-content .stat-card .stat-title,
+    .dashboard-content .delivery-stat-card .stat-title,
+    .dashboard-content .refill-card .kpi-label {
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.05em !important;
+        line-height: 1.3 !important;
+    }
+    .dashboard-content .stat-card small,
+    .dashboard-content .stat-card .stat-meta,
+    .dashboard-content .delivery-stat-card .stat-subtitle,
+    .dashboard-content .refill-card .kpi-meta {
+        font-size: 10.5px !important;
+        line-height: 1.3 !important;
+    }
+
+    /* 5. Mobile Dashboard Bento & Operations Panels */
+    .dashboard-content .dashboard-bento-grid {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 12px !important;
+    }
+    .dashboard-content .bento-card {
+        min-width: 0;
+        background: #FFFFFF;
+        border: 1px solid #E2EEF8;
+        border-radius: 14px;
+        box-shadow: 0 4px 16px rgba(6, 59, 115, .08);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .dashboard-content .bento-card-header {
+        background: linear-gradient(115deg, #0052CC 0%, #0066CC 45%, #0284C7 80%, #0EA5E9 100%);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 68px;
+        padding: 12px 14px;
+        gap: 10px;
+    }
+    .dashboard-content .bento-card-title {
+        font-size: 15px !important;
+        font-weight: 800;
+        color: #FFFFFF;
+        margin: 0;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+    }
+    .dashboard-content .bento-card-subtitle {
+        margin-top: 3px;
+        font-size: 11px !important;
+        line-height: 1.3;
+        color: rgba(255, 255, 255, .9);
+    }
+    .dashboard-content .bento-header-icon {
+        width: 38px;
+        height: 38px;
+        flex: 0 0 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #FFFFFF;
+        background: rgba(255, 255, 255, .2);
+        border: 1px solid rgba(255, 255, 255, .35);
+        border-radius: 10px;
+    }
+    .dashboard-content .bento-card-body {
+        padding: 12px 14px;
+        background: #FFFFFF;
+    }
+    .dashboard-content .bento-pill-card {
+        padding: 10px 12px;
+        border-radius: 10px;
+        margin-bottom: 8px;
+    }
+
+    /* 6. Mobile Welcome Banner */
+    .dashboard-content .dashboard-welcome {
+        display: block !important;
+        width: 100%;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        padding: 14px !important;
+        margin: 0;
+        border-radius: 14px;
+        overflow: hidden;
+    }
+    .dashboard-content .dashboard-welcome .welcome-content {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        width: 100%;
+        min-width: 0;
+    }
+    .dashboard-content .dashboard-welcome .welcome-greeting {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        min-width: 0;
+        width: 100%;
+    }
+    .dashboard-content .dashboard-welcome .welcome-badge {
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 999px;
+    }
+    .dashboard-content .dashboard-welcome .welcome-title {
+        display: block !important;
+        font-size: clamp(20px, 6vw, 25px) !important;
+        color: #FFFFFF;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+    }
+    .dashboard-content .dashboard-welcome .welcome-subtitle {
+        display: block !important;
+        font-size: 12.5px !important;
+        color: #D1EAFE;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+    }
+    .dashboard-content .dashboard-welcome .welcome-datetime-card {
+        width: fit-content;
+        max-width: 100%;
+        padding: 8px 12px;
+        gap: 8px;
+        border-radius: 10px;
+    }
+
+    /* 7. Mobile Table Touch-Friendly Scrolling (Never Overly Shrunk) */
+    .dashboard-content .data-table-wrap table,
+    .dashboard-content .table-responsive table,
+    .dashboard-content .orders-table-wrapper table,
+    .dashboard-content .walk-in-orders-table-wrap table,
+    .dashboard-content .delivery-table-wrapper table,
+    .dashboard-content .active-mission-table-wrap table,
+    .dashboard-content .refill-table-wrapper table,
+    .dashboard-content .refill-table-wrap table {
+        width: max-content;
+        min-width: 580px;
+    }
+    .dashboard-content .data-table-wrap table[style*="min-width: 100%"] {
+        width: 580px;
+        min-width: 580px;
+    }
+    .dashboard-content .data-table th,
+    .dashboard-content .data-table td,
+    .dashboard-content .table th,
+    .dashboard-content .table td,
+    .dashboard-content .orders-table th,
+    .dashboard-content .orders-table td,
+    .dashboard-content .delivery-table th,
+    .dashboard-content .delivery-table td,
+    .dashboard-content .refill-table th,
+    .dashboard-content .refill-table td {
+        padding: 10px 12px;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+    .dashboard-content .data-table td .row-actions,
+    .dashboard-content .table td .row-actions,
+    .dashboard-content .data-table td .table-action,
+    .dashboard-content .table td .table-action {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 38px;
+        padding: 6px 10px;
+        font-size: 12.5px;
+        white-space: nowrap;
+    }
+
+    /* 8. Mobile Forms, Filter Bars & Controls (Font-Size 16px to prevent iOS auto-zoom) */
+    .dashboard-content input:not([type="checkbox"]):not([type="radio"]),
+    .dashboard-content select,
+    .dashboard-content textarea,
+    .dashboard-content .form-control {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-height: 44px;
+        font-size: 16px !important;
+        box-sizing: border-box;
+    }
+    .dashboard-content textarea {
+        min-height: 96px;
+    }
+    .dashboard-content .filter-bar,
+    .dashboard-content .page-actions,
+    .dashboard-content .form-actions {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+    }
+    .dashboard-content .filter-bar > *,
+    .dashboard-content .page-actions > * {
+        min-width: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    .dashboard-content .filter-bar input[style*="min-width"] {
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+    .dashboard-content button,
+    .dashboard-content .btn,
+    .dashboard-content .primary-button,
+    .dashboard-content .btn-primary,
+    .dashboard-content .btn-secondary {
+        min-height: 42px;
+    }
+
+    /* 9. Mobile Stacked Layouts & Operational Grids */
+    .dashboard-content .two-column-grid,
+    .dashboard-content .detail-grid,
+    .dashboard-content .show-grid,
+    .dashboard-content .form-grid,
+    .dashboard-content .settings-grid,
+    .dashboard-content .report-grid,
+    .dashboard-content .customer-detail-grid,
+    .dashboard-content .chat-layout,
+    .dashboard-content .delivery-layout,
+    .dashboard-content .delivery-content-grid,
+    .dashboard-content .order-detail-layout,
+    .dashboard-content .customer-layout,
+    .dashboard-content .refill-operations-grid,
+    .dashboard-content .pickup-batches-grid {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 12px !important;
+    }
+    .dashboard-content .chat-sidebar {
+        max-height: 32vh;
+        overflow-y: auto;
+    }
+    .dashboard-content .chart-card {
+        padding: 12px;
+    }
+    .dashboard-content .chart-canvas-container {
+        height: 210px;
+    }
+    .dashboard-content .doughnut-container {
+        height: 200px;
+    }
+
+    /* 10. Staff Portal Usability: Refill Queue & Deliveries */
+    .refill-queue-header,
+    .deliveries-header,
+    .orders-header {
+        min-height: 0 !important;
+        padding: 14px !important;
+        border-radius: 14px !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+    }
+    .refill-queue-header > div:last-child,
+    .deliveries-header-actions,
+    .header-action-group {
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    .refill-queue-header .queue-action-btn,
+    .deliveries-header .btn-assign-driver,
+    .orders-header .btn-queue-link {
+        width: 100% !important;
+        justify-content: center !important;
+        min-height: 42px !important;
+    }
+    .location-map-canvas,
+    .delivery-location-panel .location-map-canvas {
+        height: 280px !important;
+        border-radius: 12px !important;
+    }
+
+    /* 11. Mobile Modals & Dialogs (Nearly Full Width with Vertical Scrolling) */
+    .modal-backdrop,
+    .delivery-modal-backdrop,
+    .modal-overlay,
+    .dialog-backdrop,
+    .action-confirm-backdrop {
+        padding: max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom)) !important;
+    }
+    .modal-backdrop > .modal-card,
+    .modal-backdrop > .modal-content,
+    .modal-backdrop > .modal,
+    .delivery-modal-backdrop > .delivery-modal,
+    .delivery-modal-backdrop > .delivery-modal-card,
+    .delivery-modal-backdrop > .modal-large,
+    .modal-overlay > .modal-card,
+    .dialog-backdrop > .dialog-card,
+    .action-confirm-card,
+    dialog.driver-register-dialog,
+    .walk-in-order-modal {
+        width: calc(100% - 16px) !important;
+        max-width: calc(100% - 16px) !important;
+        max-height: calc(100dvh - 20px) !important;
+        margin: auto !important;
+        border-radius: 14px !important;
+    }
+    .driver-register-modal-head,
+    .assign-modal-header,
+    .delivery-modal-header {
+        padding: 14px 16px !important;
+    }
+    .driver-register-form,
+    .assign-driver-form,
+    .delivery-modal-body {
+        padding: 14px 16px !important;
+    }
+    .driver-register-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+    .driver-register-actions,
+    .assign-modal-footer,
+    .delivery-modal-actions,
+    .action-confirm-buttons {
+        display: flex !important;
+        flex-direction: column-reverse !important;
+        gap: 8px !important;
+        width: 100% !important;
+    }
+    .driver-register-actions button,
+    .assign-modal-footer button,
+    .delivery-modal-actions button,
+    .action-confirm-buttons button {
+        width: 100% !important;
+        min-height: 44px !important;
+        justify-content: center !important;
+    }
+}
+
+/* =============================================================================
+   TIER 5B: SMALL MOBILE PHONES (320px–380px)
+   Ultra-Compact Viewport Fine-Tuning
+   ============================================================================= */
+@media (max-width: 380px) {
+    .dashboard-content {
+        padding-inline: 8px !important;
+    }
+    .dashboard-header {
+        padding-inline: 6px !important;
+        gap: 4px !important;
+    }
+    .header-page-title {
+        max-width: 35vw !important;
+        font-size: 13.5px !important;
+    }
+    .header-right {
+        gap: 1px !important;
+    }
+    .header-icon-btn,
+    .theme-toggle-btn {
+        width: 35px !important;
+        height: 35px !important;
+        min-width: 35px !important;
+        flex: 0 0 35px !important;
+    }
+    .header-user-btn {
+        min-width: 35px !important;
+        height: 35px !important;
+    }
+    /* Hide pending orders button on extra-small screens so title and avatar fit without wrapping */
+    .header-orders-btn {
+        display: none !important;
+    }
+    .dashboard-content .stat-grid,
+    .dashboard-content .stats-grid,
+    .dashboard-content .metric-grid,
+    .dashboard-content .kpi-grid,
+    .dashboard-content .dashboard-stats,
+    .dashboard-content .delivery-stats,
+    .dashboard-content .refill-kpi-grid,
+    .dashboard-content .refill-stats {
+        gap: 6px !important;
+    }
+    .dashboard-content .stat-card,
+    .dashboard-content .delivery-stat-card,
+    .dashboard-content .refill-card.kpi-card {
+        padding: 8px 6px !important;
+    }
+    .modal-backdrop > .modal-card,
+    .modal-backdrop > .modal-content,
+    .modal-backdrop > .modal,
+    .delivery-modal-backdrop > .delivery-modal,
+    .dialog-backdrop > .dialog-card,
+    .action-confirm-card,
+    dialog.driver-register-dialog {
+        width: calc(100% - 10px) !important;
+        max-width: calc(100% - 10px) !important;
+    }
+}
+
+/* =============================================================================
+   DARK THEME COMPATIBILITY FOR RESPONSIVE SURFACES
+   ============================================================================= */
+html[data-theme="dark"] .dashboard-content .bento-card {
+    background: #061C32;
+    border-color: #0B5D96;
+}
+html[data-theme="dark"] .dashboard-content .bento-card-body,
+html[data-theme="dark"] .dashboard-content .bento-card-footer {
+    background: #061C32;
+}
+html[data-theme="dark"] .dashboard-content .bento-card-footer,
+html[data-theme="dark"] .dashboard-content .bento-pay-row {
+    border-color: #0B2545;
+}
+html[data-theme="dark"] .dashboard-content .bento-pay-label {
+    color: #94A3B8;
+}
+html[data-theme="dark"] .dashboard-content .bento-pay-val,
+html[data-theme="dark"] .dashboard-content .bento-timeline-code,
+html[data-theme="dark"] .dashboard-content .bento-pill-title,
+html[data-theme="dark"] .dashboard-content .bento-stock-qty,
+html[data-theme="dark"] .dashboard-content .bento-quick-label {
+    color: #F8FAFC;
+}
+html[data-theme="dark"] .dashboard-content .bento-timeline-meta,
+html[data-theme="dark"] .dashboard-content .bento-pill-subtitle,
+html[data-theme="dark"] .dashboard-content .bento-stock-reorder {
+    color: #94A3B8;
+}
+html[data-theme="dark"] .dashboard-content .bento-timeline-dot {
+    border-color: #061C32;
+}
+html[data-theme="dark"] .dashboard-content .bento-pill-card,
+html[data-theme="dark"] .dashboard-content .bento-quick-tile {
+    background: #082848;
+    border-color: #0F4777;
+}
+html[data-theme="dark"] .dashboard-content .bento-quick-icon,
+html[data-theme="dark"] .dashboard-content .bento-footer-link,
+html[data-theme="dark"] .dashboard-content .bento-footer-btn {
+    color: #38BDF8;
+}
+html[data-theme="dark"] .dashboard-content .bento-footer-btn {
+    background: #0A3258;
+    border-color: #155A94;
+}
+html[data-theme="dark"] .action-confirm-card {
+    background: #0B1E34;
+    border-color: #203D59;
+    color: #D8E7F4;
+}
+html[data-theme="dark"] .action-confirm-card h2 {
+    color: #F2F7FB;
+}
+html[data-theme="dark"] .action-confirm-card p {
+    color: #91A4BD;
+}
+html[data-theme="dark"] .action-confirm-cancel {
+    background: #142B43;
+    color: #C7D8E8;
+}
+
+/* =============================================================================
+   PRINT OPTIMIZATION
+   ============================================================================= */
+@media print {
+    .sidebar,
+    .sidebar-backdrop,
+    .dashboard-header,
+    .menu-toggle-btn,
+    .theme-toggle-btn,
+    .header-orders-btn,
+    .toast-container,
+    .header-actions button,
+    .filter-bar button {
+        display: none !important;
+    }
+    .dashboard-main {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+    .dashboard-content {
+        padding: 0 !important;
+    }
+}

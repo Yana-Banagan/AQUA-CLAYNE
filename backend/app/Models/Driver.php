@@ -19,6 +19,13 @@ class Driver extends Model
         'vehicle_plate',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'created_at' => 'datetime',
+        ];
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -27,5 +34,15 @@ class Driver extends Model
     public function deliveries(): HasMany
     {
         return $this->hasMany(Delivery::class);
+    }
+
+    public function pickupBatches(): HasMany
+    {
+        return $this->hasMany(PickupBatch::class);
+    }
+
+    public function deliveryRoutes(): HasMany
+    {
+        return $this->hasMany(DeliveryRoute::class);
     }
 }

@@ -5,6 +5,8 @@ use Pdo\Mysql;
 
 return [
 
+    'slow_query_ms' => (float) env('DB_SLOW_QUERY_MS', 500),
+
     /*
     |--------------------------------------------------------------------------
     | Default Database Connection Name
@@ -97,6 +99,8 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // Do not let unavailable remote databases hold an HTTP request open.
+            'connect_timeout' => (int) env('DB_CONNECT_TIMEOUT', 5),
         ],
 
         'sqlsrv' => [

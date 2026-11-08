@@ -14,4 +14,6 @@ class RefillQueueEntry extends Model
     protected function casts(): array { return ['queued_at' => 'datetime', 'started_at' => 'datetime', 'completed_at' => 'datetime', 'removed_at' => 'datetime']; }
 
     public function order(): BelongsTo { return $this->belongsTo(Order::class); }
+    public function createdBy(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
+    public function updatedBy(): BelongsTo { return $this->belongsTo(User::class, 'updated_by'); }
 }

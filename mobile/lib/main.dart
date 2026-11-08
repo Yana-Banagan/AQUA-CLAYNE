@@ -1,582 +1,338 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+// Core
 import 'core/api/api_client.dart';
 import 'core/repositories/auth_repository.dart';
 import 'core/services/token_storage.dart';
+import 'core/services/realtime_service.dart';
+import 'core/services/offline_service.dart';
 import 'core/notifications/push_handler.dart';
+import 'core/config/env.dart';
+import 'core/theme/app_theme.dart';
+import 'core/providers/auth_provider.dart';
+import 'core/screens/splash_screen.dart';
+import 'customer/screens/customer_shell.dart';
 
+// Customer data
 import 'customer/data/product_repository.dart';
 import 'customer/data/address_repository.dart';
 import 'customer/data/order_repository.dart';
+import 'customer/data/notification_repository.dart';
+import 'customer/data/queue_repository.dart';
+import 'customer/data/complaint_repository.dart';
+import 'customer/data/credit_repository.dart';
+import 'customer/data/payment_repository.dart';
+
+// Customer providers
+import 'customer/providers/cart_provider.dart';
+import 'customer/providers/order_provider.dart';
+import 'customer/providers/address_provider.dart';
+import 'customer/providers/notification_provider.dart';
+import 'customer/providers/queue_provider.dart';
+import 'customer/providers/complaint_provider.dart';
+import 'customer/providers/credit_provider.dart';
+import 'customer/providers/payment_provider.dart';
+
+// Driver data
 import 'driver/data/delivery_repository.dart';
 
-import 'customer/screens/catalog_screen.dart';
-import 'driver/screens/driver_home_screen.dart';
+// Driver providers
+import 'driver/providers/driver_delivery_provider.dart';
 
-import 'customer/state/cart_provider.dart';
-
-// ====================================================================
-// FIREBASE BACKGROUND FCM HANDLER
-// ====================================================================
-//
-// Handles Firebase Cloud Messaging notifications when the application
-// is running in the background or terminated.
-//
-// IMPORTANT:
-// This must be a top-level function.
-//
-
+// ======================================================================
+// FIREBASE BACKGROUND HANDLER — must be a top-level function
+// ======================================================================
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Firebase must be initialized before using Firebase services.
   await Firebase.initializeApp();
-
-  debugPrint('Background FCM message received: ${message.messageId}');
-
-  debugPrint('FCM notification title: ${message.notification?.title}');
-
-  debugPrint('FCM notification body: ${message.notification?.body}');
-
-  debugPrint('FCM data: ${message.data}');
+  debugPrint('[FCM Background] messageId: ${message.messageId}');
 }
 
-// ====================================================================
+// ======================================================================
 // MAIN
-// ====================================================================
-
+// ======================================================================
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ================================================================
-  // FIREBASE INITIALIZATION
-  // ================================================================
-
+  // ── Firebase ──────────────────────────────────────────────────────
   await Firebase.initializeApp();
-
-  // ================================================================
-  // REGISTER BACKGROUND FCM HANDLER
-  // ================================================================
-
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-  // ================================================================
-  // REQUEST NOTIFICATION PERMISSION
-  // ================================================================
-
-  final notificationSettings = await FirebaseMessaging.instance
-      .requestPermission(alert: true, badge: true, sound: true);
-
-  debugPrint(
-    'FCM permission: '
-    '${notificationSettings.authorizationStatus}',
+  await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
   );
 
-  // ================================================================
-  // INITIALIZE PUSH HANDLER
-  // ================================================================
-  //
-  // Registers:
-  // - Foreground notification listener
-  // - Background notification tap listener
-  // - Terminated notification tap handling
-  // - Local notification channel
-  //
-
+  // ── Push notifications (local channel + tap handling) ─────────────
   await PushHandler.initialize();
 
-  // ================================================================
-  // SUPABASE INITIALIZATION
-  // ================================================================
-
+  // ── Supabase — publishable key only, service-role stays server-side
   await Supabase.initialize(
-    url: 'https://evnhwmmwsnxizcoejqhz.supabase.co',
-    publishableKey: 'sb_publishable_HVLCXjrvWAJyezYy0qGolQ_Ep--J7Ni',
+    url: Env.supabaseUrl,
+    publishableKey: Env.supabaseAnonKey,
   );
 
-  // ================================================================
-  // RUN APP
-  // ================================================================
+  runApp(const AquaClayneApp());
+}
 
-  runApp(
-    MultiProvider(
+// ======================================================================
+// APP ROOT
+// ======================================================================
+class AquaClayneApp extends StatelessWidget {
+  const AquaClayneApp({super.key});
+
+  static final RealtimeService _realtimeService = RealtimeService();
+
+  @override
+  Widget build(BuildContext context) {
+    // ── Infrastructure singletons (created once) ───────────────────
+    final tokenStorage = TokenStorage();
+    final apiClient = ApiClient(tokenStorage);
+    final realtimeService = _realtimeService;
+    final offlineService = OfflineService();
+    offlineService.initialize();
+    final authRepo = AuthRepository(apiClient, tokenStorage);
+
+    apiClient.onSessionExpired = () {
+      final appContext = navigatorKey.currentContext;
+      if (appContext != null) {
+        appContext.read<AuthProvider>().expireSession();
+        try { appContext.read<NotificationProvider>().clearSessionData(); } catch (_) {}
+        try { appContext.read<OrderProvider>().clearSessionData(); } catch (_) {}
+        try { appContext.read<PaymentProvider>().clearSessionData(); } catch (_) {}
+        try { appContext.read<AddressProvider>().clearSessionData(); } catch (_) {}
+        try { appContext.read<CreditProvider>().clearSessionData(); } catch (_) {}
+        try { appContext.read<QueueProvider>().clearSessionData(); } catch (_) {}
+        try { appContext.read<ComplaintProvider>().clearSessionData(); } catch (_) {}
+        try { appContext.read<CartProvider>().clearCart(); } catch (_) {}
+      }
+      navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const CustomerShell()),
+        (route) => false,
+      );
+    };
+
+    // ── Repositories ───────────────────────────────────────────────
+    final productRepo = ProductRepository(apiClient);
+    final addressRepo = AddressRepository(apiClient);
+    final orderRepo = OrderRepository(apiClient);
+    final notificationRepo = NotificationRepository(apiClient);
+    final queueRepo = QueueRepository(apiClient);
+    final complaintRepo = ComplaintRepository(apiClient);
+    final creditRepo = CreditRepository(apiClient);
+    final paymentRepo = PaymentRepository(apiClient);
+    final deliveryRepo = DeliveryRepository(apiClient);
+
+    return MultiProvider(
       providers: [
-        // ------------------------------------------------------------
-        // Token Storage
-        // ------------------------------------------------------------
+        // ── Infrastructure ─────────────────────────────────────────
+        Provider<TokenStorage>.value(value: tokenStorage),
+        Provider<ApiClient>.value(value: apiClient),
+        Provider<RealtimeService>.value(value: realtimeService),
+        ChangeNotifierProvider<OfflineService>.value(value: offlineService),
+        Provider<AuthRepository>.value(value: authRepo),
 
-        Provider<TokenStorage>(create: (_) => TokenStorage()),
-
-        // ------------------------------------------------------------
-        // API Client
-        // ------------------------------------------------------------
-        Provider<ApiClient>(
-          create: (context) => ApiClient(context.read<TokenStorage>()),
+        // ── Auth state ─────────────────────────────────────────────
+        ChangeNotifierProvider<AuthProvider>(
+          create: (_) => AuthProvider(authRepo, realtimeService),
         ),
 
-        // ------------------------------------------------------------
-        // Authentication Repository
-        // ------------------------------------------------------------
-        Provider<AuthRepository>(
-          create: (context) => AuthRepository(
-            context.read<ApiClient>(),
-            context.read<TokenStorage>(),
-          ),
+        // ── Customer repositories ───────────────────────────────────
+        Provider<ProductRepository>.value(value: productRepo),
+        Provider<AddressRepository>.value(value: addressRepo),
+        Provider<OrderRepository>.value(value: orderRepo),
+        Provider<NotificationRepository>.value(value: notificationRepo),
+        Provider<QueueRepository>.value(value: queueRepo),
+        Provider<ComplaintRepository>.value(value: complaintRepo),
+        Provider<CreditRepository>.value(value: creditRepo),
+        Provider<PaymentRepository>.value(value: paymentRepo),
+
+        // ── Customer state ──────────────────────────────────────────
+        ChangeNotifierProvider<CartProvider>(
+          create: (_) => CartProvider(),
+        ),
+        ChangeNotifierProvider<OrderProvider>(
+          create: (_) => OrderProvider(orderRepo, realtimeService),
+        ),
+        ChangeNotifierProvider<AddressProvider>(
+          create: (_) => AddressProvider(addressRepo),
+        ),
+        ChangeNotifierProvider<NotificationProvider>(
+          create: (_) => NotificationProvider(notificationRepo, realtimeService),
+        ),
+        ChangeNotifierProvider<QueueProvider>(
+          create: (_) => QueueProvider(queueRepo, realtimeService),
+        ),
+        ChangeNotifierProvider<ComplaintProvider>(
+          create: (_) => ComplaintProvider(complaintRepo),
+        ),
+        ChangeNotifierProvider<CreditProvider>(
+          create: (_) => CreditProvider(creditRepo),
+        ),
+        ChangeNotifierProvider<PaymentProvider>(
+          create: (_) => PaymentProvider(paymentRepo, realtimeService),
         ),
 
-        // ------------------------------------------------------------
-        // Product Repository
-        // ------------------------------------------------------------
-        Provider<ProductRepository>(
-          create: (context) => ProductRepository(context.read<ApiClient>()),
+        // ── Driver ─────────────────────────────────────────────────
+        Provider<DeliveryRepository>.value(value: deliveryRepo),
+        ChangeNotifierProvider<DriverDeliveryProvider>(
+          create: (_) =>
+              DriverDeliveryProvider(deliveryRepo, realtimeService),
         ),
-
-        // ------------------------------------------------------------
-        // Address Repository
-        // ------------------------------------------------------------
-        Provider<AddressRepository>(
-          create: (context) => AddressRepository(context.read<ApiClient>()),
-        ),
-
-        // ------------------------------------------------------------
-        // Order Repository
-        // ------------------------------------------------------------
-        Provider<OrderRepository>(
-          create: (context) => OrderRepository(context.read<ApiClient>()),
-        ),
-
-        // ------------------------------------------------------------
-        // Delivery Repository
-        // ------------------------------------------------------------
-        Provider<DeliveryRepository>(
-          create: (context) => DeliveryRepository(context.read<ApiClient>()),
-        ),
-
-        // ------------------------------------------------------------
-        // Local Cart State
-        // ------------------------------------------------------------
-        ChangeNotifierProvider<CartProvider>(create: (_) => CartProvider()),
       ],
-      child: const MyApp(),
-    ),
-  );
-}
-
-// ====================================================================
-// APP
-// ====================================================================
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      // ==============================================================
-      // GLOBAL NAVIGATOR KEY
-      // ==============================================================
-      //
-      // Push notifications do not have access to a Widget
-      // BuildContext. The navigator key allows PushHandler to
-      // navigate to screens when the user taps a notification.
-      //
-
-      navigatorKey: navigatorKey,
-
-      title: 'Aqua Clayne',
-
-      debugShowCheckedModeBanner: false,
-
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
-
-      home: const HomePage(),
-    );
-  }
-}
-
-// ====================================================================
-// HOME PAGE
-// ====================================================================
-
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
-
-  @override
-  State<HomePage> createState() => _HomePageState();
-}
-
-class _HomePageState extends State<HomePage> {
-  String message = 'Please log in.';
-
-  bool loading = false;
-
-  // ==================================================================
-  // CUSTOMER LOGIN
-  // ==================================================================
-
-  Future<void> loginAsCustomer() async {
-    await login(email: 'juan2@example.com', password: 'password123');
-  }
-
-  // ==================================================================
-  // DRIVER LOGIN
-  // ==================================================================
-
-  Future<void> loginAsDriver() async {
-    await login(email: 'testdriver123@example.com', password: 'password123');
-  }
-
-  // ==================================================================
-  // LOGIN
-  // ==================================================================
-
-  Future<void> login({required String email, required String password}) async {
-    // Get AuthRepository before the async gap.
-    //
-    // This prevents the "use_build_context_synchronously" warning
-    // when accessing Provider after an await.
-
-    final authRepo = context.read<AuthRepository>();
-
-    setState(() {
-      loading = true;
-      message = 'Logging in...';
-    });
-
-    try {
-      // ==============================================================
-      // STEP 1 — LOGIN THROUGH LARAVEL
-      // ==============================================================
-
-      final user = await authRepo.login(email, password);
-
-      // ==============================================================
-      // STEP 2 — CHECK THAT SCREEN STILL EXISTS
-      // ==============================================================
-
-      if (!mounted) {
-        return;
-      }
-
-      // ==============================================================
-      // STEP 3 — REGISTER FCM TOKEN
-      // ==============================================================
-      //
-      // Login has already succeeded.
-      //
-      // Firebase
-      //     ↓
-      // FCM token
-      //     ↓
-      // Laravel /auth/fcm-token
-      //     ↓
-      // users.fcm_token
-      //
-      // If FCM registration fails, the user is still allowed to
-      // continue into the application.
-      //
-
-      try {
-        await authRepo.registerFcmToken();
-
-        debugPrint('FCM token successfully registered with Laravel.');
-      } catch (e) {
-        debugPrint('FCM token registration failed: $e');
-      }
-
-      // ==============================================================
-      // STEP 4 — CHECK SCREEN AGAIN
-      // ==============================================================
-
-      if (!mounted) {
-        return;
-      }
-
-      // ==============================================================
-      // STEP 5 — DETERMINE USER ROLE
-      // ==============================================================
-
-      final role = user['role']?.toString();
-
-      setState(() {
-        loading = false;
-        message = 'Logged in as ${role ?? 'unknown'}';
-      });
-
-      // ==============================================================
-      // DRIVER
-      // ==============================================================
-
-      if (role == 'driver') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const DriverHomeScreen()),
-        );
-
-        return;
-      }
-
-      // ==============================================================
-      // CUSTOMER
-      // ==============================================================
-
-      if (role == 'customer') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const CatalogScreen()),
-        );
-
-        return;
-      }
-
-      // ==============================================================
-      // OTHER ROLES
-      // ==============================================================
-
-      setState(() {
-        loading = false;
-        message = 'Unsupported account role: $role';
-      });
-    } on ApiException catch (e) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        loading = false;
-
-        // Do not expose raw backend/database errors.
-        message = _friendlyApiError(e.message);
-      });
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        loading = false;
-        message = 'Unable to connect to the server. Please try again.';
-      });
-    }
-  }
-
-  // ==================================================================
-  // FRIENDLY API ERROR
-  // ==================================================================
-
-  String _friendlyApiError(String error) {
-    final lowerError = error.toLowerCase();
-
-    // --------------------------------------------------------------
-    // Database / PostgreSQL connection errors
-    // --------------------------------------------------------------
-
-    if (lowerError.contains('sqlstate') ||
-        lowerError.contains('postgres') ||
-        lowerError.contains('connection to server') ||
-        lowerError.contains('connection refused') ||
-        lowerError.contains('permission denied')) {
-      return 'Unable to connect to the server. Please try again.';
-    }
-
-    // --------------------------------------------------------------
-    // Authentication errors
-    // --------------------------------------------------------------
-
-    if (lowerError.contains('invalid credentials') ||
-        lowerError.contains('unauthorized') ||
-        lowerError.contains('authentication')) {
-      return 'Invalid email or password.';
-    }
-
-    // --------------------------------------------------------------
-    // Forbidden
-    // --------------------------------------------------------------
-
-    if (lowerError.contains('forbidden')) {
-      return 'You do not have permission to perform this action.';
-    }
-
-    // --------------------------------------------------------------
-    // Not found
-    // --------------------------------------------------------------
-
-    if (lowerError.contains('not found')) {
-      return 'The requested resource was not found.';
-    }
-
-    // --------------------------------------------------------------
-    // Generic API error
-    // --------------------------------------------------------------
-
-    return error.length > 150
-        ? 'Something went wrong. Please try again.'
-        : error;
-  }
-
-  // ==================================================================
-  // LOGOUT
-  // ==================================================================
-
-  Future<void> logout() async {
-    // Get repository before the async gap.
-    final authRepo = context.read<AuthRepository>();
-
-    try {
-      await authRepo.logout();
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        message = 'Logged out successfully.';
-      });
-    } on ApiException catch (e) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        message = _friendlyApiError(e.message);
-      });
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        message = 'Logout failed.';
-      });
-    }
-  }
-
-  // ==================================================================
-  // BUILD
-  // ==================================================================
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Aqua Clayne')),
-
-      // ================================================================
-      // SAFE AREA + SCROLL VIEW
-      //
-      // Prevents RenderFlex overflow when the screen is small or
-      // when the keyboard changes the available height.
-      // ================================================================
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight - 48,
+      child: MaterialApp(
+        title: 'Aqua Clayne',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        // navigatorKey lets PushHandler navigate from FCM callbacks
+        navigatorKey: navigatorKey,
+        builder: (context, child) => Column(
+          children: [
+            Builder(builder: (context) {
+              final offline = context.watch<OfflineService>();
+              if (!offline.isOffline && offline.pendingSyncCount == 0) return const SizedBox.shrink();
+              final message = offline.isOffline
+                  ? offline.pendingSyncCount > 0
+                      ? 'Offline · ${offline.pendingSyncCount} safe change(s) saved on this device and waiting to sync.'
+                      : 'Offline · Showing saved information where available. Some actions require a connection.'
+                  : offline.syncError != null
+                      ? '${offline.pendingSyncCount} saved change(s) still need to sync: ${offline.syncError}'
+                      : '${offline.pendingSyncCount} saved change(s) are queued for sync when the server is available.';
+              return Material(
+                color: offline.isOffline ? const Color(0xFF7C2D12) : const Color(0xFF075985),
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Row(children: [
+                      Icon(offline.isOffline ? Icons.cloud_off_rounded : Icons.sync_rounded, color: Colors.white, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(message, style: const TextStyle(color: Colors.white, fontSize: 12))),
+                      if (!offline.isOffline && offline.pendingSyncCount > 0)
+                        TextButton(
+                          onPressed: () async {
+                            final result = await context.read<ApiClient>().syncPendingMutations();
+                            if (!context.mounted) return;
+                            context.read<OfflineService>().updateSyncState(
+                              pendingCount: result.pending,
+                              error: result.error,
+                            );
+                            if (result.synced > 0) {
+                              await Future.wait([
+                                context.read<OrderProvider>().loadOrders(),
+                                context.read<AddressProvider>().load(),
+                                context.read<NotificationProvider>().load(),
+                                context.read<PaymentProvider>().loadPayments(),
+                              ]);
+                            }
+                          },
+                          child: const Text('Retry', style: TextStyle(color: Colors.white)),
+                        ),
+                    ]),
+                  ),
                 ),
-
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-
-                  children: [
-                    // --------------------------------------------------
-                    // Logo
-                    // --------------------------------------------------
-
-                    const Icon(Icons.water_drop, size: 70),
-
-                    const SizedBox(height: 20),
-
-                    // --------------------------------------------------
-                    // Application Name
-                    // --------------------------------------------------
-                    const Text(
-                      'Aqua Clayne',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // --------------------------------------------------
-                    // Login Message
-                    // --------------------------------------------------
-                    Text(
-                      message,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 16),
-                    ),
-
-                    const SizedBox(height: 30),
-
-                    // --------------------------------------------------
-                    // Loading
-                    // --------------------------------------------------
-                    if (loading) ...[
-                      const CircularProgressIndicator(),
-
-                      const SizedBox(height: 20),
-
-                      const Text('Please wait...', textAlign: TextAlign.center),
-                    ],
-
-                    // --------------------------------------------------
-                    // Login Buttons
-                    // --------------------------------------------------
-                    if (!loading) ...[
-                      // Customer
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: loginAsCustomer,
-                          child: const Text('Login as Customer'),
-                        ),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Driver
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: loginAsDriver,
-                          child: const Text('Login as Driver'),
-                        ),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Logout
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: logout,
-                          child: const Text('Clear Login Session'),
-                        ),
-                      ),
-                    ],
-
-                    // Extra bottom spacing for smaller screens.
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              ),
-            );
-          },
+              );
+            }),
+            Expanded(child: OfflineSyncGate(child: child ?? const SizedBox.shrink())),
+          ],
         ),
+        home: const SplashScreen(),
       ),
     );
   }
+}
+
+/// Refreshes server-authoritative data after connectivity returns. Order and
+/// payment creation are never replayed from local storage; they remain server
+/// validated to prevent duplicate transactions.
+class OfflineSyncGate extends StatefulWidget {
+  final Widget child;
+  const OfflineSyncGate({super.key, required this.child});
+
+  @override
+  State<OfflineSyncGate> createState() => _OfflineSyncGateState();
+}
+
+class _OfflineSyncGateState extends State<OfflineSyncGate> {
+  bool _wasOffline = false;
+  bool _callbackBound = false;
+  bool _syncing = false;
+  String? _lastOwnerId;
+  Timer? _retryTimer;
+  ApiClient? _api;
+
+  @override
+  void dispose() {
+    _retryTimer?.cancel();
+    _api?.onOutboxChanged = null;
+    super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final offline = context.watch<OfflineService>().isOffline;
+    final auth = context.watch<AuthProvider>();
+    final ownerId = auth.user?.id;
+    if (!_callbackBound) {
+      _callbackBound = true;
+      _api = context.read<ApiClient>();
+      _api!.onOutboxChanged = () {
+        _updatePendingCount();
+      };
+      _retryTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+        if (!mounted || context.read<OfflineService>().isOffline || !context.read<AuthProvider>().isAuthenticated) return;
+        context.read<ApiClient>().pendingMutationCount().then((count) {
+          if (mounted && count > 0) _syncAndRefresh(refreshAllOnReconnect: false);
+        });
+      });
+    }
+    final shouldSync = auth.isAuthenticated && !offline &&
+        (_wasOffline || ownerId != _lastOwnerId);
+    final shouldRefreshOfflineCount = auth.isAuthenticated && offline && ownerId != _lastOwnerId;
+    final reconnected = _wasOffline && !offline;
+    _wasOffline = offline;
+    _lastOwnerId = ownerId;
+    if (shouldSync) WidgetsBinding.instance.addPostFrameCallback((_) => _syncAndRefresh(refreshAllOnReconnect: reconnected));
+    if (shouldRefreshOfflineCount) WidgetsBinding.instance.addPostFrameCallback((_) => _updatePendingCount());
+  }
+
+  Future<void> _updatePendingCount() async {
+    if (!mounted) return;
+    final api = context.read<ApiClient>();
+    final count = await api.pendingMutationCount();
+    if (mounted) context.read<OfflineService>().updateSyncState(pendingCount: count, error: null);
+  }
+
+  Future<void> _syncAndRefresh({required bool refreshAllOnReconnect}) async {
+    if (!mounted || _syncing) return;
+    _syncing = true;
+    try {
+      final api = context.read<ApiClient>();
+      final result = await api.syncPendingMutations();
+      if (!mounted) return;
+      context.read<OfflineService>().updateSyncState(pendingCount: result.pending, error: result.error);
+      if (!context.read<AuthProvider>().isAuthenticated) return;
+      if (refreshAllOnReconnect || result.synced > 0) {
+        await Future.wait([
+          context.read<OrderProvider>().loadOrders(),
+          context.read<AddressProvider>().load(),
+          context.read<NotificationProvider>().load(),
+          context.read<PaymentProvider>().loadPayments(),
+        ]);
+      }
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

@@ -19,11 +19,12 @@ class StoreDriverRequest extends FormRequest
 
             'email' => 'required|email|unique:users,email',
 
-            'phone' => 'nullable|string|max:30',
+            'phone' => 'required|string|max:30',
 
             'license_number' => 'nullable|string|max:50',
 
             'vehicle_plate' => 'nullable|string|max:20',
+            'password' => 'required|string|min:8|confirmed',
         ];
     }
 }

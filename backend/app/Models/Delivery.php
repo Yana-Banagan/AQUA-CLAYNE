@@ -18,14 +18,30 @@ class Delivery extends Model
         'driver_id',
         'eta',
         'proof_photo_url',
+        'proof_status',
         'signature_url',
         'status',
         'delivered_at',
         'failure_reason',
         'customer_confirmed',
+        'driver_latitude',
+        'driver_longitude',
+        'location_updated_at',
     ];
 
-    protected function casts(): array { return ['delivered_at' => 'datetime', 'customer_confirmed' => 'boolean']; }
+    protected function casts(): array
+    {
+        return [
+            'eta' => 'datetime',
+            'created_at' => 'datetime',
+            'delivered_at' => 'datetime',
+            'location_updated_at' => 'datetime',
+            'customer_confirmed' => 'boolean',
+            'driver_latitude' => 'float',
+            'driver_longitude' => 'float',
+            'location_updated_at' => 'datetime',
+        ];
+    }
 
     public function order(): BelongsTo
     {

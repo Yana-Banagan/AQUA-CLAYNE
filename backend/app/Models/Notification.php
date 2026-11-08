@@ -16,8 +16,18 @@ class Notification extends Model
         'user_id',
         'title',
         'body',
+        'entity_type',
+        'entity_id',
         'is_read',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'is_read' => 'boolean',
+            'created_at' => 'datetime',
+        ];
+    }
 
     public function user(): BelongsTo
     {

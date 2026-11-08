@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use App\Services\SupabaseStorageService;
 
 class User extends Authenticatable
 {
@@ -15,12 +16,14 @@ class User extends Authenticatable
 
     protected $fillable = [
         'name',
+        'username',
         'email',
         'phone',
         'password_hash',
         'role',
         'status',
         'fcm_token',
+        'avatar_path',
     ];
 
     protected $hidden = [
@@ -35,6 +38,29 @@ class User extends Authenticatable
     public function getAuthPassword(): string
     {
         return $this->password_hash;
+    }
+
+    public function getAvatarUrlAttribute(): ?string
+    {
+        if (array_key_exists('avatar_url', $this->attributes)) {
+            return $this->attributes['avatar_url'];
+        }
+
+        if (!$this->avatar_path) {
+            return $this->socialAccounts()->first()?->avatar_url;
+        }
+
+        try {
+            return app(SupabaseStorageService::class)
+                ->signedProfilePhotoUrl((string) $this->id, $this->avatar_path);
+        } catch (\Throwable) {
+            return $this->socialAccounts()->first()?->avatar_url;
+        }
+    }
+
+    public function socialAccounts(): HasMany
+    {
+        return $this->hasMany(SocialAccount::class);
     }
 
     public function customer(): HasOne

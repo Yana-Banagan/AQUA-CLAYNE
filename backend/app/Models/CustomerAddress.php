@@ -17,9 +17,17 @@ class CustomerAddress extends Model
         'customer_id',
         'label',
         'address_line',
+        'barangay',
+        'city',
+        'province',
+        'zip_code',
         'latitude',
         'longitude',
         'is_default',
+    ];
+
+    protected $casts = [
+        'is_default' => 'boolean',
     ];
 
     public function customer(): BelongsTo

@@ -1,0 +1,634 @@
+/* Shared shell treatment for every administration menu page. */
+:root { --sidebar-width: 272px; }
+
+/* Refined water station navigation */
+.sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    background-color: #041a33;
+    background-image:
+        linear-gradient(180deg, rgba(3, 27, 55, .84), rgba(2, 20, 43, .94)),
+        url('/images/aqua-clayne-sidebar-bg.png');
+    background-size: cover;
+    background-position: left center;
+    box-shadow: 8px 0 28px rgba(0, 22, 48, .2);
+}
+
+.sidebar-brand {
+    flex: 0 0 auto;
+    height: auto;
+    min-height: 142px;
+    justify-content: center;
+    padding: 1.1rem 1rem 1rem;
+    border-bottom: 1px solid rgba(151, 218, 255, .14);
+    background: linear-gradient(180deg, rgba(10, 53, 91, .62), rgba(3, 29, 57, .42));
+}
+.brand-link {
+    width: auto;
+    flex-direction: column;
+    justify-content: center;
+    gap: .38rem;
+    text-align: center;
+}
+.brand-logo-icon { width: 56px; height: 56px; }
+.brand-text-wrap { align-items: center; overflow: visible; }
+.brand-company { font-size: .97rem; letter-spacing: .13em; }
+.brand-sub { margin-top: .2rem; font-size: .58rem; letter-spacing: .12em; color: #A9E8FF; }
+
+.sidebar-nav {
+    min-height: 0;
+    padding: .65rem .8rem .85rem;
+    gap: 0;
+    background: rgba(1, 19, 42, .18);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(125, 211, 252, .3) transparent;
+}
+.sidebar-nav::-webkit-scrollbar { width: 4px; }
+.sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+.sidebar-nav::-webkit-scrollbar-thumb { background: rgba(125, 211, 252, .3); border-radius: 999px; }
+.sidebar-nav .nav-group {
+    display: flex;
+    gap: .12rem;
+    padding: .42rem 0 .5rem;
+}
+.sidebar-nav .nav-group + .nav-group { border-top: 1px solid rgba(166, 219, 248, .13); }
+.sidebar .nav-group-title {
+    margin: 0 0 .24rem;
+    padding: .18rem .72rem;
+    color: #83C9F0;
+    font-size: .67rem;
+    font-weight: 700;
+    letter-spacing: .14em;
+}
+.sidebar .nav-link {
+    min-height: 38px;
+    margin: 0;
+    gap: .72rem;
+    padding: .48rem .72rem;
+    overflow: hidden;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    color: #D5EAF8;
+    font-size: .87rem;
+    font-weight: 500;
+    line-height: 1.25;
+    transition: color .16s ease, background .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+.sidebar .nav-link .nav-label { min-width: 0; font-size: inherit; font-weight: inherit; }
+.sidebar .nav-icon {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    color: #9BCBE7;
+}
+.sidebar .nav-icon svg { display: block; width: 18px; height: 18px; }
+.sidebar .nav-link:hover {
+    color: #fff;
+    background: rgba(71, 174, 226, .12);
+}
+.sidebar .nav-link:hover .nav-icon { color: #C7F1FF; transform: none; }
+.sidebar .nav-link.active-nav {
+    color: #fff;
+    border-color: rgba(92, 203, 255, .18);
+    background: linear-gradient(100deg, rgba(0, 139, 218, .42), rgba(14, 92, 163, .27));
+    box-shadow: inset 2px 0 #5DD8FF, 0 3px 14px rgba(0, 137, 214, .13), inset 0 1px rgba(255,255,255,.04);
+}
+.sidebar .nav-link.active-nav .nav-icon { color: #9FEBFF; transform: none; }
+.sidebar .nav-badge { flex: 0 0 auto; font-size: .69rem; padding: .15rem .45rem; }
+
+.sidebar-footer {
+    flex: 0 0 auto;
+    padding: .72rem .9rem .82rem;
+    gap: .56rem;
+    border-top: 1px solid rgba(151, 218, 255, .15);
+    background: rgba(2, 22, 46, .94);
+    backdrop-filter: blur(10px);
+}
+.sidebar-user-card { gap: .68rem; }
+.user-avatar-circle { width: 34px; height: 34px; }
+.user-name { font-size: .8rem; }
+
+@media (max-height: 720px) {
+    .sidebar-brand { min-height: 120px; padding-block: .7rem; }
+    .brand-logo-icon { width: 48px; height: 48px; }
+    .sidebar-nav .nav-group { padding-block: .28rem .34rem; }
+    .sidebar .nav-link { min-height: 34px; padding-block: .38rem; }
+}
+
+.dashboard-body {
+    background: var(--bg-app);
+}
+
+.dashboard-content {
+    background:
+        radial-gradient(circle at 96% 4%, rgba(56, 189, 248, .13), transparent 23rem),
+        linear-gradient(180deg, rgba(245, 251, 255, .96), rgba(238, 248, 255, .96));
+}
+
+/* Single source of truth for sidebar sizing across every admin menu. */
+.sidebar-nav { padding: .7rem .7rem; gap: 0; }
+.sidebar-nav .nav-group { display: block; }
+.nav-group-title {
+    margin: .5rem 0 .2rem;
+    padding: .25rem .75rem;
+    font-size: .75rem;
+    font-weight: 800;
+    letter-spacing: .09em;
+}
+.sidebar .nav-link {
+    margin: 0 0 .12rem;
+    gap: .75rem;
+    padding: .5rem .75rem;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.25;
+}
+.sidebar .nav-link .nav-label {
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0;
+}
+.sidebar .nav-icon svg { width: 21px; height: 21px; }
+.sidebar .nav-badge { font-size: .82rem; padding: .2rem .58rem; }
+
+/* The legacy views all expose this class, so one banner design reaches every menu. */
+.dashboard-content .page-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    min-height: 130px;
+    margin: 0;
+    padding: 1.65rem 2rem;
+    overflow: hidden;
+    color: #fff;
+    border: 0;
+    border-radius: var(--radius-xl);
+    background-image:
+        linear-gradient(90deg, rgba(6, 59, 115, .9), rgba(0, 102, 204, .72) 56%, rgba(14, 165, 233, .46)),
+        url('/images/aqua-clayne-water-bg.webp');
+    background-position: center;
+    background-size: cover;
+    box-shadow: 0 10px 28px -4px rgba(6, 59, 115, .25);
+}
+
+.dashboard-content .page-header::after {
+    position: absolute;
+    top: -65px;
+    right: 7%;
+    width: 205px;
+    height: 205px;
+    content: '';
+    border: 1px solid rgba(255, 255, 255, .26);
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, .24), rgba(56, 189, 248, .04));
+    pointer-events: none;
+}
+
+.dashboard-content .page-header > * { position: relative; z-index: 1; }
+.dashboard-content .page-header .eyebrow { margin: 0 0 .35rem; color: #c9efff; font-weight: 800; letter-spacing: .11em; font-size: .71rem; }
+.dashboard-content .page-header h1 { margin: 0; color: #fff; font-size: clamp(1.45rem, 2vw, 2rem); line-height: 1.2; }
+.dashboard-content .page-header p:not(.eyebrow) { max-width: 720px; margin: .5rem 0 0; color: #e0f4ff; }
+.dashboard-content .page-header .header-actions { display: flex; flex-wrap: wrap; gap: .65rem; }
+.dashboard-content .page-header .header-actions .primary-button,
+.dashboard-content .page-header .header-actions .btn-primary { background: #fff; color: var(--color-primary); border-color: #fff; }
+
+/* The older pages use these variables; map them to the standard dashboard palette. */
+.dashboard-content {
+    --primary: var(--color-primary);
+    --primary-dark: var(--color-primary-hover);
+    --primary-light: var(--color-primary-subtle);
+    --navy: var(--color-navy);
+    --navy-dark: var(--color-navy-dark);
+    --background: var(--bg-app);
+    --surface: var(--bg-card);
+    --surface-soft: var(--color-aqua-subtle);
+    --text-primary: var(--text-heading);
+    --text-secondary: var(--text-muted);
+    --border: var(--border-subtle);
+}
+
+html[data-theme="dark"] .dashboard-content .page-header { box-shadow: 0 10px 28px -4px rgba(0, 0, 0, .35); }
+
+/* Dark theme coverage for the reusable components originally used by legacy menu pages. */
+html[data-theme="dark"] .dashboard-content {
+    background:
+        radial-gradient(circle at 96% 4%, rgba(14, 165, 233, .13), transparent 23rem),
+        linear-gradient(180deg, #0b1726, #0d1f33);
+    --surface: var(--bg-card);
+    --surface-soft: #18324c;
+    --text-primary: var(--text-heading);
+    --text-secondary: var(--text-muted);
+    --border: var(--border-subtle);
+}
+
+html[data-theme="dark"] .dashboard-content .panel,
+html[data-theme="dark"] .dashboard-content .stat-card,
+html[data-theme="dark"] .dashboard-content .modal-card,
+html[data-theme="dark"] .dashboard-content .empty-state,
+html[data-theme="dark"] .dashboard-content .data-table-wrap,
+html[data-theme="dark"] .dashboard-content .card,
+html[data-theme="dark"] .dashboard-content .container-fluid > .card {
+    background: var(--bg-card);
+    border-color: var(--border-subtle);
+    color: var(--text-body);
+}
+
+/* The dashboard welcome banner is a branded status surface, not a regular card.
+   Keep its water-blue artwork and light text when the surrounding UI is dark. */
+html[data-theme="dark"] .dashboard-content .dashboard-welcome.card {
+    background-image:
+        linear-gradient(90deg, rgba(6, 59, 115, .68) 0%, rgba(0, 102, 204, .52) 56%, rgba(14, 165, 233, .38) 100%),
+        url('/images/aqua-clayne-water-bg.webp');
+    background-position: center;
+    background-size: cover;
+    border-color: transparent;
+    color: #FFFFFF;
+}
+
+html[data-theme="dark"] .dashboard-content .dashboard-welcome.card .welcome-title,
+html[data-theme="dark"] .dashboard-content .dashboard-welcome.card .datetime-time {
+    color: #FFFFFF;
+}
+
+/* These analytics panels are intentionally theme-independent. This rule lives
+   in the shared shell, which loads last, so generic dark card rules cannot
+   replace their blue surface or chart text. */
+html[data-theme="dark"] .dashboard-content .order-overview-card.chart-card,
+html[data-theme="dark"] .dashboard-content .status-overview-card.chart-card {
+    background: linear-gradient(135deg, #061C32 0%, #063B73 58%, #075D97 100%);
+    border-color: #0B5D96;
+    color: #D9F1FF;
+}
+
+html[data-theme="dark"] .dashboard-content .order-overview-card.chart-card .chart-title,
+html[data-theme="dark"] .dashboard-content .status-overview-card.chart-card .chart-title,
+html[data-theme="dark"] .dashboard-content .status-overview-card.chart-card .status-chart-total strong,
+html[data-theme="dark"] .dashboard-content .status-overview-card.chart-card .status-summary-row strong {
+    color: #FFFFFF;
+}
+
+html[data-theme="dark"] .dashboard-content .order-overview-card.chart-card .chart-subtitle,
+html[data-theme="dark"] .dashboard-content .order-overview-card.chart-card .chart-legend-wrap,
+html[data-theme="dark"] .dashboard-content .status-overview-card.chart-card .status-chart-total span,
+html[data-theme="dark"] .dashboard-content .status-overview-card.chart-card .status-summary-empty {
+    color: #B8DDF5;
+}
+
+html[data-theme="dark"] .dashboard-content .order-overview-card.chart-card .chart-link,
+html[data-theme="dark"] .dashboard-content .status-overview-card.chart-card .chart-link {
+    color: #7DD3FC;
+}
+
+html[data-theme="dark"] .dashboard-content .status-overview-card.chart-card .status-summary-row small {
+    color: #9FC9E4;
+}
+
+html[data-theme="dark"] .dashboard-content .panel h1,
+html[data-theme="dark"] .dashboard-content .panel h2,
+html[data-theme="dark"] .dashboard-content .panel h3,
+html[data-theme="dark"] .dashboard-content .stat-value,
+html[data-theme="dark"] .dashboard-content .stat-label,
+html[data-theme="dark"] .dashboard-content .modal-head h3,
+html[data-theme="dark"] .dashboard-content .empty-state strong,
+html[data-theme="dark"] .dashboard-content .card h1,
+html[data-theme="dark"] .dashboard-content .card h2,
+html[data-theme="dark"] .dashboard-content .card h3,
+html[data-theme="dark"] .dashboard-content .card h4,
+html[data-theme="dark"] .dashboard-content .card h5,
+html[data-theme="dark"] .dashboard-content .card strong { color: var(--text-heading); }
+
+html[data-theme="dark"] .dashboard-content .data-table th { background: #102034; color: #b9d8ec; border-color: var(--border-subtle); }
+html[data-theme="dark"] .dashboard-content .data-table td,
+html[data-theme="dark"] .dashboard-content .data-table tr,
+html[data-theme="dark"] .dashboard-content .panel-head,
+html[data-theme="dark"] .dashboard-content .modal-head,
+html[data-theme="dark"] .dashboard-content .modal-footer { border-color: var(--border-subtle); color: var(--text-body); }
+html[data-theme="dark"] .dashboard-content .data-table tr:hover td { background: #19324c; }
+html[data-theme="dark"] .dashboard-content .filter-bar input,
+html[data-theme="dark"] .dashboard-content .filter-bar select,
+html[data-theme="dark"] .dashboard-content .field input,
+html[data-theme="dark"] .dashboard-content .field select,
+html[data-theme="dark"] .dashboard-content .field textarea,
+html[data-theme="dark"] .dashboard-content .form-control,
+html[data-theme="dark"] .dashboard-content .input-group-text {
+    background: #102034;
+    border-color: var(--border-subtle);
+    color: var(--text-heading);
+}
+html[data-theme="dark"] .dashboard-content hr { border-color: var(--border-subtle); }
+
+/* Keep the sidebar overrides after the shared shell primitives above. */
+.sidebar-nav { padding: .65rem .8rem .85rem; gap: 0; }
+.sidebar-nav .nav-group { display: flex; gap: .12rem; padding: .42rem 0 .5rem; }
+.sidebar-nav .nav-group { flex-direction: column; align-items: stretch; min-width: 0; }
+.sidebar-nav .nav-group + .nav-group { border-top: 1px solid rgba(166, 219, 248, .13); }
+.sidebar-footer { flex: 0 0 auto; }
+
+/* Legacy admin.css hides every span inside links at tablet widths. The current
+   sidebar uses spans for its icon and label, so explicitly keep both visible. */
+.sidebar .nav-link > .nav-icon { display: flex !important; }
+.sidebar .nav-link > .nav-label { display: inline-block !important; }
+
+@media (max-width: 700px) {
+    .dashboard-content .page-header { align-items: flex-start; min-height: 0; padding: 1.35rem; }
+    .dashboard-content .page-header .header-actions { width: 100%; }
+}
+
+/* ==========================================================================
+   GLOBAL STATISTIC CARDS (Unified Bold Title, Bigger Font, Centered, Single Blue)
+   ========================================================================== */
+.stat-card,
+a.stat-card,
+.delivery-stat-card,
+.refill-card.kpi-card {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    text-align: center !important;
+    text-decoration: none !important;
+    padding: 1.15rem 1rem !important;
+    min-height: 110px !important;
+    box-sizing: border-box !important;
+    border-radius: var(--radius-lg, 12px) !important;
+    background: #FFFFFF !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.stat-card:hover,
+.delivery-stat-card:hover,
+.refill-card.kpi-card:hover {
+    transform: translateY(-2px) !important;
+}
+
+.stat-card,
+.stat-card:hover,
+.stat-card:visited,
+.stat-card:active,
+.stat-card:focus,
+.stat-card-link,
+.stat-card *,
+.delivery-stat-card,
+.delivery-stat-card *,
+.refill-card.kpi-card,
+.refill-card.kpi-card * {
+    text-decoration: none !important;
+}
+
+/* Titles: Bold & Bigger & Centered */
+.stat-card .stat-head,
+.stat-card .stat-label,
+.stat-card span.stat-label,
+.stat-card > span:first-child,
+.delivery-stat-card .stat-header,
+.delivery-stat-card .stat-title,
+.refill-card .kpi-head,
+.refill-card .kpi-label {
+    font-size: 0.84rem !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.06em !important;
+    color: var(--text-heading, #0F172A) !important;
+    text-transform: uppercase !important;
+    text-align: center !important;
+    width: 100% !important;
+    display: block !important;
+    margin-bottom: 0.2rem !important;
+}
+
+/* Values: Bold & Bigger & Centered */
+.stat-card .stat-number,
+.stat-card .stat-value,
+.stat-card strong,
+.delivery-stat-card .stat-number,
+.refill-card .kpi-value {
+    font-size: 1.85rem !important;
+    font-weight: 800 !important;
+    color: var(--text-heading, #0F172A) !important;
+    letter-spacing: -0.02em !important;
+    line-height: 1.15 !important;
+    margin: 0.25rem 0 !important;
+    text-align: center !important;
+    width: 100% !important;
+    display: block !important;
+}
+
+/* Footers/Subtitles: Bigger & Centered */
+.stat-card .stat-foot,
+.stat-card .stat-meta,
+.stat-card small,
+.delivery-stat-card .stat-subtitle,
+.refill-card .kpi-meta,
+.refill-card .kpi-meta span {
+    font-size: 0.82rem !important;
+    color: var(--text-muted, #64748B) !important;
+    text-align: center !important;
+    width: 100% !important;
+    display: block !important;
+}
+
+/* Hide any remaining icons or colored badges in stat cards */
+.stat-card .stat-icon,
+.stat-card .stat-icon-wrap,
+.stat-card .stat-icon-bubble,
+.delivery-stat-card .stat-icon,
+.refill-card .kpi-icon {
+    display: none !important;
+}
+
+/* Remove colored top borders / colored after-bars if any */
+.stat-card::after,
+.delivery-stat-card::after,
+.refill-card::after {
+    display: none !important;
+}
+
+/* Shared responsive layer for all admin pages. Page-specific styles remain
+   responsible for their own visual treatments; this layer supplies safe
+   sizing, touch targets, overflow handling, and mobile stacking. */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body { max-width: 100%; }
+body.dashboard-body { overflow-x: clip; }
+.dashboard-layout, .dashboard-main, .dashboard-content,
+.dashboard-content > *, .dashboard-content section,
+.dashboard-content article, .dashboard-content .panel,
+.dashboard-content .card { min-width: 0; }
+.dashboard-main { width: calc(100% - var(--sidebar-width)); }
+.dashboard-content img, .dashboard-content svg,
+.dashboard-content canvas, .dashboard-content video,
+.dashboard-content iframe { max-width: 100%; }
+.dashboard-content img { height: auto; }
+
+.dashboard-content .data-table-wrap,
+.dashboard-content .table-responsive,
+.dashboard-content .orders-table-wrapper,
+.dashboard-content .walk-in-orders-table-wrap,
+.dashboard-content .delivery-table-wrapper,
+.dashboard-content .active-mission-table-wrap,
+.dashboard-content .refill-table-wrapper,
+.dashboard-content .refill-table-wrap,
+.dashboard-content .chat-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+}
+.dashboard-content .chart-card,
+.dashboard-content .chart-container,
+.dashboard-content .chart-canvas-container,
+.dashboard-content .doughnut-container,
+.dashboard-content .chart-area { min-width: 0; max-width: 100%; }
+.dashboard-content canvas { display: block; }
+
+.modal-backdrop, .delivery-modal-backdrop, .modal-overlay,
+.dialog-backdrop {
+    padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.modal-backdrop > .modal-card,
+.modal-backdrop > .modal-content,
+.delivery-modal-backdrop > .delivery-modal,
+.delivery-modal-backdrop > .delivery-modal-card,
+.modal-overlay > .modal-card,
+.dialog-backdrop > .dialog-card {
+    width: min(100%, 680px);
+    max-width: 100%;
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+@media (max-width: 1200px) {
+    .dashboard-main { width: 100%; margin-left: 0; }
+    .sidebar { z-index: 1100; width: min(290px, calc(100vw - 48px)); min-width: min(290px, calc(100vw - 48px)); }
+    .sidebar-backdrop { z-index: 1090; }
+}
+
+@media (max-width: 900px) {
+    .dashboard-content { padding: 18px; gap: 16px; }
+    .dashboard-content .two-column-grid,
+    .dashboard-content .detail-grid,
+    .dashboard-content .show-grid,
+    .dashboard-content .form-grid,
+    .dashboard-content .settings-grid,
+    .dashboard-content .report-grid,
+    .dashboard-content .customer-detail-grid { grid-template-columns: minmax(0, 1fr); }
+    .dashboard-content .page-header { flex-wrap: wrap; }
+    .dashboard-content .page-header .header-actions { flex-wrap: wrap; }
+}
+
+@media (max-width: 640px) {
+    html { font-size: 14px !important; }
+    .dashboard-content .data-table-wrap table,
+    .dashboard-content .table-responsive table,
+    .dashboard-content .orders-table-wrapper table,
+    .dashboard-content .walk-in-orders-table-wrap table,
+    .dashboard-content .delivery-table-wrapper table,
+    .dashboard-content .active-mission-table-wrap table,
+    .dashboard-content .refill-table-wrapper table {
+        width: max-content;
+        min-width: 640px;
+    }
+    .dashboard-content .data-table-wrap table[style*="min-width: 100%"] { width: 640px; min-width: 640px; }
+    .dashboard-header {
+        min-height: 60px;
+        height: auto;
+        padding: 8px 12px;
+        gap: 8px;
+    }
+    .header-left { min-width: 0; flex: 1 1 auto; gap: 8px; }
+    .menu-toggle-btn { width: 42px; height: 42px; min-width: 42px; flex: 0 0 42px; justify-content: center; }
+    .header-page-title {
+        min-width: 0;
+        max-width: min(38vw, 210px);
+        margin: 0;
+        overflow: hidden;
+        font-size: clamp(14px, 4vw, 17px);
+        line-height: 1.2;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .header-right { min-width: 0; flex: 0 0 auto; gap: 4px; }
+    .header-icon-btn, .theme-toggle-btn { width: 40px; height: 40px; min-width: 40px; }
+    .header-user-btn { min-width: 40px; min-height: 40px; padding: 4px; }
+    .header-user-text, .header-user-btn .dropdown-chevron { display: none; }
+    .dashboard-content { width: 100%; padding: 14px 12px calc(18px + env(safe-area-inset-bottom)); gap: 14px; }
+    .dashboard-content .page-header {
+        min-height: 0;
+        padding: 18px 16px;
+        border-radius: 16px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    .dashboard-content .page-header h1 { font-size: clamp(21px, 6vw, 28px); overflow-wrap: anywhere; }
+    .dashboard-content .page-header .header-actions { width: 100%; }
+    .dashboard-content .page-header .header-actions > * { flex: 1 1 auto; }
+    .dashboard-content .stat-grid,
+    .dashboard-content .stats-grid,
+    .dashboard-content .metric-grid,
+    .dashboard-content .kpi-grid,
+    .dashboard-content .dashboard-stats,
+    .dashboard-content .delivery-stats,
+    .dashboard-content .refill-kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 10px !important;
+    }
+    .dashboard-content .stat-card,
+    .dashboard-content .delivery-stat-card,
+    .dashboard-content .refill-card.kpi-card { min-width: 0; min-height: 96px; padding: 12px 8px !important; }
+    .dashboard-content .stat-card .stat-number,
+    .dashboard-content .stat-card .stat-value,
+    .dashboard-content .delivery-stat-card .stat-number,
+    .dashboard-content .refill-card .kpi-value { font-size: clamp(20px, 7vw, 27px) !important; overflow-wrap: anywhere; }
+    .dashboard-content .page-actions,
+    .dashboard-content .header-actions,
+    .dashboard-content .filter-bar,
+    .dashboard-content .form-actions { flex-wrap: wrap; }
+    .dashboard-content .filter-bar > *,
+    .dashboard-content .page-actions > * { min-width: 0; max-width: 100%; }
+    .dashboard-content input:not([type="checkbox"]):not([type="radio"]),
+    .dashboard-content select,
+    .dashboard-content textarea,
+    .dashboard-content .form-control { max-width: 100%; min-height: 44px; font-size: 16px; }
+    .dashboard-content textarea { min-height: 100px; }
+    .dashboard-content button,
+    .dashboard-content .btn,
+    .dashboard-content .primary-button,
+    .dashboard-content .btn-primary,
+    .dashboard-content .btn-secondary { min-height: 42px; touch-action: manipulation; }
+    .sidebar .nav-link { min-height: 44px; }
+    .dashboard-content .form-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 14px; }
+    .dashboard-content .chat-layout,
+    .dashboard-content .delivery-layout,
+    .dashboard-content .order-detail-layout,
+    .dashboard-content .customer-layout { grid-template-columns: minmax(0, 1fr) !important; }
+    .dashboard-content .chat-sidebar { max-height: 34vh; overflow-y: auto; }
+    .dashboard-content .chart-card { padding: 14px; }
+    .dashboard-content .chart-canvas-container { height: 220px; }
+    .dashboard-content .doughnut-container { height: 210px; }
+    .dropdown-menu { max-width: calc(100vw - 24px); }
+    .notif-dropdown { position: fixed; top: 64px; right: 12px; left: 12px; width: auto; max-height: min(70dvh, 520px); overflow-y: auto; }
+}
+
+@media (max-width: 380px) {
+    .dashboard-content { padding-inline: 10px; }
+    .dashboard-header { padding-inline: 8px; }
+    .header-page-title { max-width: 37vw; }
+    .header-right { gap: 1px; }
+    .header-icon-btn, .theme-toggle-btn { width: 36px; min-width: 36px; }
+    .header-orders-btn { display: none; }
+    .dashboard-content .stat-grid,
+    .dashboard-content .stats-grid,
+    .dashboard-content .metric-grid,
+    .dashboard-content .kpi-grid,
+    .dashboard-content .dashboard-stats,
+    .dashboard-content .delivery-stats,
+    .dashboard-content .refill-kpi-grid { gap: 8px !important; }
+}
