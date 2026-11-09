@@ -16,8 +16,9 @@ class SecurityHeaders
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set('Permissions-Policy', 'camera=(self), geolocation=(self), microphone=()');
         $response->headers->set('Cross-Origin-Opener-Policy', 'same-origin');
-        if ($request->isSecure()) {
+        if ($request->isSecure() || $request->header('X-Forwarded-Proto') === 'https' || app()->environment('production')) {
             $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+            $response->headers->set('Content-Security-Policy', 'upgrade-insecure-requests');
         }
         return $response;
     }

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <meta name="description" content="AQUA CLAYNE Purified Water - Unified Portal Login for Customers, Staff, and Administrators.">
 
     <title>AQUA CLAYNE | Unified Portal Login</title>
