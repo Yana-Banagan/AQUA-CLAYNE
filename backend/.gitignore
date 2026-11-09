@@ -1,6 +1,9 @@
 *.log
 .DS_Store
 .env
+.env.*
+!.env.example
+!.env.*.example
 .env.backup
 .env.production
 .phpactor.json
@@ -21,6 +24,7 @@
 /storage/*.key
 /storage/pail
 /vendor
+/storage/app/firebase-service-account.json
 _ide_helper.php
 Homestead.json
 Homestead.yaml

@@ -1,122 +1,338 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
-void main() {
-  runApp(const MyApp());
+// Core
+import 'core/api/api_client.dart';
+import 'core/repositories/auth_repository.dart';
+import 'core/services/token_storage.dart';
+import 'core/services/realtime_service.dart';
+import 'core/services/offline_service.dart';
+import 'core/notifications/push_handler.dart';
+import 'core/config/env.dart';
+import 'core/theme/app_theme.dart';
+import 'core/providers/auth_provider.dart';
+import 'core/screens/splash_screen.dart';
+import 'customer/screens/customer_shell.dart';
+
+// Customer data
+import 'customer/data/product_repository.dart';
+import 'customer/data/address_repository.dart';
+import 'customer/data/order_repository.dart';
+import 'customer/data/notification_repository.dart';
+import 'customer/data/queue_repository.dart';
+import 'customer/data/complaint_repository.dart';
+import 'customer/data/credit_repository.dart';
+import 'customer/data/payment_repository.dart';
+
+// Customer providers
+import 'customer/providers/cart_provider.dart';
+import 'customer/providers/order_provider.dart';
+import 'customer/providers/address_provider.dart';
+import 'customer/providers/notification_provider.dart';
+import 'customer/providers/queue_provider.dart';
+import 'customer/providers/complaint_provider.dart';
+import 'customer/providers/credit_provider.dart';
+import 'customer/providers/payment_provider.dart';
+
+// Driver data
+import 'driver/data/delivery_repository.dart';
+
+// Driver providers
+import 'driver/providers/driver_delivery_provider.dart';
+
+// ======================================================================
+// FIREBASE BACKGROUND HANDLER — must be a top-level function
+// ======================================================================
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  debugPrint('[FCM Background] messageId: ${message.messageId}');
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+// ======================================================================
+// MAIN
+// ======================================================================
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-  // This widget is the root of your application.
+  // ── Firebase ──────────────────────────────────────────────────────
+  await Firebase.initializeApp();
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
+  // ── Push notifications (local channel + tap handling) ─────────────
+  await PushHandler.initialize();
+
+  // ── Supabase — publishable key only, service-role stays server-side
+  await Supabase.initialize(
+    url: Env.supabaseUrl,
+    publishableKey: Env.supabaseAnonKey,
+  );
+
+  runApp(const AquaClayneApp());
+}
+
+// ======================================================================
+// APP ROOT
+// ======================================================================
+class AquaClayneApp extends StatelessWidget {
+  const AquaClayneApp({super.key});
+
+  static final RealtimeService _realtimeService = RealtimeService();
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
-    );
-  }
-}
+    // ── Infrastructure singletons (created once) ───────────────────
+    final tokenStorage = TokenStorage();
+    final apiClient = ApiClient(tokenStorage);
+    final realtimeService = _realtimeService;
+    final offlineService = OfflineService();
+    offlineService.initialize();
+    final authRepo = AuthRepository(apiClient, tokenStorage);
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+    apiClient.onSessionExpired = () {
+      final appContext = navigatorKey.currentContext;
+      if (appContext != null) {
+        appContext.read<AuthProvider>().expireSession();
+        try { appContext.read<NotificationProvider>().clearSessionData(); } catch (_) {}
+        try { appContext.read<OrderProvider>().clearSessionData(); } catch (_) {}
+        try { appContext.read<PaymentProvider>().clearSessionData(); } catch (_) {}
+        try { appContext.read<AddressProvider>().clearSessionData(); } catch (_) {}
+        try { appContext.read<CreditProvider>().clearSessionData(); } catch (_) {}
+        try { appContext.read<QueueProvider>().clearSessionData(); } catch (_) {}
+        try { appContext.read<ComplaintProvider>().clearSessionData(); } catch (_) {}
+        try { appContext.read<CartProvider>().clearCart(); } catch (_) {}
+      }
+      navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const CustomerShell()),
+        (route) => false,
+      );
+    };
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
+    // ── Repositories ───────────────────────────────────────────────
+    final productRepo = ProductRepository(apiClient);
+    final addressRepo = AddressRepository(apiClient);
+    final orderRepo = OrderRepository(apiClient);
+    final notificationRepo = NotificationRepository(apiClient);
+    final queueRepo = QueueRepository(apiClient);
+    final complaintRepo = ComplaintRepository(apiClient);
+    final creditRepo = CreditRepository(apiClient);
+    final paymentRepo = PaymentRepository(apiClient);
+    final deliveryRepo = DeliveryRepository(apiClient);
 
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
+    return MultiProvider(
+      providers: [
+        // ── Infrastructure ─────────────────────────────────────────
+        Provider<TokenStorage>.value(value: tokenStorage),
+        Provider<ApiClient>.value(value: apiClient),
+        Provider<RealtimeService>.value(value: realtimeService),
+        ChangeNotifierProvider<OfflineService>.value(value: offlineService),
+        Provider<AuthRepository>.value(value: authRepo),
 
-  final String title;
+        // ── Auth state ─────────────────────────────────────────────
+        ChangeNotifierProvider<AuthProvider>(
+          create: (_) => AuthProvider(authRepo, realtimeService),
+        ),
 
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
+        // ── Customer repositories ───────────────────────────────────
+        Provider<ProductRepository>.value(value: productRepo),
+        Provider<AddressRepository>.value(value: addressRepo),
+        Provider<OrderRepository>.value(value: orderRepo),
+        Provider<NotificationRepository>.value(value: notificationRepo),
+        Provider<QueueRepository>.value(value: queueRepo),
+        Provider<ComplaintRepository>.value(value: complaintRepo),
+        Provider<CreditRepository>.value(value: creditRepo),
+        Provider<PaymentRepository>.value(value: paymentRepo),
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+        // ── Customer state ──────────────────────────────────────────
+        ChangeNotifierProvider<CartProvider>(
+          create: (_) => CartProvider(),
+        ),
+        ChangeNotifierProvider<OrderProvider>(
+          create: (_) => OrderProvider(orderRepo, realtimeService),
+        ),
+        ChangeNotifierProvider<AddressProvider>(
+          create: (_) => AddressProvider(addressRepo),
+        ),
+        ChangeNotifierProvider<NotificationProvider>(
+          create: (_) => NotificationProvider(notificationRepo, realtimeService),
+        ),
+        ChangeNotifierProvider<QueueProvider>(
+          create: (_) => QueueProvider(queueRepo, realtimeService),
+        ),
+        ChangeNotifierProvider<ComplaintProvider>(
+          create: (_) => ComplaintProvider(complaintRepo),
+        ),
+        ChangeNotifierProvider<CreditProvider>(
+          create: (_) => CreditProvider(creditRepo),
+        ),
+        ChangeNotifierProvider<PaymentProvider>(
+          create: (_) => PaymentProvider(paymentRepo, realtimeService),
+        ),
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
+        // ── Driver ─────────────────────────────────────────────────
+        Provider<DeliveryRepository>.value(value: deliveryRepo),
+        ChangeNotifierProvider<DriverDeliveryProvider>(
+          create: (_) =>
+              DriverDeliveryProvider(deliveryRepo, realtimeService),
+        ),
+      ],
+      child: MaterialApp(
+        title: 'Aqua Clayne',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        // navigatorKey lets PushHandler navigate from FCM callbacks
+        navigatorKey: navigatorKey,
+        builder: (context, child) => Column(
           children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
+            Builder(builder: (context) {
+              final offline = context.watch<OfflineService>();
+              if (!offline.isOffline && offline.pendingSyncCount == 0) return const SizedBox.shrink();
+              final message = offline.isOffline
+                  ? offline.pendingSyncCount > 0
+                      ? 'Offline · ${offline.pendingSyncCount} safe change(s) saved on this device and waiting to sync.'
+                      : 'Offline · Showing saved information where available. Some actions require a connection.'
+                  : offline.syncError != null
+                      ? '${offline.pendingSyncCount} saved change(s) still need to sync: ${offline.syncError}'
+                      : '${offline.pendingSyncCount} saved change(s) are queued for sync when the server is available.';
+              return Material(
+                color: offline.isOffline ? const Color(0xFF7C2D12) : const Color(0xFF075985),
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Row(children: [
+                      Icon(offline.isOffline ? Icons.cloud_off_rounded : Icons.sync_rounded, color: Colors.white, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(message, style: const TextStyle(color: Colors.white, fontSize: 12))),
+                      if (!offline.isOffline && offline.pendingSyncCount > 0)
+                        TextButton(
+                          onPressed: () async {
+                            final result = await context.read<ApiClient>().syncPendingMutations();
+                            if (!context.mounted) return;
+                            context.read<OfflineService>().updateSyncState(
+                              pendingCount: result.pending,
+                              error: result.error,
+                            );
+                            if (result.synced > 0) {
+                              await Future.wait([
+                                context.read<OrderProvider>().loadOrders(),
+                                context.read<AddressProvider>().load(),
+                                context.read<NotificationProvider>().load(),
+                                context.read<PaymentProvider>().loadPayments(),
+                              ]);
+                            }
+                          },
+                          child: const Text('Retry', style: TextStyle(color: Colors.white)),
+                        ),
+                    ]),
+                  ),
+                ),
+              );
+            }),
+            Expanded(child: OfflineSyncGate(child: child ?? const SizedBox.shrink())),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+        home: const SplashScreen(),
       ),
     );
   }
+}
+
+/// Refreshes server-authoritative data after connectivity returns. Order and
+/// payment creation are never replayed from local storage; they remain server
+/// validated to prevent duplicate transactions.
+class OfflineSyncGate extends StatefulWidget {
+  final Widget child;
+  const OfflineSyncGate({super.key, required this.child});
+
+  @override
+  State<OfflineSyncGate> createState() => _OfflineSyncGateState();
+}
+
+class _OfflineSyncGateState extends State<OfflineSyncGate> {
+  bool _wasOffline = false;
+  bool _callbackBound = false;
+  bool _syncing = false;
+  String? _lastOwnerId;
+  Timer? _retryTimer;
+  ApiClient? _api;
+
+  @override
+  void dispose() {
+    _retryTimer?.cancel();
+    _api?.onOutboxChanged = null;
+    super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final offline = context.watch<OfflineService>().isOffline;
+    final auth = context.watch<AuthProvider>();
+    final ownerId = auth.user?.id;
+    if (!_callbackBound) {
+      _callbackBound = true;
+      _api = context.read<ApiClient>();
+      _api!.onOutboxChanged = () {
+        _updatePendingCount();
+      };
+      _retryTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+        if (!mounted || context.read<OfflineService>().isOffline || !context.read<AuthProvider>().isAuthenticated) return;
+        context.read<ApiClient>().pendingMutationCount().then((count) {
+          if (mounted && count > 0) _syncAndRefresh(refreshAllOnReconnect: false);
+        });
+      });
+    }
+    final shouldSync = auth.isAuthenticated && !offline &&
+        (_wasOffline || ownerId != _lastOwnerId);
+    final shouldRefreshOfflineCount = auth.isAuthenticated && offline && ownerId != _lastOwnerId;
+    final reconnected = _wasOffline && !offline;
+    _wasOffline = offline;
+    _lastOwnerId = ownerId;
+    if (shouldSync) WidgetsBinding.instance.addPostFrameCallback((_) => _syncAndRefresh(refreshAllOnReconnect: reconnected));
+    if (shouldRefreshOfflineCount) WidgetsBinding.instance.addPostFrameCallback((_) => _updatePendingCount());
+  }
+
+  Future<void> _updatePendingCount() async {
+    if (!mounted) return;
+    final api = context.read<ApiClient>();
+    final count = await api.pendingMutationCount();
+    if (mounted) context.read<OfflineService>().updateSyncState(pendingCount: count, error: null);
+  }
+
+  Future<void> _syncAndRefresh({required bool refreshAllOnReconnect}) async {
+    if (!mounted || _syncing) return;
+    _syncing = true;
+    try {
+      final api = context.read<ApiClient>();
+      final result = await api.syncPendingMutations();
+      if (!mounted) return;
+      context.read<OfflineService>().updateSyncState(pendingCount: result.pending, error: result.error);
+      if (!context.read<AuthProvider>().isAuthenticated) return;
+      if (refreshAllOnReconnect || result.synced > 0) {
+        await Future.wait([
+          context.read<OrderProvider>().loadOrders(),
+          context.read<AddressProvider>().load(),
+          context.read<NotificationProvider>().load(),
+          context.read<PaymentProvider>().loadPayments(),
+        ]);
+      }
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
