@@ -1,0 +1,228 @@
+/* Shared final dark-theme pass for every page inside the admin shell. */
+.profile-avatar-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+}
+.profile-avatar-fallback { display: none; }
+.avatar, .cell-avatar, .customer-avatar, .customer-avatar-large, .driver-avatar-lg,
+.driver-large-avatar, .cell-driver-avatar, .show-driver-avatar, .driver-card-avatar,
+.driver-preview-avatar {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+}
+.cell-customer-avatar {
+    position: relative;
+    display: inline-flex;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0EA5E9, #0066CC);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+}
+.cell-user-wrap { flex-direction: row; align-items: center; gap: 8px; }
+.cell-user-meta { display: flex; min-width: 0; flex-direction: column; }
+.profile-avatar-image + .profile-avatar-fallback {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+}
+.avatar-failed .profile-avatar-fallback { display: grid; }
+
+html[data-theme="dark"] body.dashboard-body {
+    background: #0B1726;
+    color: #C7D8E8;
+    color-scheme: dark;
+}
+
+html[data-theme="dark"] .dashboard-main,
+html[data-theme="dark"] .dashboard-content {
+    background-color: #0B1726;
+    color: #C7D8E8;
+}
+
+html[data-theme="dark"] .dashboard-content {
+    --background: #0B1726;
+    --surface: #13243A;
+    --surface-soft: #18324C;
+    --text-primary: #E6F4FF;
+    --text-secondary: #9AB1C7;
+    --text-heading: #E6F4FF;
+    --text-body: #C7D8E8;
+    --text-muted: #9AB1C7;
+    --border: #2A425D;
+    --border-light: #253B54;
+    --navy: #A9DFFF;
+    --navy-dark: #C7E9FF;
+}
+
+/* Shared cards, forms and content surfaces used across admin sections. */
+html[data-theme="dark"] .dashboard-content .panel,
+html[data-theme="dark"] .dashboard-content .stat-card,
+html[data-theme="dark"] .dashboard-content .delivery-stat-card,
+html[data-theme="dark"] .dashboard-content .detail-section,
+html[data-theme="dark"] .dashboard-content .form-card,
+html[data-theme="dark"] .dashboard-content .assignment-card,
+html[data-theme="dark"] .dashboard-content .modal-card,
+html[data-theme="dark"] .dashboard-content .card,
+html[data-theme="dark"] .dashboard-content .container-fluid > .card,
+html[data-theme="dark"] .dashboard-content .table-responsive,
+html[data-theme="dark"] .dashboard-content .data-table-wrap {
+    background-color: #13243A !important;
+    border-color: #2A425D !important;
+    color: #C7D8E8;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .14);
+}
+
+html[data-theme="dark"] .dashboard-content .panel-head,
+html[data-theme="dark"] .dashboard-content .modal-head,
+html[data-theme="dark"] .dashboard-content .modal-footer,
+html[data-theme="dark"] .dashboard-content .form-actions {
+    border-color: #2A425D !important;
+    color: #C7D8E8;
+}
+
+html[data-theme="dark"] .dashboard-content h1,
+html[data-theme="dark"] .dashboard-content h2,
+html[data-theme="dark"] .dashboard-content h3,
+html[data-theme="dark"] .dashboard-content h4,
+html[data-theme="dark"] .dashboard-content h5,
+html[data-theme="dark"] .dashboard-content label,
+html[data-theme="dark"] .dashboard-content .detail-row .value,
+html[data-theme="dark"] .dashboard-content .customer-cell strong,
+html[data-theme="dark"] .dashboard-content .order-cell strong {
+    color: #E6F4FF;
+}
+
+html[data-theme="dark"] .dashboard-content .detail-row .label,
+html[data-theme="dark"] .dashboard-content .stat-meta,
+html[data-theme="dark"] .dashboard-content .text-muted {
+    color: #9AB1C7;
+}
+
+/* Delivery KPIs use their own page-specific card classes. */
+html[data-theme="dark"] .dashboard-content .delivery-stat-card {
+    background: #13243A !important;
+    border-color: #2A425D !important;
+    color: #C7D8E8 !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .2) !important;
+}
+html[data-theme="dark"] .dashboard-content .delivery-stat-card .stat-title,
+html[data-theme="dark"] .dashboard-content .delivery-stat-card .stat-header { color: #B9D8EC !important; }
+html[data-theme="dark"] .dashboard-content .delivery-stat-card .stat-number { color: #E6F4FF !important; }
+html[data-theme="dark"] .dashboard-content .delivery-stat-card .stat-subtitle { color: #9AB1C7 !important; }
+
+/* Inline light fills appear in several older admin views. */
+html[data-theme="dark"] .dashboard-content [style*="background: #fff"],
+html[data-theme="dark"] .dashboard-content [style*="background:#fff"],
+html[data-theme="dark"] .dashboard-content [style*="background: #ffffff"],
+html[data-theme="dark"] .dashboard-content [style*="background:#ffffff"],
+html[data-theme="dark"] .dashboard-content [style*="background: white"],
+html[data-theme="dark"] .dashboard-content [style*="background-color: #fff"],
+html[data-theme="dark"] .dashboard-content [style*="background-color:#fff"],
+html[data-theme="dark"] .dashboard-content [style*="background-color: #ffffff"],
+html[data-theme="dark"] .dashboard-content [style*="background-color:#ffffff"] {
+    background-color: #13243A !important;
+    border-color: #2A425D !important;
+    color: #C7D8E8 !important;
+}
+
+html[data-theme="dark"] .dashboard-content [style*="background: var(--surface-soft)"],
+html[data-theme="dark"] .dashboard-content [style*="background:var(--surface-soft)"] {
+    background-color: #18324C !important;
+    border-color: #2A425D !important;
+}
+
+/* Tables keep clear row boundaries and readable hover states. */
+html[data-theme="dark"] .dashboard-content .data-table,
+html[data-theme="dark"] .dashboard-content table,
+html[data-theme="dark"] .dashboard-content .table {
+    color: #C7D8E8;
+    --bs-table-bg: transparent;
+    --bs-table-color: #C7D8E8;
+    --bs-table-border-color: #2A425D;
+}
+
+html[data-theme="dark"] .dashboard-content .data-table th,
+html[data-theme="dark"] .dashboard-content .table thead th {
+    background: #102034 !important;
+    border-color: #2A425D !important;
+    color: #B9D8EC !important;
+}
+
+html[data-theme="dark"] .dashboard-content .data-table td,
+html[data-theme="dark"] .dashboard-content .table td,
+html[data-theme="dark"] .dashboard-content .data-table tr,
+html[data-theme="dark"] .dashboard-content .table tr {
+    border-color: #253B54 !important;
+    color: #C7D8E8;
+}
+
+html[data-theme="dark"] .dashboard-content .data-table tr:hover td,
+html[data-theme="dark"] .dashboard-content .table tbody tr:hover td {
+    background-color: #19324C !important;
+}
+
+/* Inputs and selects across both current and legacy forms. */
+html[data-theme="dark"] .dashboard-content input:not([type="checkbox"]):not([type="radio"]),
+html[data-theme="dark"] .dashboard-content select,
+html[data-theme="dark"] .dashboard-content textarea,
+html[data-theme="dark"] .dashboard-content .form-control,
+html[data-theme="dark"] .dashboard-content .input-group-text {
+    background-color: #0E1E31 !important;
+    border-color: #36516D !important;
+    color: #E6F4FF !important;
+}
+
+html[data-theme="dark"] .dashboard-content input::placeholder,
+html[data-theme="dark"] .dashboard-content textarea::placeholder {
+    color: #829BB2 !important;
+}
+
+html[data-theme="dark"] .dashboard-content input:disabled,
+html[data-theme="dark"] .dashboard-content select:disabled,
+html[data-theme="dark"] .dashboard-content textarea:disabled {
+    background-color: #172A40 !important;
+    color: #91A7BC !important;
+}
+
+html[data-theme="dark"] .dashboard-content hr { border-color: #2A425D !important; }
+html[data-theme="dark"] .dashboard-content .data-table-wrap,
+html[data-theme="dark"] .dashboard-content .table-responsive { scrollbar-color: #36516D #13243A; }
+
+/* Preserve intentionally branded surfaces while fixing inline dark navy text. */
+html[data-theme="dark"] .dashboard-content [style*="color: var(--navy)"],
+html[data-theme="dark"] .dashboard-content [style*="color:var(--navy)"],
+html[data-theme="dark"] .dashboard-content [style*="color: var(--text-primary)"],
+html[data-theme="dark"] .dashboard-content [style*="color:var(--text-primary)"] {
+    color: #E6F4FF !important;
+}
+
+html[data-theme="dark"] .dashboard-content .filter-bar input,
+html[data-theme="dark"] .dashboard-content .filter-bar select,
+html[data-theme="dark"] .dashboard-content .field input,
+html[data-theme="dark"] .dashboard-content .field select,
+html[data-theme="dark"] .dashboard-content .field textarea { color-scheme: dark; }
+
+/* Refill queue KPI cards use page-local styles, so keep their surface and text
+   colors explicit when the shared admin dark theme is active. */
+html[data-theme="dark"] .dashboard-content .refill-card.kpi-card {
+    background: #13243A !important;
+    border-color: #2A425D !important;
+    color: #C7D8E8 !important;
+    box-shadow: 0 8px 22px rgba(2, 12, 24, 0.24) !important;
+}
+html[data-theme="dark"] .dashboard-content .refill-card.kpi-card .kpi-label { color: #B9D8EC !important; }
+html[data-theme="dark"] .dashboard-content .refill-card.kpi-card .kpi-value { color: #E6F4FF !important; }
+html[data-theme="dark"] .dashboard-content .refill-card.kpi-card .kpi-meta { color: #9AB1C7 !important; }

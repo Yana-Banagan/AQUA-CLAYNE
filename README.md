@@ -1,3 +1,7 @@
+# AQUA-CLAYNE
+
+Water Refilling Station Business
+
 # Water Refilling Station Management System
 
 ## Technology Stack
@@ -13,3 +17,4 @@
 - mobile/ — Flutter Customer and Driver application
 - database/ — Database-related files
 - docs/ — Project documentation
+  ddd42d (Initial commit: project structure)
