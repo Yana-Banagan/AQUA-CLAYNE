@@ -18,6 +18,6 @@ class AdminLoginTest extends TestCase
         $response->assertSee('Sign in');
         $response->assertSee('admin-login.css');
         $response->assertSee('admin-login.js');
-        $response->assertSee('action="http://127.0.0.1:8000/admin/login"', false);
+        $response->assertSee(route('admin.login.submit'), false);
     }
 }

@@ -14,6 +14,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Trust all proxies (Railway, Cloudflare, load balancers) so Laravel
+        // correctly detects HTTPS and client IP from X-Forwarded-* headers.
+        $middleware->trustProxies(at: '*');
+
         $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
         $middleware->append(\App\Http\Middleware\LogSlowRequests::class);
         $middleware->alias([
@@ -39,6 +43,10 @@ return Application::configure(basePath: dirname(__DIR__))
         });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->shouldRenderJsonWhen(
+            fn(Request $request) => $request->is('api/*') || $request->expectsJson(),
+        );
+
         $exceptions->render(function (QueryException $exception, Request $request) {
             if ($request->expectsJson() && str_contains($exception->getMessage(), 'SQLSTATE[08006]')) {
                 return response()->json([

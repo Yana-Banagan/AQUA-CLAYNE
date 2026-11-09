@@ -274,5 +274,21 @@ class LandingPageTest extends TestCase
         $response->assertSee('id="btnModalClose"', false);
         $response->assertSee('id="modalOrderBtn"', false);
     }
+
+    /**
+     * Test that HTTPS proxy headers and CSP upgrade-insecure-requests are honored.
+     */
+    public function test_landing_page_enforces_https_and_csp_headers_behind_proxy(): void
+    {
+        $response = $this->withHeaders([
+            'X-Forwarded-Proto' => 'https',
+            'X-Forwarded-Port' => '443',
+        ])->get('/');
+
+        $response->assertStatus(200);
+        $response->assertSee('<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">', false);
+        $response->assertSee('https://', false);
+        $this->assertEquals('upgrade-insecure-requests', $response->headers->get('Content-Security-Policy'));
+    }
 }
 

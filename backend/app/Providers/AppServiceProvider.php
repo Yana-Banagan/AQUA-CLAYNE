@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\URL;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -33,6 +34,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Enforce HTTPS URLs when running in production, behind an SSL proxy (like Railway),
+        // or when APP_URL is configured with https.
+        if (app()->environment('production') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') || str_starts_with(config('app.url'), 'https://')) {
+            URL::forceScheme('https');
+        }
+
         $slowQueryThresholdMs = max(0, (float) config('database.slow_query_ms', 500));
         DB::listen(function (QueryExecuted $query) use ($slowQueryThresholdMs) {
             if ($query->time < $slowQueryThresholdMs) {
