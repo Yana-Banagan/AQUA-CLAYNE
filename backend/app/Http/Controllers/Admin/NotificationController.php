@@ -25,7 +25,7 @@ class NotificationController extends Controller
         $statsRow = Notification::where('user_id', $userId)
             ->selectRaw("
                 COUNT(*) AS total,
-                SUM(CASE WHEN is_read = false OR is_read = 0 THEN 1 ELSE 0 END) AS unread
+                COALESCE(SUM(CASE WHEN is_read = false THEN 1 ELSE 0 END), 0) AS unread
             ")->first();
 
         $stats = [

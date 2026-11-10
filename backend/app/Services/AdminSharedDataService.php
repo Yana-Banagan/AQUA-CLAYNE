@@ -108,7 +108,7 @@ class AdminSharedDataService
                 (SELECT COUNT(*) FROM refill_queue_entries WHERE status = 'waiting') AS waiting_queue,
                 (SELECT COUNT(*) FROM deliveries WHERE status IN ('assigned', 'en_route', 'en_route_for_pickup', 'picked_up', 'at_station', 'out_for_delivery')) AS active_deliveries,
                 (SELECT COUNT(*) FROM inventory WHERE quantity_on_hand <= reorder_level) AS low_stock,
-                (SELECT COUNT(*) FROM notifications WHERE user_id = :userId AND (is_read = false OR is_read = 0)) AS unread_notifications,
+                (SELECT COUNT(*) FROM notifications WHERE user_id = :userId AND is_read = false) AS unread_notifications,
                 {$chatQuery} AS unread_chats
         ";
 
