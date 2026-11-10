@@ -69,46 +69,41 @@ class AppServiceProvider extends ServiceProvider
             ->by((string) optional($request->user())->id));
         RateLimiter::for('public-api', fn (Request $request) => Limit::perMinute(120)->by($request->ip()));
 
-        // Provide notification data to every page that uses the admin dashboard
-        // layout. Individual controllers no longer need to remember to pass it.
+        // Keep the shared admin shell lightweight. The page header only needs the
+        // unread counts; the notification list is refreshed asynchronously via the
+        // existing admin status endpoint so we avoid loading the full notification
+        // history on every admin request.
         View::composer('admin.layouts.app', function ($view) {
             $adminAvatarUrl = null;
+            $unreadNotifs = 0;
+            $unreadChats = 0;
+            $headerNotifications = [];
+
             try {
                 $user = auth()->user();
-                $headerData = $user
-                    ? Cache::store('file')->remember('admin-header-v2:' . $user->id, now()->addSeconds(15), function () use ($user) {
-                        return [
-                            'unreadNotifs' => $user->notifications()->where('is_read', false)->count(),
-                            'unreadChats' => in_array($user->role, ['admin', 'staff'], true)
-                                ? Cache::store('file')->remember('admin-unread-chats', now()->addSeconds(15), fn () => ChatMessage::whereIn('sender_role', ['customer', 'driver'])->whereNull('read_at')->count())
-                                : 0,
-                            'notifications' => Notification::where('user_id', $user->id)
-                                ->latest('created_at')
-                                ->take(5)
-                                ->get(['id', 'title', 'body', 'is_read', 'created_at'])
-                                ->map(fn (Notification $notification) => [
-                                    'id' => (string) $notification->id,
-                                    'title' => (string) $notification->title,
-                                    'body' => (string) $notification->body,
-                                    'is_read' => (bool) $notification->is_read,
-                                    'time_ago' => $notification->created_at?->diffForHumans() ?? 'Recently',
-                                ])
-                                ->all(),
-                        ];
-                    })
-                    : ['unreadNotifs' => 0, 'unreadChats' => 0, 'notifications' => []];
-                $unreadNotifs = $headerData['unreadNotifs'];
-                $unreadChats = $headerData['unreadChats'];
-                $headerNotifications = $headerData['notifications'];
-                $adminAvatarUrl = ($user && $user->avatar_path)
-                    ? app(SupabaseStorageService::class)->signedProfilePhotoUrl(
-                        $user->id,
-                        $user->avatar_path,
-                    )
-                    : null;
 
-                // Preserve the page-specific operational counts, but always use
-                // the signed-in user's unread notification count.
+                if ($user) {
+                    $userId = $user->getAuthIdentifier();
+
+                    $unreadNotifs = Cache::store('file')->remember('admin-header-unread-notifications:' . $userId, now()->addSeconds(15), function () use ($userId) {
+                        return Notification::where('user_id', $userId)
+                            ->where('is_read', false)
+                            ->count();
+                    });
+
+                    if (in_array($user->role, ['admin', 'staff'], true)) {
+                        $unreadChats = Cache::store('file')->remember('admin-header-unread-chats', now()->addSeconds(15), function () {
+                            return ChatMessage::whereIn('sender_role', ['customer', 'driver'])
+                                ->whereNull('read_at')
+                                ->count();
+                        });
+                    }
+
+                    $adminAvatarUrl = $user->avatar_path
+                        ? app(SupabaseStorageService::class)->signedProfilePhotoUrl($userId, $user->avatar_path)
+                        : null;
+                }
+
                 $existingCounts = $view->getData()['sidebarCounts'] ?? [];
                 $view->with('sidebarCounts', array_merge([
                     'pendingOrders' => 0,
