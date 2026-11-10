@@ -101,6 +101,10 @@ return [
             'sslmode' => env('DB_SSLMODE', 'prefer'),
             // Do not let unavailable remote databases hold an HTTP request open.
             'connect_timeout' => (int) env('DB_CONNECT_TIMEOUT', 5),
+            'options' => extension_loaded('pdo_pgsql') ? array_filter([
+                PDO::ATTR_PERSISTENT => env('DB_PERSISTENT', true) ? true : null,
+                PDO::ATTR_TIMEOUT => (int) env('DB_TIMEOUT', 5),
+            ]) : [],
         ],
 
         'sqlsrv' => [

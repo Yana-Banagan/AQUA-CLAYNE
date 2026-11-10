@@ -462,7 +462,11 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    initCharts();
+    if (window.requestIdleCallback) {
+        requestIdleCallback(initCharts);
+    } else {
+        setTimeout(initCharts, 50);
+    }
 
     // =========================================================================
     // 5. DASHBOARD ORDERS TABLE — no client-side filter/search in the compact

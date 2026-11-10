@@ -640,21 +640,23 @@
                 }
             });
 
-            // Reliable 30s background heartbeat polling fallback
+            // Reliable 30s background heartbeat polling fallback using lightweight status endpoint
             this.heartbeatInterval = setInterval(async () => {
                 try {
                     if (this.realtimeConnected || document.visibilityState !== 'visible') return;
-                    const res = await fetch(window.location.href, {
+                    const res = await fetch('/admin/refill-queue/status', {
                         headers: { 'Accept': 'application/json' }
                     });
                     if (res.ok) {
                         const json = await res.json();
-                        if (json && json.stats) {
+                        const waitingCount = json.waiting !== undefined ? json.waiting : json.stats?.waiting;
+                        const refillingCount = json.refilling !== undefined ? json.refilling : json.stats?.refilling;
+                        if (waitingCount !== undefined && refillingCount !== undefined) {
                             // Update KPI badges if DOM elements present
                             const waitingBadge = document.querySelector('.kpi-waiting .kpi-value');
                             const activeBadge = document.querySelector('.kpi-refilling .kpi-value');
-                            if ((waitingBadge && parseInt(waitingBadge.textContent.trim(), 10) !== json.stats.waiting) ||
-                                (activeBadge && parseInt(activeBadge.textContent.trim(), 10) !== json.stats.refilling)) {
+                            if ((waitingBadge && parseInt(waitingBadge.textContent.trim(), 10) !== waitingCount) ||
+                                (activeBadge && parseInt(activeBadge.textContent.trim(), 10) !== refillingCount)) {
                                 this.refreshQueue();
                             }
                         }

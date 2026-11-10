@@ -22,68 +22,78 @@ class DispatchService
     /**
      * Get operational status and workload summary for the station's two active drivers.
      */
-    public function getDriverStatuses(): array
+    public function getDriverStatuses(bool $forceFresh = false): array
     {
-        $drivers = Driver::with(['user', 'pickupBatches' => function ($q) {
-            $q->whereIn('status', ['ready', 'in_progress'])->with('items.order');
-        }, 'deliveryRoutes' => function ($q) {
-            $q->whereIn('status', ['ready', 'in_progress'])->with('stops.order');
-        }])->get();
-
-        $driverBoard = [];
-
-        foreach ($drivers as $driver) {
-            $activeBatch = $driver->pickupBatches->first();
-            $activeRoute = $driver->deliveryRoutes->first();
-
-            $status = 'AVAILABLE';
-            $currentTaskType = null;
-            $currentTaskCode = null;
-            $currentArea = null;
-            $stopsCount = 0;
-            $gallonsCount = 0;
-            $completedStops = 0;
-
-            if ($driver->user?->status !== 'active') {
-                $status = 'OFFLINE';
-            } elseif ($activeRoute) {
-                $status = $activeRoute->status === 'in_progress' ? 'ON_DELIVERY' : 'ASSIGNED';
-                $currentTaskType = 'route';
-                $currentTaskCode = $activeRoute->route_number;
-                $currentArea = $activeRoute->area;
-                $stopsCount = $activeRoute->stops->count();
-                $completedStops = $activeRoute->stops->whereIn('status', ['delivered', 'failed'])->count();
-                $gallonsCount = $activeRoute->total_gallons;
-            } elseif ($activeBatch) {
-                $status = $activeBatch->status === 'in_progress' ? 'ON_PICKUP' : 'ASSIGNED';
-                $currentTaskType = 'pickup';
-                $currentTaskCode = $activeBatch->batch_number;
-                $currentArea = $activeBatch->area;
-                $stopsCount = $activeBatch->items->count();
-                $completedStops = $activeBatch->items->whereIn('status', ['picked_up', 'failed'])->count();
-                $gallonsCount = $activeBatch->total_expected_gallons;
-            }
-
-            $driverBoard[] = [
-                'id' => $driver->id,
-                'name' => $driver->user?->name ?? 'Driver',
-                'avatar_url' => $driver->user?->avatar_url,
-                'phone' => $driver->user?->phone ?? 'N/A',
-                'vehicle_plate' => $driver->vehicle_plate ?? 'N/A',
-                'license_number' => $driver->license_number ?? 'N/A',
-                'status' => $status,
-                'current_task_type' => $currentTaskType,
-                'current_task_code' => $currentTaskCode,
-                'area' => $currentArea,
-                'stops_count' => $stopsCount,
-                'completed_stops' => $completedStops,
-                'gallons_count' => $gallonsCount,
-                'active_batch' => $activeBatch,
-                'active_route' => $activeRoute,
-            ];
+        if ($forceFresh) {
+            \Illuminate\Support\Facades\Cache::forget('dispatch:driver-statuses');
         }
 
-        return $driverBoard;
+        return \Illuminate\Support\Facades\Cache::remember('dispatch:driver-statuses', now()->addSeconds(15), function () {
+            $drivers = Driver::with([
+                'user:id,name,phone,status,avatar_path',
+                'pickupBatches' => function ($q) {
+                    $q->whereIn('status', ['ready', 'in_progress'])->with('items.order:id,order_number');
+                },
+                'deliveryRoutes' => function ($q) {
+                    $q->whereIn('status', ['ready', 'in_progress'])->with('stops.order:id,order_number');
+                }
+            ])->get();
+
+            $driverBoard = [];
+
+            foreach ($drivers as $driver) {
+                $activeBatch = $driver->pickupBatches->first();
+                $activeRoute = $driver->deliveryRoutes->first();
+
+                $status = 'AVAILABLE';
+                $currentTaskType = null;
+                $currentTaskCode = null;
+                $currentArea = null;
+                $stopsCount = 0;
+                $gallonsCount = 0;
+                $completedStops = 0;
+
+                if ($driver->user?->status !== 'active') {
+                    $status = 'OFFLINE';
+                } elseif ($activeRoute) {
+                    $status = $activeRoute->status === 'in_progress' ? 'ON_DELIVERY' : 'ASSIGNED';
+                    $currentTaskType = 'route';
+                    $currentTaskCode = $activeRoute->route_number;
+                    $currentArea = $activeRoute->area;
+                    $stopsCount = $activeRoute->stops->count();
+                    $completedStops = $activeRoute->stops->whereIn('status', ['delivered', 'failed'])->count();
+                    $gallonsCount = $activeRoute->total_gallons;
+                } elseif ($activeBatch) {
+                    $status = $activeBatch->status === 'in_progress' ? 'ON_PICKUP' : 'ASSIGNED';
+                    $currentTaskType = 'pickup';
+                    $currentTaskCode = $activeBatch->batch_number;
+                    $currentArea = $activeBatch->area;
+                    $stopsCount = $activeBatch->items->count();
+                    $completedStops = $activeBatch->items->whereIn('status', ['picked_up', 'failed'])->count();
+                    $gallonsCount = $activeBatch->total_expected_gallons;
+                }
+
+                $driverBoard[] = [
+                    'id' => $driver->id,
+                    'name' => $driver->user?->name ?? 'Driver',
+                    'avatar_url' => $driver->user?->avatar_url,
+                    'phone' => $driver->user?->phone ?? 'N/A',
+                    'vehicle_plate' => $driver->vehicle_plate ?? 'N/A',
+                    'license_number' => $driver->license_number ?? 'N/A',
+                    'status' => $status,
+                    'current_task_type' => $currentTaskType,
+                    'current_task_code' => $currentTaskCode,
+                    'area' => $currentArea,
+                    'stops_count' => $stopsCount,
+                    'completed_stops' => $completedStops,
+                    'gallons_count' => $gallonsCount,
+                    'active_batch' => $activeBatch,
+                    'active_route' => $activeRoute,
+                ];
+            }
+
+            return $driverBoard;
+        });
     }
 
     /**
@@ -238,6 +248,7 @@ class DispatchService
                 'record_id' => $batch->id,
             ]);
 
+            \Illuminate\Support\Facades\Cache::forget('dispatch:driver-statuses');
             app(RealtimeEventService::class)->emit('pickup_batch', $batch->id, 'created', 'ready');
 
             if ($driver?->user) {
@@ -400,6 +411,7 @@ class DispatchService
                 'record_id' => $route->id,
             ]);
 
+            \Illuminate\Support\Facades\Cache::forget('dispatch:driver-statuses');
             app(RealtimeEventService::class)->emit('delivery_route', $route->id, 'created', 'ready');
 
             if ($driver?->user) {

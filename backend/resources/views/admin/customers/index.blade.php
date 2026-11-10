@@ -80,7 +80,7 @@
                             </span>
                         </td>
                         <td>
-                            <strong>{{ $cust->orders->count() }}</strong>
+                            <strong>{{ $cust->orders_count ?? $cust->orders->count() }}</strong>
                         </td>
                         <td>
                             @if($cust->creditAccount)

@@ -352,7 +352,11 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    initCharts();
+    if (window.requestIdleCallback) {
+        requestIdleCallback(initCharts);
+    } else {
+        setTimeout(initCharts, 50);
+    }
 
     // =========================================================================
     // 5. LATEST ORDERS TABLE: SEARCH & STATUS FILTERING
@@ -436,11 +440,16 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
 
-        // Search input listener
+        // Search input listener with 200ms debounce
+        var searchDebounceTimer = null;
         if (searchInput) {
             searchInput.addEventListener('input', function () {
-                searchQuery = this.value.toLowerCase().trim();
-                applyFilters();
+                var val = this.value.toLowerCase().trim();
+                clearTimeout(searchDebounceTimer);
+                searchDebounceTimer = setTimeout(function () {
+                    searchQuery = val;
+                    applyFilters();
+                }, 200);
             });
         }
     }

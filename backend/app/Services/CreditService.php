@@ -47,6 +47,8 @@ class CreditService
             'type' => 'charge',
             'amount' => $amount,
         ]);
+
+        \Illuminate\Support\Facades\Cache::forget('admin:dashboard:station-kpis');
     }
 
     public function pay(
@@ -77,6 +79,8 @@ class CreditService
                 'table_name' => 'credit_accounts',
                 'record_id' => $account->id,
             ]);
+
+            \Illuminate\Support\Facades\Cache::forget('admin:dashboard:station-kpis');
 
             return $transaction;
         });

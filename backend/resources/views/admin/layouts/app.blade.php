@@ -638,7 +638,9 @@
                     .catch(function () {})
                     .finally(function () { window.clearTimeout(timeout); inFlight = false; });
             }
-            refreshAdminCounts();
+            // Initial counts are already server-rendered by Blade.
+            // Do not fire a redundant immediate fetch on page load;
+            // refresh only via realtime events or fallback polling.
             function startFallback() {
                 if (!fallbackTimer) fallbackTimer = window.setInterval(refreshAdminCounts, 30000);
             }
@@ -665,7 +667,9 @@
                             var signal = payload.new || {};
                             window.dispatchEvent(new CustomEvent('aqua:realtime', { detail: signal }));
                             if (['order', 'delivery', 'refill_queue', 'notification', 'payment', 'chat'].includes(signal.entity_type)) {
-                                refreshAdminCounts();
+                                // Initial counts are already server-rendered by Blade.
+            // Do not fire a redundant immediate fetch on page load;
+            // refresh only via realtime events or fallback polling.
                             }
                         })
                         .subscribe(function (status) {

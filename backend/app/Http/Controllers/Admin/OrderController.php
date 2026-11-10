@@ -98,9 +98,10 @@ class OrderController extends Controller
             ->where('delivery_method', '!=', 'station_pickup')
             ->whereDoesntHave('delivery', fn ($q) => $q->whereNotNull('driver_id'))
             ->with([
-                'customer.user',
-                'address',
-                'items.product',
+                'customer.user:id,name,phone',
+                'address:id,customer_id,address_line,barangay,city',
+                'items:id,order_id,product_id,quantity,unit_price',
+                'items.product:id,name,type',
                 'rfidTransactions' => fn ($query) => $query->with('rfidTag.gallon')->orderByDesc('created_at')->orderByDesc('id'),
             ])
             ->latest('created_at')
@@ -109,10 +110,18 @@ class OrderController extends Controller
         $walkInOrders = WalkInOrder::latest('created_at')->take(10)->get();
         $todayStart = today()->startOfDay();
         $tomorrow = $todayStart->copy()->addDay();
-        $walkInSummaryRow = WalkInOrder::query()->selectRaw(
-            'COUNT(*) AS total, COALESCE(SUM(amount), 0) AS payments, COUNT(*) FILTER (WHERE created_at >= ? AND created_at < ?) AS today_count, COALESCE(SUM(amount) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS today_payments',
-            [$todayStart, $tomorrow, $todayStart, $tomorrow]
-        )->first();
+        $isPgsql = \Illuminate\Support\Facades\DB::getDriverName() === 'pgsql';
+        if ($isPgsql) {
+            $walkInSummaryRow = WalkInOrder::query()->selectRaw(
+                'COUNT(*) AS total, COALESCE(SUM(amount), 0) AS payments, COUNT(*) FILTER (WHERE created_at >= ? AND created_at < ?) AS today_count, COALESCE(SUM(amount) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS today_payments',
+                [$todayStart, $tomorrow, $todayStart, $tomorrow]
+            )->first();
+        } else {
+            $walkInSummaryRow = WalkInOrder::query()->selectRaw(
+                'COUNT(*) AS total, COALESCE(SUM(amount), 0) AS payments, SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END) AS today_count, COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN amount ELSE 0 END), 0) AS today_payments',
+                [$todayStart, $tomorrow, $todayStart, $tomorrow]
+            )->first();
+        }
         $walkInSummary = [
             'count' => (int) $walkInSummaryRow->total,
             'payments' => (float) $walkInSummaryRow->payments,
@@ -139,7 +148,7 @@ class OrderController extends Controller
             $q->where('status', 'active');
         })
         ->with([
-            'user',
+            'user:id,name,phone,avatar_path',
             'deliveries' => function ($dq) {
                 $dq->whereIn('status', ['assigned', 'en_route_for_pickup', 'picked_up', 'out_for_delivery']);
             }

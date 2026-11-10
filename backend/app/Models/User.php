@@ -47,14 +47,18 @@ class User extends Authenticatable
         }
 
         if (!$this->avatar_path) {
-            return $this->socialAccounts()->first()?->avatar_url;
+            return $this->relationLoaded('socialAccounts')
+                ? $this->socialAccounts->first()?->avatar_url
+                : null;
         }
 
         try {
             return app(SupabaseStorageService::class)
                 ->signedProfilePhotoUrl((string) $this->id, $this->avatar_path);
         } catch (\Throwable) {
-            return $this->socialAccounts()->first()?->avatar_url;
+            return $this->relationLoaded('socialAccounts')
+                ? $this->socialAccounts->first()?->avatar_url
+                : null;
         }
     }
 

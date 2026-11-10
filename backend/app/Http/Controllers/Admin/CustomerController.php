@@ -12,7 +12,8 @@ class CustomerController extends Controller
     {
         $search = $request->get('search');
 
-        $query = Customer::with(['user', 'addresses', 'creditAccount', 'orders'])
+        $query = Customer::with(['user:id,name,email,phone,status,avatar_path', 'addresses', 'creditAccount'])
+            ->withCount('orders')
             ->latest();
 
         if ($search) {
@@ -25,11 +26,22 @@ class CustomerController extends Controller
 
         $customers = $query->paginate(5)->withQueryString();
 
-        $stats = [
-            'total' => Customer::count(),
-            'active' => Customer::whereHas('user', fn($q) => $q->where('status', 'active'))->count(),
-            'withCredit' => Customer::whereHas('creditAccount', fn($q) => $q->where('balance', '>', 0))->count(),
-        ];
+        $stats = \Illuminate\Support\Facades\Cache::remember('admin:customers:stats', now()->addSeconds(15), function () {
+            $withCredit = 0;
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('credit_accounts')) {
+                    $withCredit = Customer::whereHas('creditAccount', fn($q) => $q->where('balance', '>', 0))->count();
+                }
+            } catch (\Throwable) {
+                $withCredit = 0;
+            }
+
+            return [
+                'total' => Customer::count(),
+                'active' => Customer::whereHas('user', fn($q) => $q->where('status', 'active'))->count(),
+                'withCredit' => $withCredit,
+            ];
+        });
 
         return view('admin.customers.index', compact('customers', 'stats', 'search'));
     }

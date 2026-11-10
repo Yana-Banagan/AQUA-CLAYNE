@@ -100,10 +100,10 @@ class AppServiceProvider extends ServiceProvider
                 $unreadNotifs = $headerData['unreadNotifs'];
                 $unreadChats = $headerData['unreadChats'];
                 $headerNotifications = $headerData['notifications'];
-                $adminAvatarUrl = auth()->check() && auth()->user()->avatar_path
+                $adminAvatarUrl = ($user && $user->avatar_path)
                     ? app(SupabaseStorageService::class)->signedProfilePhotoUrl(
-                        auth()->user()->id,
-                        auth()->user()->avatar_path,
+                        $user->id,
+                        $user->avatar_path,
                     )
                     : null;
 
