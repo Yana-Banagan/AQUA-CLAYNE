@@ -134,10 +134,10 @@ class DeliveryController extends Controller
         // RECENT DELIVERIES — paginated, server-side filtered
         // ------------------------------------------------------------------
         $query = Delivery::with([
-            'order.customer.user',
+            'order.customer.user:id,name,phone',
             'order.address',
-            'order.payment',
-            'driver.user',
+            'order.payment:id,order_id,method,status',
+            'driver.user:id,name',
             'statusHistory',
         ]);
 
@@ -207,9 +207,16 @@ class DeliveryController extends Controller
             ->paginate(5, ['*'], 'recent_history_page')
             ->withQueryString()
             ->fragment('tabDeliveryHistory');
-        $archivedDeliveries = (clone $query)
-            ->whereIn('status', $completedStatuses)
+
+        // Archive deliveries only needs order, customer, address, driver (no payment/statusHistory)
+        $archivedDeliveries = Delivery::whereIn('status', $completedStatuses)
             ->whereRaw('COALESCE(delivered_at, created_at) < ?', [$archiveCutoff])
+            ->with([
+                'order:id,order_number,customer_id',
+                'order.customer.user:id,name,phone',
+                'order.address:id,order_id,address_line1,barangay',
+                'driver.user:id,name',
+            ])
             ->orderByRaw('COALESCE(delivered_at, created_at) DESC')
             ->paginate(5, ['*'], 'archive_history_page')
             ->withQueryString()
@@ -223,7 +230,7 @@ class DeliveryController extends Controller
             'user:id,name,phone,status,avatar_path',
             'deliveries' => fn($dq) => $dq->whereIn('status', [
                 'assigned', 'en_route_for_pickup', 'picked_up', 'out_for_delivery',
-            ]),
+            ])->select(['id', 'driver_id', 'status']),
         ])->get(['id', 'user_id', 'vehicle_plate']);
 
         $activeDrivers = $allDrivers->where('user.status', 'active')->values();
@@ -232,7 +239,7 @@ class DeliveryController extends Controller
         // KPI STATS & STATUS BREAKDOWN — Consolidated Single Query
         // ------------------------------------------------------------------
         $today = Carbon::today();
-        $statsBundle = \Illuminate\Support\Facades\Cache::store('file')->remember('admin:deliveries:stats', now()->addSeconds(15), function () use ($today) {
+        $statsBundle = \Illuminate\Support\Facades\Cache::store('file')->remember('admin:deliveries:stats', now()->addSeconds(30), function () use ($today) {
             $tomorrow = $today->copy()->addDay();
             $unassignedOrdersCount = Order::where('status', 'confirmed')
                 ->where('delivery_method', '!=', 'station_pickup')
@@ -278,7 +285,7 @@ class DeliveryController extends Controller
             'assigned', 'en_route', 'en_route_for_pickup',
             'picked_up', 'at_station', 'ready_for_delivery', 'out_for_delivery',
         ])
-            ->with(['order.customer.user', 'order.address', 'driver.user'])
+            ->with(['order.customer.user:id,name,phone', 'order.address', 'driver.user:id,name'])
             ->latest('created_at')
             ->take(8)
             ->get();
@@ -286,37 +293,44 @@ class DeliveryController extends Controller
 
         // ------------------------------------------------------------------
         // ASSIGNABLE ORDERS — confirmed / ready orders with no driver yet
+        // Only loads customer, address, and delivery needed by the assign modal dropdown
         // ------------------------------------------------------------------
         $assignableOrders = Order::where('status', 'confirmed')
             ->where('delivery_method', '!=', 'station_pickup')
             ->whereDoesntHave('delivery', fn($q) => $q->whereNotNull('driver_id'))
             ->with([
-                'customer.user',
-                'address',
-                'delivery',
-                'items.product',
-                'rfidTransactions' => fn ($query) => $query->with('rfidTag.gallon')->orderByDesc('created_at')->orderByDesc('id'),
+                'customer.user:id,name',
+                'address:id,order_id,address_line',
+                'delivery:id,order_id',
             ])
             ->latest('created_at')
             ->take(20)
-            ->get();
+            ->get(['id', 'order_number', 'customer_id', 'created_at']);
 
         // ------------------------------------------------------------------
         // SIDEBAR BADGE COUNTS — populated via AdminSharedDataService
         // ------------------------------------------------------------------
         $sharedData = app(\App\Services\AdminSharedDataService::class);
-        $sharedData->provide(['activeDeliveries' => $stats['onDelivery']]);
+        $sharedData->provide([
+            'activeDeliveries' => $stats['onDelivery'],
+            'pendingOrders' => $statusCounts['pending'],
+        ]);
         $sidebarCounts = $sharedData->getSidebarCounts($request->user());
-
-        // ------------------------------------------------------------------
-        // RECENT NOTIFICATIONS — header bell dropdown
-        // ------------------------------------------------------------------
 
         // ------------------------------------------------------------------
         // DISPATCH & BATCHING DATA FOR TWO DRIVERS (Reusing active drivers collection)
         // ------------------------------------------------------------------
         $driverBoard = $dispatchService->getDriverStatuses();
-        $suggestedPickupBatches = $dispatchService->suggestPickupBatches($activeDrivers);
+
+        $dispatchBundle = \Illuminate\Support\Facades\Cache::store('file')->remember('admin:deliveries:dispatch-bundle', now()->addSeconds(30), function () use ($dispatchService, $activeDrivers) {
+            return [
+                'suggestedPickupBatches' => $dispatchService->suggestPickupBatches($activeDrivers),
+                'suggestedDeliveryRoutes' => $dispatchService->suggestDeliveryRoutes($activeDrivers),
+            ];
+        });
+        $suggestedPickupBatches = $dispatchBundle['suggestedPickupBatches'];
+        $suggestedDeliveryRoutes = $dispatchBundle['suggestedDeliveryRoutes'];
+
         $suggestedPickupPage = max(1, (int) $request->query('suggested_pickup_page', 1));
         $suggestedPickupBatchesPage = new LengthAwarePaginator(
             array_slice($suggestedPickupBatches, ($suggestedPickupPage - 1) * 5, 5),
@@ -329,26 +343,54 @@ class DeliveryController extends Controller
                 'query' => $request->query(),
             ],
         );
-        $suggestedDeliveryRoutes = $dispatchService->suggestDeliveryRoutes($activeDrivers);
-        $activePickupBatches = PickupBatch::with(['driver.user', 'items.order.address', 'items.order.customer.user'])
+        $activePickupBatches = PickupBatch::with(['driver.user:id,name', 'items.order.address', 'items.order.customer.user:id,name'])
             ->whereIn('status', ['ready', 'in_progress'])
             ->latest()
             ->paginate(5, ['*'], 'active_pickup_page')
             ->withQueryString();
-        $activeDeliveryRoutes = DeliveryRoute::with(['driver.user', 'stops.order.address', 'stops.order.customer.user', 'stops.order.payment'])
+        $activeDeliveryRoutes = DeliveryRoute::with(['driver.user:id,name', 'stops.order.address', 'stops.order.customer.user:id,name', 'stops.order.payment'])
             ->whereIn('status', ['ready', 'in_progress'])
             ->latest()
             ->get();
-        $historyBatches = PickupBatch::with(['driver.user'])
-            ->whereIn('status', ['completed', 'cancelled'])
-            ->latest()
-            ->take(15)
-            ->get();
-        $historyRoutes = DeliveryRoute::with(['driver.user'])
-            ->whereIn('status', ['completed', 'cancelled'])
-            ->latest()
-            ->take(15)
-            ->get();
+        $historyBatches = collect(\Illuminate\Support\Facades\Cache::store('file')->remember('admin:deliveries:history-batches', now()->addSeconds(60), function () {
+            return PickupBatch::with(['driver.user:id,name'])
+                ->whereIn('status', ['completed', 'cancelled'])
+                ->latest()
+                ->take(15)
+                ->get()
+                ->map(fn($b) => (object) [
+                    'id' => $b->id,
+                    'batch_number' => $b->batch_number,
+                    'area' => $b->area,
+                    'total_expected_gallons' => $b->total_expected_gallons,
+                    'status' => $b->status,
+                    'updated_at' => $b->updated_at,
+                    'driver' => $b->driver ? (object) [
+                        'user' => $b->driver->user ? (object) ['name' => $b->driver->user->name] : null,
+                    ] : null,
+                ])
+                ->all();
+        }));
+
+        $historyRoutes = collect(\Illuminate\Support\Facades\Cache::store('file')->remember('admin:deliveries:history-routes', now()->addSeconds(60), function () {
+            return DeliveryRoute::with(['driver.user:id,name'])
+                ->whereIn('status', ['completed', 'cancelled'])
+                ->latest()
+                ->take(15)
+                ->get()
+                ->map(fn($r) => (object) [
+                    'id' => $r->id,
+                    'route_number' => $r->route_number,
+                    'area' => $r->area,
+                    'total_gallons' => $r->total_gallons,
+                    'status' => $r->status,
+                    'updated_at' => $r->updated_at,
+                    'driver' => $r->driver ? (object) [
+                        'user' => $r->driver->user ? (object) ['name' => $r->driver->user->name] : null,
+                    ] : null,
+                ])
+                ->all();
+        }));
 
         // ------------------------------------------------------------------
         // JSON RESPONSE — for AJAX / Realtime refresh from admin-deliveries.js

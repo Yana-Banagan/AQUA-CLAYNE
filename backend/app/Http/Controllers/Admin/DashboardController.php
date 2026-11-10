@@ -38,8 +38,8 @@ class DashboardController extends Controller
         }
 
         // Consolidated Station KPI bundle (KPIs, Financials, Charts, Drivers summary)
-        // Cached for 15s to eliminate 20+ repeated remote database round trips.
-        $kpi = Cache::store('file')->remember($cacheKey, now()->addSeconds(15), function () use ($today, $sevenDaysAgo) {
+        // Cached for 60s (invalidated on realtime operational events) to eliminate repeated remote database round trips.
+        $kpi = Cache::store('file')->remember($cacheKey, now()->addSeconds(60), function () use ($today, $sevenDaysAgo) {
             $isPgsql = DB::getDriverName() === 'pgsql';
 
             if ($isPgsql) {
@@ -252,29 +252,29 @@ class DashboardController extends Controller
         });
 
         // ---------------------------------------------------------------------
-        // 2. LIVE OPERATIONAL ALERTS & INTAKE DISCREPANCIES
+        // 2. LIVE OPERATIONAL ALERTS & INTAKE DISCREPANCIES (Cached for 60s)
         // ---------------------------------------------------------------------
-        $intakeDiscrepancies = OrderContainerIntake::with([
-            'order:id,order_number,customer_id',
-            'order.customer:id,user_id',
-            'order.customer.user:id,name,phone'
-        ])
-            ->whereColumn('expected_count', '!=', 'received_count')
-            ->orWhere('rejected_count', '>', 0)
-            ->latest('received_at')
-            ->take(3)
-            ->get();
+        $intakeDiscrepancies = Cache::store('file')->remember('admin:dashboard:intake-discrepancies', now()->addSeconds(60), function () {
+            return OrderContainerIntake::with([
+                'order:id,order_number,customer_id',
+                'order.customer:id,user_id',
+                'order.customer.user:id,name,phone'
+            ])
+                ->whereColumn('expected_count', '!=', 'received_count')
+                ->orWhere('rejected_count', '>', 0)
+                ->latest('received_at')
+                ->take(3)
+                ->get();
+        });
 
         // ---------------------------------------------------------------------
         // 3. LATEST ORDERS TABLE (paginated, 5 per page with specific column selection)
+        // Only loads customer user name needed by dashboard table (skips unused items/products/deliveries)
         // ---------------------------------------------------------------------
         $latestOrders = Order::with([
-            'customer.user:id,name,phone,email,avatar_path',
-            'items:id,order_id,product_id,quantity,unit_price',
-            'items.product:id,name,type',
-            'containerIntake',
-            'delivery.driver.user:id,name,phone'
+            'customer.user:id,name',
         ])
+            ->select(['id', 'order_number', 'customer_id', 'status', 'total_amount', 'created_at'])
             ->latest('created_at')
             ->paginate(5, ['*'], 'orders_page')
             ->withQueryString();
@@ -313,30 +313,32 @@ class DashboardController extends Controller
         $driverBoard = app(\App\Services\DispatchService::class)->getDriverStatuses();
 
         // ---------------------------------------------------------------------
-        // 6. RECENT ACTIVITY FEED
+        // 6. RECENT ACTIVITY FEED (Cached for 60s)
         // ---------------------------------------------------------------------
-        $recentHistory = OrderStatusHistory::with([
-            'order:id,order_number,customer_id',
-            'order.customer:id,user_id',
-            'order.customer.user:id,name',
-            'changedBy:id,name'
-        ])
-            ->latest('created_at')
-            ->take(6)
-            ->get();
+        $recentActivities = Cache::store('file')->remember('admin:dashboard:recent-activities', now()->addSeconds(60), function () {
+            $recentHistory = OrderStatusHistory::with([
+                'order:id,order_number,customer_id',
+                'order.customer:id,user_id',
+                'order.customer.user:id,name',
+                'changedBy:id,name'
+            ])
+                ->latest('created_at')
+                ->take(6)
+                ->get();
 
-        $recentActivities = $recentHistory->map(function ($h) {
-            $orderNumber = $h->order?->order_number ?? ('ORD-' . strtoupper(substr($h->order_id, 0, 8)));
-            $customerName = $h->order?->customer?->user?->name ?? 'Customer';
-            $toStatus = ucwords(str_replace('_', ' ', $h->to_status));
-            return [
-                'order_number' => $orderNumber,
-                'customer_name' => $customerName,
-                'status' => $h->to_status,
-                'status_label' => $toStatus,
-                'changed_by' => $h->changedBy?->name ?? 'System',
-                'time_ago' => $h->created_at ? ($h->created_at instanceof \Carbon\Carbon ? $h->created_at->diffForHumans() : \Carbon\Carbon::parse($h->created_at)->diffForHumans()) : 'Recently',
-            ];
+            return $recentHistory->map(function ($h) {
+                $orderNumber = $h->order?->order_number ?? ('ORD-' . strtoupper(substr($h->order_id, 0, 8)));
+                $customerName = $h->order?->customer?->user?->name ?? 'Customer';
+                $toStatus = ucwords(str_replace('_', ' ', $h->to_status));
+                return [
+                    'order_number' => $orderNumber,
+                    'customer_name' => $customerName,
+                    'status' => $h->to_status,
+                    'status_label' => $toStatus,
+                    'changed_by' => $h->changedBy?->name ?? 'System',
+                    'time_ago' => $h->created_at ? ($h->created_at instanceof \Carbon\Carbon ? $h->created_at->diffForHumans() : \Carbon\Carbon::parse($h->created_at)->diffForHumans()) : 'Recently',
+                ];
+            })->all();
         });
 
         // ---------------------------------------------------------------------

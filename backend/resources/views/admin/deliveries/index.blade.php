@@ -1075,10 +1075,7 @@
                                     data-order-number="{{ $ao->order_number }}"
                                     data-customer="{{ $ao->customer?->user?->name ?? 'Customer' }}"
                                     data-address="{{ $ao->address?->address_line ?? 'Station Service Area' }}"
-                                    data-gallons="{{ $ao->items->sum('quantity') ?: ($ao->expected_empty_gallons ?: 1) }}"
-                                    data-service="{{ $ao->items->first()?->product?->name ?? 'Purified Water Refill' }}"
-                                    data-rfid-uid="{{ $ao->rfidTransactions->first()?->rfidTag?->tag_uid ?? '' }}"
-                                    data-gallon-status="{{ $ao->rfidTransactions->first()?->rfidTag?->gallon?->status ?? '' }}">
+                                    data-gallons="{{ $ao->expected_empty_gallons ?: 1 }}">
                                 #{{ $ao->order_number }} · {{ $ao->customer?->user?->name ?? 'Customer' }}
                                 ({{ ucwords(str_replace('_', ' ', $ao->status)) }})
                             </option>

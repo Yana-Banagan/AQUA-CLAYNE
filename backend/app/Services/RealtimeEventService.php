@@ -43,6 +43,10 @@ class RealtimeEventService
 
             if (in_array($entityType, ['order', 'payment', 'refill_queue', 'delivery', 'pickup_batch', 'delivery_route'], true)) {
                 $cache->forget('admin:dashboard:station-kpis');
+                $cache->forget('admin:dashboard:intake-discrepancies');
+                $cache->forget('admin:dashboard:recent-activities');
+                $cache->forget('admin:deliveries:stats');
+                $cache->forget('admin:deliveries:dispatch-bundle');
                 $cache->forget('admin-pending-orders-count');
                 $cache->forget('refill-queue:summary-stats');
                 $cache->forget('refill-queue:quick-status');
@@ -50,6 +54,8 @@ class RealtimeEventService
 
             if (in_array($entityType, ['delivery', 'pickup_batch', 'delivery_route'], true)) {
                 $cache->forget('dispatch:driver-statuses');
+                $cache->forget('admin:deliveries:history-batches');
+                $cache->forget('admin:deliveries:history-routes');
             }
 
             if ($entityType === 'chat') {
