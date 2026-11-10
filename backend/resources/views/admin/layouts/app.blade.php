@@ -202,7 +202,7 @@
                                 <line x1="12" y1="22.08" x2="12" y2="12"></line>
                             </svg>
                         </span>
-                        <span class="nav-label">Products & Services</span>
+                        <span class="nav-label">Products</span>
                     </a>
 
                     <a href="{{ route('admin.inventory.index') }}" class="nav-link {{ request()->routeIs('admin.inventory.*') ? 'active-nav' : '' }}">

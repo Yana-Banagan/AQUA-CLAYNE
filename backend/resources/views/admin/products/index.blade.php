@@ -1,12 +1,12 @@
 @extends('admin.layouts.app')
 
-@section('title', 'Products & Services')
+@section('title', 'Products')
 
 @section('content')
 <div class="page-header">
     <div>
         <p class="eyebrow">Catalog &amp; Offerings</p>
-        <h1>Products &amp; Refill Services</h1>
+        <h1>Products</h1>
         <p>Manage water offerings and refill service pricing available to customers on mobile.</p>
     </div>
     <div class="header-actions">

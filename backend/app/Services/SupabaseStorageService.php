@@ -12,8 +12,8 @@ class SupabaseStorageService
 
     public function __construct()
     {
-        $this->url = config('services.supabase.url');
-        $this->key = config('services.supabase.service_role_key');
+        $this->url = (string) (config('services.supabase.url') ?? '');
+        $this->key = (string) (config('services.supabase.service_role_key') ?? '');
     }
 
     public function upload(
@@ -22,6 +22,10 @@ class SupabaseStorageService
         string $contents,
         string $mime
     ): string {
+        if (empty($this->url) || empty($this->key)) {
+            throw new \Exception('Supabase storage is not configured.');
+        }
+
         try {
             $response = Http::withHeaders([
                 'Authorization' => "Bearer {$this->key}",
@@ -49,6 +53,10 @@ class SupabaseStorageService
 
     public function ensurePrivateBucket(string $bucket): void
     {
+        if (empty($this->url) || empty($this->key)) {
+            return;
+        }
+
         $headers = ['Authorization' => "Bearer {$this->key}"];
         $existing = Http::withHeaders($headers)
             ->get("{$this->url}/storage/v1/bucket/{$bucket}");
@@ -81,6 +89,10 @@ class SupabaseStorageService
         string $path,
         int $expiresIn = 3600
     ): ?string {
+        if (empty($this->url) || empty($this->key)) {
+            return null;
+        }
+
         try {
             $response = Http::timeout(5)->withHeaders([
                 'Authorization' => "Bearer {$this->key}",

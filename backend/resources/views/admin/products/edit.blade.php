@@ -6,7 +6,7 @@
 <div class="page-header">
     <div>
         <p class="eyebrow">
-            <a href="{{ route('admin.products.index') }}" style="color: var(--primary); text-decoration: none;">← Back to Products &amp; Services</a>
+            <a href="{{ route('admin.products.index') }}" style="color: var(--primary); text-decoration: none;">← Back to Products</a>
             &nbsp;·&nbsp; Service Details
         </p>
         <h1>Edit: {{ $product->name }}</h1>

@@ -13,7 +13,7 @@ class InventoryController extends Controller
 {
     public function index()
     {
-        $consumables = Inventory::with('product:id,name,price,category')->get();
+        $consumables = Inventory::with('product:id,name,price,product_type')->get();
         $stationGallons = Gallon::with('rfidTag:id,gallon_id,tag_uid')->paginate(15);
 
         $stats = Cache::store('file')->remember('admin:inventory:stats', now()->addSeconds(30), function () {
