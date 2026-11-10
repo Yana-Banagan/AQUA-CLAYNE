@@ -137,13 +137,31 @@ html[data-theme="dark"] .refill-table-wrap::-webkit-scrollbar-thumb {
     position: fixed;
     inset: 0;
     z-index: 10000;
-    display: grid;
+    display: none;
     place-items: center;
     padding: max(16px, env(safe-area-inset-top)) 14px max(16px, env(safe-area-inset-bottom));
     background: rgba(5, 23, 46, 0.65);
     backdrop-filter: blur(5px);
     overflow-y: auto;
     overscroll-behavior: contain;
+}
+
+.modal-backdrop.is-active,
+.modal-backdrop.is-open,
+.modal-backdrop.show,
+.delivery-modal-backdrop.is-active,
+.delivery-modal-backdrop.is-open,
+.modal-overlay.is-active,
+.modal-overlay.is-open,
+.dialog-backdrop.is-active,
+.dialog-backdrop.is-open,
+.action-confirm-backdrop.is-visible,
+.action-confirm-backdrop.is-active {
+    display: grid;
+}
+
+[hidden] {
+    display: none !important;
 }
 .modal-backdrop > .modal-card,
 .modal-backdrop > .modal-content,

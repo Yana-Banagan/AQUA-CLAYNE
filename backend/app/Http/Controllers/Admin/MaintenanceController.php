@@ -13,12 +13,17 @@ class MaintenanceController extends Controller
 {
     public function index()
     {
-        $equipment = Maintenance::with('latestRecord.performedBy:id,name')
-            ->orderBy('equipment_name')
-            ->get();
+        $equipment = Maintenance::orderBy('equipment_name')->get();
 
-        $equipmentData = $equipment->map(function ($item) {
-            $lastRecord = $item->latestRecord;
+        $latestRecords = MaintenanceRecord::with('performedBy:id,name')
+            ->whereIn('maintenance_id', $equipment->pluck('id'))
+            ->orderBy('performed_at', 'desc')
+            ->get()
+            ->groupBy('maintenance_id')
+            ->map(fn ($records) => $records->first());
+
+        $equipmentData = $equipment->map(function ($item) use ($latestRecords) {
+            $lastRecord = $latestRecords->get($item->id);
             return [
                 'id' => $item->id,
                 'name' => $item->equipment_name,

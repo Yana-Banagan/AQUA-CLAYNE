@@ -89,7 +89,7 @@
             @csrf
             <div class="modal-head">
                 <h3>Create Staff Account</h3>
-                <button type="button" class="modal-close" data-modal-close>&times;</button>
+                <button type="button" class="modal-close" onclick="closeUsersModal()" data-modal-close>&times;</button>
             </div>
             <div class="modal-body">
                 <div class="form-grid">
@@ -118,7 +118,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+                <button type="button" class="secondary-button" onclick="closeUsersModal()" data-modal-close>Cancel</button>
                 <button type="submit" class="primary-button">Create Staff</button>
             </div>
         </form>
@@ -130,28 +130,34 @@
 <script>
     (function () {
         var modal = document.getElementById('add-user-modal');
-        if (!modal) return;
 
         window.openUsersModal = function () {
+            if (!modal) modal = document.getElementById('add-user-modal');
+            if (!modal) return;
             modal.classList.add('is-active');
             modal.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
             modal.querySelector('input[name="name"]')?.focus();
         };
 
-        function closeUsersModal() {
+        window.closeUsersModal = function () {
+            if (!modal) modal = document.getElementById('add-user-modal');
+            if (!modal) return;
             modal.classList.remove('is-active');
+            modal.classList.remove('is-open');
             modal.setAttribute('aria-hidden', 'true');
             document.body.style.overflow = '';
-        }
+        };
 
-        modal.setAttribute('aria-hidden', 'true');
-        modal.addEventListener('click', function (event) {
-            if (event.target === modal || event.target.closest('[data-modal-close]')) closeUsersModal();
-        });
-        document.addEventListener('keydown', function (event) {
-            if (event.key === 'Escape' && modal.classList.contains('is-active')) closeUsersModal();
-        });
+        if (modal) {
+            modal.setAttribute('aria-hidden', 'true');
+            modal.addEventListener('click', function (event) {
+                if (event.target === modal || event.target.closest('[data-modal-close]')) window.closeUsersModal();
+            });
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape' && modal.classList.contains('is-active')) window.closeUsersModal();
+            });
+        }
 
         @if($errors->any())
             window.openUsersModal();

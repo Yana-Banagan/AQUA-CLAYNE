@@ -24,9 +24,4 @@ class Maintenance extends Model
     {
         return $this->hasMany(MaintenanceRecord::class);
     }
-
-    public function latestRecord(): HasOne
-    {
-        return $this->hasOne(MaintenanceRecord::class)->latestOfMany('performed_at');
-    }
 }

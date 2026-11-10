@@ -106,7 +106,7 @@
             @csrf
             <div class="modal-head">
                 <h3>Add New FAQ Entry</h3>
-                <button type="button" class="modal-close" data-modal-close>&times;</button>
+                <button type="button" class="modal-close" onclick="closeFaqModal('add-faq-modal')" data-modal-close>&times;</button>
             </div>
             <div class="modal-body">
                 <div class="field">
@@ -128,7 +128,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+                <button type="button" class="secondary-button" onclick="closeFaqModal('add-faq-modal')" data-modal-close>Cancel</button>
                 <button type="submit" class="primary-button">Publish FAQ</button>
             </div>
         </form>
@@ -143,7 +143,7 @@
             @method('PUT')
             <div class="modal-head">
                 <h3>Edit FAQ Entry</h3>
-                <button type="button" class="modal-close" data-modal-close>&times;</button>
+                <button type="button" class="modal-close" onclick="closeFaqModal('edit-faq-modal')" data-modal-close>&times;</button>
             </div>
             <div class="modal-body">
                 <div class="field">
@@ -164,7 +164,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+                <button type="button" class="secondary-button" onclick="closeFaqModal('edit-faq-modal')" data-modal-close>Cancel</button>
                 <button type="submit" class="primary-button">Save Changes</button>
             </div>
         </form>
@@ -176,7 +176,7 @@
 <script>
     (function () {
         function openFaqModal(id) {
-            var modal = document.getElementById(id);
+            var modal = typeof id === 'string' ? document.getElementById(id) : id;
             if (!modal) return;
             modal.classList.add('is-active');
             modal.setAttribute('aria-hidden', 'false');
@@ -184,14 +184,17 @@
             modal.querySelector('input:not([type="hidden"]), select, textarea, button')?.focus();
         }
 
-        function closeFaqModal(modal) {
+        function closeFaqModal(modalOrId) {
+            var modal = typeof modalOrId === 'string' ? document.getElementById(modalOrId) : modalOrId;
             if (!modal) return;
             modal.classList.remove('is-active');
+            modal.classList.remove('is-open');
             modal.setAttribute('aria-hidden', 'true');
             document.body.style.overflow = '';
         }
 
         window.openFaqModal = openFaqModal;
+        window.closeFaqModal = closeFaqModal;
         window.openEditFaqModal = function (id, categoryId, question, answer) {
             document.getElementById('edit-faq-category').value = categoryId || '';
             document.getElementById('edit-faq-question').value = question || '';

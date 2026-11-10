@@ -11,8 +11,8 @@ class FaqController extends Controller
 {
     public function index()
     {
-        $categories = FaqCategory::with('faqs')->get();
-        $faqs = Faq::with('category')->orderBy('question')->paginate(20);
+        $categories = FaqCategory::with('faqs:id,category_id,question')->get();
+        $faqs = Faq::with('category:id,name')->orderBy('question')->paginate(20);
 
         return view('admin.faq.index', compact('categories', 'faqs'));
     }

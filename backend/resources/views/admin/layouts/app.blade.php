@@ -40,7 +40,7 @@
     </script>
     @stack('styles')
     <link rel="stylesheet" href="{{ asset('css/admin-dark-mode.css') }}?v=20261006-4">
-    <link rel="stylesheet" href="{{ asset('css/admin-responsive.css') }}?v=20261007-5">
+    <link rel="stylesheet" href="{{ asset('css/admin-responsive.css') }}?v=20261007-6">
 </head>
 <body class="dashboard-body">
 
