@@ -116,5 +116,6 @@ class ReportController extends Controller
 
         return view('admin.reports.index', array_merge($reportData, compact('range', 'method')));
     }
-    }
+    
 }
+
