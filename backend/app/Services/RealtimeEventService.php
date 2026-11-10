@@ -38,6 +38,9 @@ class RealtimeEventService
         try {
             $cache = \Illuminate\Support\Facades\Cache::store();
 
+            // Invalidate centralized shared administrative counters
+            \App\Services\AdminSharedDataService::invalidate();
+
             if (in_array($entityType, ['order', 'payment', 'refill_queue', 'delivery', 'pickup_batch', 'delivery_route'], true)) {
                 $cache->forget('admin:dashboard:station-kpis');
                 $cache->forget('admin-pending-orders-count');

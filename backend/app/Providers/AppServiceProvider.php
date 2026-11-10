@@ -27,6 +27,9 @@ class AppServiceProvider extends ServiceProvider
         // Laravel's default PostgreSQL connector has no connection timeout.
         // Bind a connector that places a short timeout in the libpq DSN.
         $this->app->bind('db.connector.pgsql', fn () => new TimedPostgresConnector());
+
+        // Centralized shared administrative data service (memoized per-request).
+        $this->app->scoped(\App\Services\AdminSharedDataService::class, fn () => new \App\Services\AdminSharedDataService());
     }
 
     /**
@@ -69,65 +72,28 @@ class AppServiceProvider extends ServiceProvider
             ->by((string) optional($request->user())->id));
         RateLimiter::for('public-api', fn (Request $request) => Limit::perMinute(120)->by($request->ip()));
 
-        // Keep the shared admin shell lightweight. The page header only needs the
-        // unread counts; the notification list is refreshed asynchronously via the
-        // existing admin status endpoint so we avoid loading the full notification
-        // history on every admin request.
+        // Centralized shared administrative layout data.
+        // Uses AdminSharedDataService to retrieve all 6 counters in ONE combined
+        // query with in-memory memoization and zero duplicate queries.
         View::composer('admin.layouts.app', function ($view) {
-            $adminAvatarUrl = null;
-            $unreadNotifs = 0;
-            $unreadChats = 0;
-            $headerNotifications = [];
-
             try {
+                $sharedData = app(\App\Services\AdminSharedDataService::class);
                 $user = auth()->user();
 
-                if ($user) {
-                    $userId = $user->getAuthIdentifier();
-
-                    $unreadNotifs = Cache::store('file')->remember('admin-header-unread-notifications:' . $userId, now()->addSeconds(15), function () use ($userId) {
-                        return Notification::where('user_id', $userId)
-                            ->where('is_read', false)
-                            ->count();
-                    });
-
-                    if (in_array($user->role, ['admin', 'staff'], true)) {
-                        $unreadChats = Cache::store('file')->remember('admin-header-unread-chats', now()->addSeconds(15), function () {
-                            return ChatMessage::whereIn('sender_role', ['customer', 'driver'])
-                                ->whereNull('read_at')
-                                ->count();
-                        });
-                    }
-
-                    $adminAvatarUrl = $user->avatar_path
-                        ? app(SupabaseStorageService::class)->signedProfilePhotoUrl($userId, $user->avatar_path)
-                        : null;
-                }
-
                 $existingCounts = $view->getData()['sidebarCounts'] ?? [];
-                $view->with('sidebarCounts', array_merge([
-                    'pendingOrders' => 0,
-                    'waitingInQueue' => 0,
-                    'activeDeliveries' => 0,
-                    'lowStock' => 0,
-                ], $existingCounts, [
-                    'unreadNotifications' => $unreadNotifs,
-                    'unreadChats' => $unreadChats,
-                ]));
-                $view->with('headerNotifications', $headerNotifications);
-                $view->with('adminAvatarUrl', $adminAvatarUrl);
-            } catch (\Throwable $e) {
-                if (!$view->offsetExists('sidebarCounts')) {
-                    $view->with('sidebarCounts', [
-                        'pendingOrders' => 0,
-                        'waitingInQueue' => 0,
-                        'activeDeliveries' => 0,
-                        'lowStock' => 0,
-                        'unreadNotifications' => 0,
-                    ]);
-                }
+                $sidebarCounts = $sharedData->getSidebarCounts($user, $existingCounts);
+                $adminAvatarUrl = $sharedData->getAdminAvatarUrl($user);
+
+                $view->with('sidebarCounts', $sidebarCounts);
                 $view->with('headerNotifications', []);
                 $view->with('adminAvatarUrl', $adminAvatarUrl);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Admin layout composer error: ' . $e->getMessage());
+                if (!$view->offsetExists('sidebarCounts')) {
+                    $view->with('sidebarCounts', \App\Services\AdminSharedDataService::DEFAULT_COUNTS);
+                }
+                $view->with('headerNotifications', []);
+                $view->with('adminAvatarUrl', null);
             }
         });
     }

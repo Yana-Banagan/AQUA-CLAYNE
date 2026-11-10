@@ -128,14 +128,31 @@ class RefillQueueController extends Controller
                 $avgWaitMinutes = (int) round($waitingEntries->avg(fn($q) => $q ? Carbon::parse($q)->diffInSeconds(now()) : 0) / 60);
             }
 
-            $readyCount = Order::where('status', 'ready_for_delivery')->count();
-
-            $totalGallonsWaiting = (int) Order::query()
+            // Single combined aggregate query for orders metrics
+            $orderAggregates = Order::query()
                 ->leftJoin('order_container_intakes', 'order_container_intakes.order_id', '=', 'orders.id')
-                ->where('orders.status', 'waiting_in_queue')
-                ->sum(DB::raw('COALESCE(order_container_intakes.accepted_count, orders.expected_empty_gallons, 0)'));
+                ->selectRaw("
+                    COUNT(*) FILTER (WHERE orders.status = 'ready_for_delivery') AS ready_count,
+                    COUNT(*) FILTER (WHERE orders.status = 'picked_up') AS awaiting_intake_count,
+                    COALESCE(SUM(CASE WHEN orders.status = 'waiting_in_queue' THEN COALESCE(order_container_intakes.accepted_count, orders.expected_empty_gallons, 0) ELSE 0 END), 0) AS total_gallons
+                ")
+                ->first();
 
-            $awaitingIntakeCount = Order::where('status', 'picked_up')->count();
+            // Fallback for drivers where FILTER syntax is unsupported (e.g. SQLite)
+            if ($orderAggregates === null || !isset($orderAggregates->ready_count)) {
+                $orderAggregates = Order::query()
+                    ->leftJoin('order_container_intakes', 'order_container_intakes.order_id', '=', 'orders.id')
+                    ->selectRaw("
+                        SUM(CASE WHEN orders.status = 'ready_for_delivery' THEN 1 ELSE 0 END) AS ready_count,
+                        SUM(CASE WHEN orders.status = 'picked_up' THEN 1 ELSE 0 END) AS awaiting_intake_count,
+                        COALESCE(SUM(CASE WHEN orders.status = 'waiting_in_queue' THEN COALESCE(order_container_intakes.accepted_count, orders.expected_empty_gallons, 0) ELSE 0 END), 0) AS total_gallons
+                    ")
+                    ->first();
+            }
+
+            $readyCount = (int) ($orderAggregates->ready_count ?? 0);
+            $totalGallonsWaiting = (int) ($orderAggregates->total_gallons ?? 0);
+            $awaitingIntakeCount = (int) ($orderAggregates->awaiting_intake_count ?? 0);
 
             $discrepanciesCount = Order::where('status', 'received_at_station')
                 ->whereHas('containerIntake', function ($iq) {
@@ -197,11 +214,9 @@ class RefillQueueController extends Controller
             ->latest('created_at')
             ->get();
 
-        $sidebarCounts = [
-            'pendingOrders' => Order::where('status', 'pending')->count(),
-            'waitingInQueue' => $stats['waiting'],
-            'lowStock' => 0,
-        ];
+        $sharedData = app(\App\Services\AdminSharedDataService::class);
+        $sharedData->provide(['waitingInQueue' => $stats['waiting']]);
+        $sidebarCounts = $sharedData->getSidebarCounts($request->user());
 
         return view('admin.refill-queue.index', compact(
             'queueEntries',

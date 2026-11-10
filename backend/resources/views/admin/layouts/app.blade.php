@@ -549,18 +549,105 @@
     <script src="{{ asset('js/admin-action-confirmations.js') }}?v=20261005-1"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script>
-        // The support inbox is intentionally polled lightly so a station
-        // operator sees incoming mobile messages without a manual reload.
+        // Centralized status counters, on-demand notifications, and realtime sync
         (function () {
             var url = @json(route('admin.status-counts'));
+            var recentNotifsUrl = @json(route('admin.notifications.recent'));
             var chatBadge = document.getElementById('chatUnreadBadge');
             var ordersBadge = document.getElementById('pendingOrdersBadge');
             var notificationBadge = document.getElementById('adminUnreadNotificationsBadge');
             var notificationList = document.getElementById('adminNotificationList');
+            var notifButton = document.getElementById('notifButton');
+            var notifDropdown = document.getElementById('notifDropdown');
             var button = document.getElementById('pendingOrdersButton');
             var lastChatCount = chatBadge && !chatBadge.hidden ? Number(chatBadge.textContent) || 0 : 0;
             var inFlight = false;
+            var notifsInFlight = false;
+            var notifsLoaded = false;
             var fallbackTimer = null;
+            var debounceTimer = null;
+
+            function renderNotifications(items) {
+                if (!notificationList) return;
+                notificationList.replaceChildren();
+                if (!Array.isArray(items) || items.length === 0) {
+                    var empty = document.createElement('div');
+                    empty.className = 'dropdown-empty';
+                    empty.textContent = 'No new notifications';
+                    notificationList.appendChild(empty);
+                    return;
+                }
+                var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                items.forEach(function (item) {
+                    var row = document.createElement('div');
+                    row.className = 'notif-item' + (item.is_read ? '' : ' unread');
+                    var title = document.createElement('div');
+                    title.className = 'notif-item-title';
+                    title.textContent = item.title || 'Station update';
+                    var body = document.createElement('div');
+                    body.className = 'notif-item-body';
+                    body.textContent = item.body || '';
+                    var time = document.createElement('div');
+                    time.className = 'notif-item-time';
+                    time.textContent = item.time_ago || 'Recently';
+                    row.append(title, body, time);
+                    if (!item.is_read) {
+                        var form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = @json(url('/admin/notifications')) + '/' + encodeURIComponent(item.id) + '/read';
+                        form.className = 'notif-mark-read-form';
+                        var token = document.createElement('input');
+                        token.type = 'hidden';
+                        token.name = '_token';
+                        token.value = csrfToken;
+                        var mark = document.createElement('button');
+                        mark.type = 'submit';
+                        mark.className = 'notif-mark-read-btn';
+                        mark.textContent = 'Mark as read';
+                        form.append(token, mark);
+                        row.appendChild(form);
+                    }
+                    notificationList.appendChild(row);
+                });
+            }
+
+            function loadRecentNotifications() {
+                if (notifsInFlight || !notificationList) return;
+                notifsInFlight = true;
+                var controller = new AbortController();
+                var timeout = window.setTimeout(function () { controller.abort(); }, 8000);
+                fetch(recentNotifsUrl, {
+                    headers: {'Accept': 'application/json'},
+                    cache: 'no-store',
+                    signal: controller.signal
+                })
+                    .then(function (res) { return res.ok ? res.json() : null; })
+                    .then(function (data) {
+                        if (!data) return;
+                        notifsLoaded = true;
+                        renderNotifications(data.notifications || []);
+                        if (typeof data.unread_notifications === 'number' && notificationBadge) {
+                            var notifCount = data.unread_notifications;
+                            notificationBadge.hidden = notifCount === 0;
+                            notificationBadge.textContent = notifCount > 99 ? '99+' : notifCount;
+                        }
+                    })
+                    .catch(function () {})
+                    .finally(function () {
+                        window.clearTimeout(timeout);
+                        notifsInFlight = false;
+                    });
+            }
+
+            // On-demand notification loading when bell panel opens
+            if (notifButton) {
+                notifButton.addEventListener('click', function () {
+                    if (!notifsLoaded) {
+                        loadRecentNotifications();
+                    }
+                });
+            }
+
             function refreshAdminCounts() {
                 if (document.visibilityState !== 'visible' || inFlight) return;
                 inFlight = true;
@@ -585,46 +672,11 @@
                             notificationBadge.hidden = notificationCount === 0;
                             notificationBadge.textContent = notificationCount > 99 ? '99+' : notificationCount;
                         }
-                        if (notificationList && Array.isArray(data.notifications)) {
-                            notificationList.replaceChildren();
-                            if (data.notifications.length === 0) {
-                                var empty = document.createElement('div');
-                                empty.className = 'dropdown-empty';
-                                empty.textContent = 'No new notifications';
-                                notificationList.appendChild(empty);
-                            } else {
-                                data.notifications.forEach(function (item) {
-                                    var row = document.createElement('div');
-                                    row.className = 'notif-item' + (item.is_read ? '' : ' unread');
-                                    var title = document.createElement('div');
-                                    title.className = 'notif-item-title';
-                                    title.textContent = item.title || 'Station update';
-                                    var body = document.createElement('div');
-                                    body.className = 'notif-item-body';
-                                    body.textContent = item.body || '';
-                                    var time = document.createElement('div');
-                                    time.className = 'notif-item-time';
-                                    time.textContent = item.time_ago || 'Recently';
-                                    row.append(title, body, time);
-                                    if (!item.is_read) {
-                                        var form = document.createElement('form');
-                                        form.method = 'POST';
-                                        form.action = @json(url('/admin/notifications')) + '/' + encodeURIComponent(item.id) + '/read';
-                                        form.className = 'notif-mark-read-form';
-                                        var token = document.createElement('input');
-                                        token.type = 'hidden';
-                                        token.name = '_token';
-                                        token.value = document.querySelector('meta[name="csrf-token"]')?.content || '';
-                                        var mark = document.createElement('button');
-                                        mark.type = 'submit';
-                                        mark.className = 'notif-mark-read-btn';
-                                        mark.textContent = 'Mark as read';
-                                        form.append(token, mark);
-                                        row.appendChild(form);
-                                    }
-                                    notificationList.appendChild(row);
-                                });
-                            }
+
+                        // If notifications array is explicitly included, update dropdown
+                        if (Array.isArray(data.notifications) && data.notifications.length > 0) {
+                            notifsLoaded = true;
+                            renderNotifications(data.notifications);
                         }
 
                         var pendingCount = Number(data.pending_orders || 0);
@@ -641,9 +693,18 @@
                     .catch(function () {})
                     .finally(function () { window.clearTimeout(timeout); inFlight = false; });
             }
-            // Initial counts are already server-rendered by Blade.
-            // Do not fire a redundant immediate fetch on page load;
-            // refresh only via realtime events or fallback polling.
+
+            function debounceRefreshAdminCounts() {
+                if (debounceTimer) window.clearTimeout(debounceTimer);
+                debounceTimer = window.setTimeout(refreshAdminCounts, 250);
+            }
+
+            window.AquaStatusManager = {
+                refresh: debounceRefreshAdminCounts,
+                refreshNow: refreshAdminCounts,
+                loadNotifications: loadRecentNotifications
+            };
+
             function startFallback() {
                 if (!fallbackTimer) fallbackTimer = window.setInterval(refreshAdminCounts, 30000);
             }
@@ -670,9 +731,8 @@
                             var signal = payload.new || {};
                             window.dispatchEvent(new CustomEvent('aqua:realtime', { detail: signal }));
                             if (['order', 'delivery', 'refill_queue', 'notification', 'payment', 'chat'].includes(signal.entity_type)) {
-                                // Initial counts are already server-rendered by Blade.
-            // Do not fire a redundant immediate fetch on page load;
-            // refresh only via realtime events or fallback polling.
+                                if (signal.entity_type === 'notification') notifsLoaded = false;
+                                debounceRefreshAdminCounts();
                             }
                         })
                         .subscribe(function (status) {
@@ -692,6 +752,7 @@
             }
             window.addEventListener('beforeunload', function () {
                 stopFallback();
+                if (debounceTimer) window.clearTimeout(debounceTimer);
                 if (window.aquaRealtimeClient && window.aquaAdminRealtimeChannel) {
                     window.aquaRealtimeClient.removeChannel(window.aquaAdminRealtimeChannel);
                 }

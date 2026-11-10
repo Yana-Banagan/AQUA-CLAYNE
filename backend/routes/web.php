@@ -609,6 +609,11 @@ Route::middleware(['auth', 'role:admin,staff'])
             'index'
         ])->name('notifications.index');
 
+        Route::get('/notifications/recent', [
+            NotificationController::class,
+            'recent'
+        ])->name('notifications.recent');
+
 
         Route::post('/notifications/{notification}/read', [
             NotificationController::class,

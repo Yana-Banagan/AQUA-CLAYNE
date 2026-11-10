@@ -17,10 +17,10 @@ class OrderController extends Controller
     /**
      * Return the live count used by the Orders notification badge.
      */
-    public function pendingCount()
+    public function pendingCount(\App\Services\AdminSharedDataService $sharedData)
     {
         return response()->json([
-            'count' => Order::where('status', 'pending')->count(),
+            'count' => $sharedData->getSidebarCounts()['pendingOrders'],
         ]);
     }
 
@@ -109,7 +109,7 @@ class OrderController extends Controller
                 'rfidTransactions' => fn ($query) => $query->with('rfidTag.gallon')->orderByDesc('created_at')->orderByDesc('id'),
             ])
             ->latest('created_at')
-            ->take(50)
+            ->take(20)
             ->get();
         $walkInOrders = WalkInOrder::latest('created_at')->take(10)->get();
         $todayStart = today()->startOfDay();
@@ -136,9 +136,10 @@ class OrderController extends Controller
             ];
 
             // One grouped query replaces nine round trips to the remote database.
-            $orderCounts = Order::query()->selectRaw('status, COUNT(*) AS aggregate')->groupBy('status')->pluck('aggregate', 'status');
+            $orderCountsCollection = Order::query()->selectRaw('status, COUNT(*) AS aggregate')->groupBy('status')->pluck('aggregate', 'status');
+            $orderCounts = $orderCountsCollection->toArray();
             $stats = [
-                'total' => (int) $orderCounts->sum() + $walkInSummary['count'],
+                'total' => (int) $orderCountsCollection->sum() + $walkInSummary['count'],
                 'pending' => (int) ($orderCounts['pending'] ?? 0),
                 'confirmed' => (int) ($orderCounts['confirmed'] ?? 0),
                 'assigned' => (int) ($orderCounts['assigned'] ?? 0),
@@ -153,7 +154,9 @@ class OrderController extends Controller
         });
 
         $walkInSummary = $orderStatsBundle['walkInSummary'];
-        $orderCounts = $orderStatsBundle['orderCounts'];
+        $orderCounts = is_array($orderStatsBundle['orderCounts'] ?? null)
+            ? $orderStatsBundle['orderCounts']
+            : (array) ($orderStatsBundle['orderCounts'] ?? []);
         $stats = $orderStatsBundle['stats'];
 
         // Active Drivers for Assignment Modal and Filter Dropdown
@@ -182,12 +185,13 @@ class OrderController extends Controller
         });
         $assignableDrivers = $activeDrivers->where('is_available', true)->values();
 
-        // Sidebar Navigation Counts
-        $sidebarCounts = [
+        // Sidebar Navigation Counts via AdminSharedDataService
+        $sharedData = app(\App\Services\AdminSharedDataService::class);
+        $sharedData->provide([
             'pendingOrders' => $stats['pending'],
             'waitingInQueue' => (int) ($orderCounts['waiting_in_queue'] ?? 0),
-            'lowStock' => Inventory::whereColumn('quantity_on_hand', '<=', 'reorder_level')->count(),
-        ];
+        ]);
+        $sidebarCounts = $sharedData->getSidebarCounts($request->user());
 
         return view('admin.orders.index', compact(
             'orders',
@@ -268,7 +272,7 @@ class OrderController extends Controller
                 'rfidTransactions' => fn ($query) => $query->with('rfidTag.gallon')->orderByDesc('created_at')->orderByDesc('id'),
             ])
             ->latest('created_at')
-            ->take(50)
+            ->take(20)
             ->get();
 
         // Active Drivers for Quick Assign option inside details view

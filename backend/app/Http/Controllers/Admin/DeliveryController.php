@@ -217,17 +217,16 @@ class DeliveryController extends Controller
 
         // ------------------------------------------------------------------
         // DRIVERS — all for filter dropdown, active-only for assignment
+        // Consolidated into a single query to eliminate duplicate roundtrips
         // ------------------------------------------------------------------
-        $allDrivers = Driver::with('user:id,name,phone,status,avatar_path')->get(['id', 'user_id', 'vehicle_plate']);
+        $allDrivers = Driver::with([
+            'user:id,name,phone,status,avatar_path',
+            'deliveries' => fn($dq) => $dq->whereIn('status', [
+                'assigned', 'en_route_for_pickup', 'picked_up', 'out_for_delivery',
+            ]),
+        ])->get(['id', 'user_id', 'vehicle_plate']);
 
-        $activeDrivers = Driver::whereHas('user', fn($q) => $q->where('status', 'active'))
-            ->with([
-                'user:id,name,phone,status,avatar_path',
-                'deliveries' => fn($dq) => $dq->whereIn('status', [
-                    'assigned', 'en_route_for_pickup', 'picked_up', 'out_for_delivery',
-                ]),
-            ])
-            ->get(['id', 'user_id', 'vehicle_plate']);
+        $activeDrivers = $allDrivers->where('user.status', 'active')->values();
 
         // ------------------------------------------------------------------
         // KPI STATS & STATUS BREAKDOWN — Consolidated Single Query
@@ -303,24 +302,21 @@ class DeliveryController extends Controller
             ->get();
 
         // ------------------------------------------------------------------
-        // SIDEBAR BADGE COUNTS — required by admin.layouts.app
+        // SIDEBAR BADGE COUNTS — populated via AdminSharedDataService
         // ------------------------------------------------------------------
-        $sidebarCounts = [
-            'pendingOrders'       => Order::where('status', 'pending')->count(),
-            'waitingInQueue'      => Order::where('status', 'waiting_in_queue')->count(),
-            'activeDeliveries'    => $stats['onDelivery'],
-            'lowStock'            => Inventory::whereColumn('quantity_on_hand', '<=', 'reorder_level')->count(),
-        ];
+        $sharedData = app(\App\Services\AdminSharedDataService::class);
+        $sharedData->provide(['activeDeliveries' => $stats['onDelivery']]);
+        $sidebarCounts = $sharedData->getSidebarCounts($request->user());
 
         // ------------------------------------------------------------------
         // RECENT NOTIFICATIONS — header bell dropdown
         // ------------------------------------------------------------------
 
         // ------------------------------------------------------------------
-        // DISPATCH & BATCHING DATA FOR TWO DRIVERS
+        // DISPATCH & BATCHING DATA FOR TWO DRIVERS (Reusing active drivers collection)
         // ------------------------------------------------------------------
         $driverBoard = $dispatchService->getDriverStatuses();
-        $suggestedPickupBatches = $dispatchService->suggestPickupBatches();
+        $suggestedPickupBatches = $dispatchService->suggestPickupBatches($activeDrivers);
         $suggestedPickupPage = max(1, (int) $request->query('suggested_pickup_page', 1));
         $suggestedPickupBatchesPage = new LengthAwarePaginator(
             array_slice($suggestedPickupBatches, ($suggestedPickupPage - 1) * 5, 5),
@@ -333,7 +329,7 @@ class DeliveryController extends Controller
                 'query' => $request->query(),
             ],
         );
-        $suggestedDeliveryRoutes = $dispatchService->suggestDeliveryRoutes();
+        $suggestedDeliveryRoutes = $dispatchService->suggestDeliveryRoutes($activeDrivers);
         $activePickupBatches = PickupBatch::with(['driver.user', 'items.order.address', 'items.order.customer.user'])
             ->whereIn('status', ['ready', 'in_progress'])
             ->latest()

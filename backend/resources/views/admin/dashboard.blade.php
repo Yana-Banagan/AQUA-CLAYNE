@@ -685,20 +685,28 @@
                 </div>
                 <div class="bento-card-body bento-items-body">
                     @forelse(collect($lowStockItems)->take(2) as $inv)
+                        @php
+                            $invObj = is_array($inv) ? (object) $inv : (is_object($inv) ? $inv : null);
+                            $productName = is_object($invObj?->product ?? null) ? ($invObj->product->name ?? 'Inventory Item') : ($invObj?->product_name ?? 'Inventory Item');
+                            $qtyOnHand = $invObj?->quantity_on_hand ?? 0;
+                            $reorderLvl = $invObj?->reorder_level ?? 0;
+                        @endphp
+                        @if($invObj)
                         <div class="bento-pill-card">
                             <div class="bento-pill-left">
-                                <strong class="bento-pill-title">{{ $inv->product?->name ?? 'Inventory Item' }}</strong>
+                                <strong class="bento-pill-title">{{ $productName }}</strong>
                             </div>
                             <div class="bento-pill-right">
                                 <div class="bento-stock-numbers">
-                                    <strong class="bento-stock-qty">{{ $inv->quantity_on_hand }} {{ $inv->quantity_on_hand <= 15 ? 'left' : 'in stock' }}</strong>
-                                    <span class="bento-stock-reorder">(Reorder: {{ $inv->reorder_level }})</span>
+                                    <strong class="bento-stock-qty">{{ $qtyOnHand }} {{ $qtyOnHand <= 15 ? 'left' : 'in stock' }}</strong>
+                                    <span class="bento-stock-reorder">(Reorder: {{ $reorderLvl }})</span>
                                 </div>
-                                <a href="{{ route('admin.inventory.index') }}" class="bento-pill-chevron" aria-label="View {{ $inv->product?->name }}">
+                                <a href="{{ route('admin.inventory.index') }}" class="bento-pill-chevron" aria-label="View {{ $productName }}">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
                                 </a>
                             </div>
                         </div>
+                        @endif
                     @empty
                         <div class="bento-pill-card">
                             <div class="bento-pill-left">

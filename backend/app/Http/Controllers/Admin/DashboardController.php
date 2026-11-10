@@ -39,7 +39,7 @@ class DashboardController extends Controller
 
         // Consolidated Station KPI bundle (KPIs, Financials, Charts, Drivers summary)
         // Cached for 15s to eliminate 20+ repeated remote database round trips.
-        $kpi = Cache::remember($cacheKey, now()->addSeconds(15), function () use ($today, $sevenDaysAgo) {
+        $kpi = Cache::store('file')->remember($cacheKey, now()->addSeconds(15), function () use ($today, $sevenDaysAgo) {
             $isPgsql = DB::getDriverName() === 'pgsql';
 
             if ($isPgsql) {
@@ -221,9 +221,7 @@ class DashboardController extends Controller
 
             $outstandingCredit = 0.0;
             try {
-                if (Schema::hasTable('credit_accounts')) {
-                    $outstandingCredit = (float) CreditAccount::sum('balance');
-                }
+                $outstandingCredit = (float) CreditAccount::sum('balance');
             } catch (\Throwable) {
                 $outstandingCredit = 0.0;
             }
@@ -379,15 +377,51 @@ class DashboardController extends Controller
             return Inventory::with('product:id,name,type,price')
                 ->whereColumn('quantity_on_hand', '<=', 'reorder_level')
                 ->take(4)
-                ->get();
+                ->get()
+                ->map(function ($inv) {
+                    return [
+                        'id' => $inv->id,
+                        'quantity_on_hand' => (int) $inv->quantity_on_hand,
+                        'reorder_level' => (int) $inv->reorder_level,
+                        'product_name' => $inv->product?->name ?? 'Inventory Item',
+                    ];
+                })
+                ->all();
         });
 
-        // Sidebar counts badge packet
-        $sidebarCounts = [
+        $lowStockItems = collect($lowStockItems)
+            ->map(function ($item) {
+                if (is_array($item)) {
+                    return (object) [
+                        'id' => $item['id'] ?? null,
+                        'quantity_on_hand' => $item['quantity_on_hand'] ?? 0,
+                        'reorder_level' => $item['reorder_level'] ?? 0,
+                        'product' => (object) [
+                            'name' => $item['product_name'] ?? ($item['product']['name'] ?? 'Inventory Item'),
+                        ],
+                    ];
+                }
+                if (is_object($item)) {
+                    if (!isset($item->product)) {
+                        $item->product = (object) ['name' => $item->product_name ?? 'Inventory Item'];
+                    } elseif (is_array($item->product)) {
+                        $item->product = (object) $item->product;
+                    }
+                    return $item;
+                }
+                return null;
+            })
+            ->filter()
+            ->values();
+
+        // Sidebar counts badge packet: provided to centralized AdminSharedDataService
+        $sharedData = app(\App\Services\AdminSharedDataService::class);
+        $sharedData->provide([
             'pendingOrders' => $kpi['pendingOrders'],
             'waitingInQueue' => $kpi['waitingInQueueCount'],
             'lowStock' => $kpi['lowStockCount'],
-        ];
+        ]);
+        $sidebarCounts = $sharedData->getSidebarCounts($request->user());
 
         return view('admin.dashboard', [
             // KPI Data

@@ -100,7 +100,7 @@ class DispatchService
      * Suggest pickup batches from confirmed orders awaiting gallon collection.
      * Groups orders by geographic area and adheres strictly to vehicle capacity.
      */
-    public function suggestPickupBatches(): array
+    public function suggestPickupBatches(?\Illuminate\Support\Collection $drivers = null): array
     {
         // Unassigned confirmed orders not in any active pickup batch
         $assignedOrderIds = PickupBatchItem::whereHas('batch', function ($q) {
@@ -119,8 +119,10 @@ class DispatchService
             return [];
         }
 
-        // Available drivers
-        $drivers = Driver::whereHas('user', fn($q) => $q->where('status', 'active'))->with('user')->get();
+        // Available drivers (reused if passed to avoid duplicate queries)
+        if ($drivers === null) {
+            $drivers = Driver::whereHas('user', fn($q) => $q->where('status', 'active'))->with('user')->get();
+        }
         $driverIndex = 0;
 
         // Group orders by area
@@ -268,7 +270,7 @@ class DispatchService
      * Suggest delivery routes for orders ready for delivery.
      * Groups orders by geographic area and vehicle capacity.
      */
-    public function suggestDeliveryRoutes(): array
+    public function suggestDeliveryRoutes(?\Illuminate\Support\Collection $drivers = null): array
     {
         $assignedOrderIds = DeliveryStop::whereHas('route', function ($q) {
             $q->whereIn('status', ['ready', 'in_progress']);
@@ -286,7 +288,10 @@ class DispatchService
             return [];
         }
 
-        $drivers = Driver::whereHas('user', fn($q) => $q->where('status', 'active'))->with('user')->get();
+        // Available drivers (reused if passed to avoid duplicate queries)
+        if ($drivers === null) {
+            $drivers = Driver::whereHas('user', fn($q) => $q->where('status', 'active'))->with('user')->get();
+        }
         $driverIndex = 0;
 
         $groupedByArea = [];
