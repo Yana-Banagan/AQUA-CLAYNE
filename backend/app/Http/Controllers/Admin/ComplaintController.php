@@ -8,6 +8,7 @@ use App\Models\ComplaintHistory;
 use App\Models\AuditLog;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class ComplaintController extends Controller
 {
@@ -15,7 +16,11 @@ class ComplaintController extends Controller
     {
         $status = $request->get('status');
 
-        $query = Complaint::with(['customer.user', 'category'])->latest();
+        $query = Complaint::with([
+            'customer:id,user_id',
+            'customer.user:id,name,phone,avatar_path',
+            'category:id,name',
+        ])->latest();
 
         if ($status) {
             $query->where('status', $status);
@@ -23,11 +28,19 @@ class ComplaintController extends Controller
 
         $complaints = $query->paginate(15)->withQueryString();
 
-        $stats = [
-            'total' => Complaint::count(),
-            'pending' => Complaint::where('status', 'pending')->count(),
-            'resolved' => Complaint::where('status', 'resolved')->count(),
-        ];
+        $stats = Cache::store('file')->remember('admin:complaints:stats', now()->addSeconds(20), function () {
+            $row = Complaint::selectRaw("
+                COUNT(*) AS total,
+                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
+                SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) AS resolved
+            ")->first();
+
+            return [
+                'total' => (int) ($row?->total ?? 0),
+                'pending' => (int) ($row?->pending ?? 0),
+                'resolved' => (int) ($row?->resolved ?? 0),
+            ];
+        });
 
         return view('admin.complaints.index', compact('complaints', 'stats', 'status'));
     }
@@ -46,6 +59,7 @@ class ComplaintController extends Controller
         ]);
 
         $complaint->update(['status' => $data['status']]);
+        Cache::store('file')->forget('admin:complaints:stats');
 
         ComplaintHistory::create([
             'complaint_id' => $complaint->id,

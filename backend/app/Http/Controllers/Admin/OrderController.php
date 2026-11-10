@@ -37,12 +37,16 @@ class OrderController extends Controller
         $deliveryMethod = $request->get('delivery_method');
 
         $query = Order::with([
-            'customer.user',
-            'address',
-            'items.product',
-            'delivery.driver.user',
-            'containerIntake',
-            'payment',
+            'customer:id,user_id',
+            'customer.user:id,name,phone,email,avatar_path',
+            'address:id,customer_id,address_line,barangay,city',
+            'items:id,order_id,product_id,quantity,unit_price',
+            'items.product:id,name,type',
+            'delivery:id,order_id,driver_id,status',
+            'delivery.driver:id,user_id,vehicle_plate',
+            'delivery.driver.user:id,name,phone',
+            'containerIntake:id,order_id,status,accepted_count,rejected_count',
+            'payment:id,order_id,status,method,amount',
         ])->latest('created_at');
 
         // Status Filtering (Supports canonical values and logical groupings)
@@ -111,37 +115,46 @@ class OrderController extends Controller
         $todayStart = today()->startOfDay();
         $tomorrow = $todayStart->copy()->addDay();
         $isPgsql = \Illuminate\Support\Facades\DB::getDriverName() === 'pgsql';
-        if ($isPgsql) {
-            $walkInSummaryRow = WalkInOrder::query()->selectRaw(
-                'COUNT(*) AS total, COALESCE(SUM(amount), 0) AS payments, COUNT(*) FILTER (WHERE created_at >= ? AND created_at < ?) AS today_count, COALESCE(SUM(amount) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS today_payments',
-                [$todayStart, $tomorrow, $todayStart, $tomorrow]
-            )->first();
-        } else {
-            $walkInSummaryRow = WalkInOrder::query()->selectRaw(
-                'COUNT(*) AS total, COALESCE(SUM(amount), 0) AS payments, SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END) AS today_count, COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN amount ELSE 0 END), 0) AS today_payments',
-                [$todayStart, $tomorrow, $todayStart, $tomorrow]
-            )->first();
-        }
-        $walkInSummary = [
-            'count' => (int) $walkInSummaryRow->total,
-            'payments' => (float) $walkInSummaryRow->payments,
-            'today_count' => (int) $walkInSummaryRow->today_count,
-            'today_payments' => (float) $walkInSummaryRow->today_payments,
-        ];
 
-        // One grouped query replaces nine round trips to the remote database.
-        $orderCounts = Order::query()->selectRaw('status, COUNT(*) AS aggregate')->groupBy('status')->pluck('aggregate', 'status');
-        $stats = [
-            'total' => (int) $orderCounts->sum() + $walkInSummary['count'],
-            'pending' => (int) ($orderCounts['pending'] ?? 0),
-            'confirmed' => (int) ($orderCounts['confirmed'] ?? 0),
-            'assigned' => (int) ($orderCounts['assigned'] ?? 0),
-            'out_for_delivery' => (int) ($orderCounts['out_for_delivery'] ?? 0),
-            'completed' => (int) ($orderCounts['completed'] ?? 0) + $walkInSummary['count'],
-            'cancelled' => (int) ($orderCounts['cancelled'] ?? 0),
-            'in_queue' => (int) ($orderCounts['waiting_in_queue'] ?? 0) + (int) ($orderCounts['refilling'] ?? 0),
-            'exceptions' => (int) ($orderCounts['rejected'] ?? 0) + (int) ($orderCounts['cancelled'] ?? 0) + (int) ($orderCounts['pickup_failed'] ?? 0) + (int) ($orderCounts['delivery_failed'] ?? 0),
-        ];
+        $orderStatsBundle = \Illuminate\Support\Facades\Cache::store('file')->remember('admin:orders:stats', now()->addSeconds(15), function () use ($todayStart, $tomorrow, $isPgsql) {
+            if ($isPgsql) {
+                $walkInSummaryRow = WalkInOrder::query()->selectRaw(
+                    'COUNT(*) AS total, COALESCE(SUM(amount), 0) AS payments, COUNT(*) FILTER (WHERE created_at >= ? AND created_at < ?) AS today_count, COALESCE(SUM(amount) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS today_payments',
+                    [$todayStart, $tomorrow, $todayStart, $tomorrow]
+                )->first();
+            } else {
+                $walkInSummaryRow = WalkInOrder::query()->selectRaw(
+                    'COUNT(*) AS total, COALESCE(SUM(amount), 0) AS payments, SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END) AS today_count, COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN amount ELSE 0 END), 0) AS today_payments',
+                    [$todayStart, $tomorrow, $todayStart, $tomorrow]
+                )->first();
+            }
+            $walkInSummary = [
+                'count' => (int) ($walkInSummaryRow?->total ?? 0),
+                'payments' => (float) ($walkInSummaryRow?->payments ?? 0),
+                'today_count' => (int) ($walkInSummaryRow?->today_count ?? 0),
+                'today_payments' => (float) ($walkInSummaryRow?->today_payments ?? 0),
+            ];
+
+            // One grouped query replaces nine round trips to the remote database.
+            $orderCounts = Order::query()->selectRaw('status, COUNT(*) AS aggregate')->groupBy('status')->pluck('aggregate', 'status');
+            $stats = [
+                'total' => (int) $orderCounts->sum() + $walkInSummary['count'],
+                'pending' => (int) ($orderCounts['pending'] ?? 0),
+                'confirmed' => (int) ($orderCounts['confirmed'] ?? 0),
+                'assigned' => (int) ($orderCounts['assigned'] ?? 0),
+                'out_for_delivery' => (int) ($orderCounts['out_for_delivery'] ?? 0),
+                'completed' => (int) ($orderCounts['completed'] ?? 0) + $walkInSummary['count'],
+                'cancelled' => (int) ($orderCounts['cancelled'] ?? 0),
+                'in_queue' => (int) ($orderCounts['waiting_in_queue'] ?? 0) + (int) ($orderCounts['refilling'] ?? 0),
+                'exceptions' => (int) ($orderCounts['rejected'] ?? 0) + (int) ($orderCounts['cancelled'] ?? 0) + (int) ($orderCounts['pickup_failed'] ?? 0) + (int) ($orderCounts['delivery_failed'] ?? 0),
+            ];
+
+            return compact('walkInSummary', 'orderCounts', 'stats');
+        });
+
+        $walkInSummary = $orderStatsBundle['walkInSummary'];
+        $orderCounts = $orderStatsBundle['orderCounts'];
+        $stats = $orderStatsBundle['stats'];
 
         // Active Drivers for Assignment Modal and Filter Dropdown
         $activeDrivers = Driver::whereHas('user', function ($q) {

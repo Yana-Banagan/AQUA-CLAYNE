@@ -48,7 +48,10 @@ class CreditService
             'amount' => $amount,
         ]);
 
-        \Illuminate\Support\Facades\Cache::forget('admin:dashboard:station-kpis');
+        \Illuminate\Support\Facades\Cache::store('file')->forget('admin:dashboard:station-kpis');
+        \Illuminate\Support\Facades\Cache::store('file')->forget('admin:credit:stats');
+        \Illuminate\Support\Facades\Cache::store('file')->forget('admin:customers:stats');
+        \Illuminate\Support\Facades\Cache::store('file')->forget('admin_dashboard_stats_v2');
     }
 
     public function pay(
@@ -80,7 +83,10 @@ class CreditService
                 'record_id' => $account->id,
             ]);
 
-            \Illuminate\Support\Facades\Cache::forget('admin:dashboard:station-kpis');
+            \Illuminate\Support\Facades\Cache::store('file')->forget('admin:dashboard:station-kpis');
+            \Illuminate\Support\Facades\Cache::store('file')->forget('admin:credit:stats');
+            \Illuminate\Support\Facades\Cache::store('file')->forget('admin:customers:stats');
+            \Illuminate\Support\Facades\Cache::store('file')->forget('admin_dashboard_stats_v2');
 
             return $transaction;
         });

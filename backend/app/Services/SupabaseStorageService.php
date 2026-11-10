@@ -111,16 +111,8 @@ class SupabaseStorageService
         }
 
         $cacheKey = 'profile-photo-url:' . $userId . ':' . sha1($path);
-        $cached = Cache::get($cacheKey);
-        if ($cached !== null) {
-            return $cached;
-        }
-
-        $url = $this->signedUrl('profile-photos', $path);
-        if ($url !== null) {
-            Cache::put($cacheKey, $url, now()->addMinutes(50));
-        }
-
-        return $url;
+        return Cache::store('file')->remember($cacheKey, now()->addHours(6), function () use ($path) {
+            return $this->signedUrl('profile-photos', $path, 86400);
+        });
     }
 }

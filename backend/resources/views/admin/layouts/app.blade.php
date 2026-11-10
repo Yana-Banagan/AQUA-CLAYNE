@@ -11,10 +11,10 @@
     <title>@yield('title', 'Admin Dashboard') · AQUA CLAYNE</title>
 
     <!-- Browser Favicon & Touch Icons (Maximized Artwork Display) -->
-    <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('images/aqua_clayne_favicon.png') }}?v={{ time() }}">
-    <link rel="icon" type="image/png" sizes="16x16" href="{{ asset('images/aqua_clayne_favicon.png') }}?v={{ time() }}">
-    <link rel="shortcut icon" type="image/x-icon" href="{{ asset('favicon.ico') }}?v={{ time() }}">
-    <link rel="apple-touch-icon" href="{{ asset('images/aqua_clayne_favicon.png') }}?v={{ time() }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('images/aqua_clayne_favicon.png') }}?v=20261007">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ asset('images/aqua_clayne_favicon.png') }}?v=20261007">
+    <link rel="shortcut icon" type="image/x-icon" href="{{ asset('favicon.ico') }}?v=20261007">
+    <link rel="apple-touch-icon" href="{{ asset('images/aqua_clayne_favicon.png') }}?v=20261007">
 
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -58,7 +58,10 @@
             <div class="sidebar-brand">
                 <a href="{{ route('admin.dashboard') }}" class="brand-link">
                     <div class="brand-logo-icon" aria-hidden="true">
-                        <img src="{{ asset('images/aqua_clayne_logo.png') }}" alt="" class="brand-logo-image">
+                        <picture>
+                            <source srcset="{{ asset('images/aqua_clayne_logo.webp') }}" type="image/webp">
+                            <img src="{{ asset('images/aqua_clayne_logo.png') }}" alt="" class="brand-logo-image" width="48" height="48">
+                        </picture>
                     </div>
                     <div class="brand-text-wrap">
                         <span class="brand-company">AQUA CLAYNE</span>

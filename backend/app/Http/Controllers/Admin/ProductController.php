@@ -12,7 +12,7 @@ class ProductController extends Controller
 {
     public function index()
     {
-        $products = Product::with('inventory')->latest()->paginate(15);
+        $products = Product::with('inventory:id,product_id,quantity_on_hand,reorder_level')->latest()->paginate(15);
         return view('admin.products.index', compact('products'));
     }
 

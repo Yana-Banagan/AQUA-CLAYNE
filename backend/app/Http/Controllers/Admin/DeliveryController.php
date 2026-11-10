@@ -218,63 +218,59 @@ class DeliveryController extends Controller
         // ------------------------------------------------------------------
         // DRIVERS — all for filter dropdown, active-only for assignment
         // ------------------------------------------------------------------
-        $allDrivers = Driver::with('user')->get();
+        $allDrivers = Driver::with('user:id,name,phone,status,avatar_path')->get(['id', 'user_id', 'vehicle_plate']);
 
         $activeDrivers = Driver::whereHas('user', fn($q) => $q->where('status', 'active'))
             ->with([
-                'user',
+                'user:id,name,phone,status,avatar_path',
                 'deliveries' => fn($dq) => $dq->whereIn('status', [
                     'assigned', 'en_route_for_pickup', 'picked_up', 'out_for_delivery',
                 ]),
             ])
-            ->get();
+            ->get(['id', 'user_id', 'vehicle_plate']);
 
         // ------------------------------------------------------------------
-        // KPI STATS — 4 live database cards
+        // KPI STATS & STATUS BREAKDOWN — Consolidated Single Query
         // ------------------------------------------------------------------
         $today = Carbon::today();
+        $statsBundle = \Illuminate\Support\Facades\Cache::store('file')->remember('admin:deliveries:stats', now()->addSeconds(15), function () use ($today) {
+            $tomorrow = $today->copy()->addDay();
+            $unassignedOrdersCount = Order::where('status', 'confirmed')
+                ->where('delivery_method', '!=', 'station_pickup')
+                ->whereDoesntHave('delivery', fn($q) => $q->whereNotNull('driver_id'))
+                ->count();
 
-        $unassignedOrdersCount = Order::where('status', 'confirmed')
-            ->whereDoesntHave('delivery', fn($q) => $q->whereNotNull('driver_id'))
-            ->count();
+            $row = Delivery::selectRaw("
+                COUNT(*) AS total,
+                SUM(CASE WHEN status = 'pending' OR driver_id IS NULL THEN 1 ELSE 0 END) AS pending,
+                SUM(CASE WHEN status IN ('assigned', 'en_route', 'en_route_for_pickup', 'picked_up', 'at_station', 'out_for_delivery') THEN 1 ELSE 0 END) AS on_delivery,
+                SUM(CASE WHEN status = 'assigned' THEN 1 ELSE 0 END) AS assigned,
+                SUM(CASE WHEN status IN ('en_route', 'en_route_for_pickup', 'picked_up', 'at_station', 'ready_for_delivery', 'out_for_delivery') THEN 1 ELSE 0 END) AS en_route,
+                SUM(CASE WHEN status IN ('delivered', 'completed') THEN 1 ELSE 0 END) AS delivered,
+                SUM(CASE WHEN status IN ('failed', 'pickup_failed', 'delivery_failed') THEN 1 ELSE 0 END) AS failed,
+                SUM(CASE WHEN status IN ('delivered', 'completed') AND ((delivered_at >= ? AND delivered_at < ?) OR (delivered_at IS NULL AND created_at >= ? AND created_at < ?)) THEN 1 ELSE 0 END) AS completed_today
+            ", [$today, $tomorrow, $today, $tomorrow])->first();
 
-        $stats = [
-            'total' => Delivery::count(),
+            $stats = [
+                'total' => (int) ($row?->total ?? 0),
+                'pending' => (int) ($row?->pending ?? 0) + $unassignedOrdersCount,
+                'onDelivery' => (int) ($row?->on_delivery ?? 0),
+                'completedToday' => (int) ($row?->completed_today ?? 0),
+            ];
 
-            'pending' => Delivery::where(function ($q) {
-                $q->where('status', 'pending')->orWhereNull('driver_id');
-            })->count() + $unassignedOrdersCount,
+            $statusCounts = [
+                'pending' => $stats['pending'],
+                'assigned' => (int) ($row?->assigned ?? 0),
+                'en_route' => (int) ($row?->en_route ?? 0),
+                'delivered' => (int) ($row?->delivered ?? 0),
+                'failed' => (int) ($row?->failed ?? 0),
+            ];
 
-            'onDelivery' => Delivery::whereIn('status', [
-                'assigned', 'en_route', 'en_route_for_pickup',
-                'picked_up', 'at_station', 'out_for_delivery',
-            ])->count(),
+            return compact('stats', 'statusCounts');
+        });
 
-            'completedToday' => Delivery::whereIn('status', ['delivered', 'completed'])
-                ->where(function ($q) use ($today) {
-                    $q->whereDate('delivered_at', $today)
-                        ->orWhere(fn($sq) => $sq->whereNull('delivered_at')
-                            ->whereDate('created_at', $today));
-                })->count(),
-        ];
-
-        // ------------------------------------------------------------------
-        // STATUS BREAKDOWN — right-column summary panel
-        // ------------------------------------------------------------------
-        $statusCounts = [
-            'pending' => $stats['pending'],
-
-            'assigned' => Delivery::where('status', 'assigned')->count(),
-
-            'en_route' => Delivery::whereIn('status', [
-                'en_route', 'en_route_for_pickup', 'picked_up',
-                'at_station', 'ready_for_delivery', 'out_for_delivery',
-            ])->count(),
-
-            'delivered' => Delivery::whereIn('status', ['delivered', 'completed'])->count(),
-
-            'failed' => Delivery::whereIn('status', ['failed', 'pickup_failed', 'delivery_failed'])->count(),
-        ];
+        $stats = $statsBundle['stats'];
+        $statusCounts = $statsBundle['statusCounts'];
 
         // ------------------------------------------------------------------
         // LIVE DELIVERIES — active in-transit panel (≤ 8 cards)

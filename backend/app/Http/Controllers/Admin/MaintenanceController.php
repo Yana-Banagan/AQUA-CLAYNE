@@ -7,17 +7,18 @@ use App\Models\Maintenance;
 use App\Models\MaintenanceRecord;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 class MaintenanceController extends Controller
 {
     public function index()
     {
-        $equipment = Maintenance::with(['records' => function ($q) {
-            $q->latest('performed_at')->limit(1)->with('performedBy');
-        }])->orderBy('equipment_name')->get();
+        $equipment = Maintenance::with('latestRecord.performedBy:id,name')
+            ->orderBy('equipment_name')
+            ->get();
 
         $equipmentData = $equipment->map(function ($item) {
-            $lastRecord = $item->records->first();
+            $lastRecord = $item->latestRecord;
             return [
                 'id' => $item->id,
                 'name' => $item->equipment_name,
@@ -27,15 +28,22 @@ class MaintenanceController extends Controller
             ];
         });
 
-        $history = MaintenanceRecord::with(['maintenance', 'performedBy'])
+        $history = MaintenanceRecord::with([
+            'maintenance:id,equipment_name',
+            'performedBy:id,name',
+        ])
             ->latest('performed_at')
             ->paginate(15);
+
+        $totalCost = Cache::store('file')->remember('admin:maintenance:total_cost', now()->addSeconds(30), function () {
+            return (float) MaintenanceRecord::sum('cost');
+        });
 
         $stats = [
             'equipment' => $equipment->count(),
             'underRepair' => $equipmentData->where('status', 'under_repair')->count(),
             'outOfService' => $equipmentData->where('status', 'out_of_service')->count(),
-            'totalCost' => MaintenanceRecord::sum('cost'),
+            'totalCost' => $totalCost,
         ];
 
         return view('admin.maintenance.index', compact('equipmentData', 'history', 'stats'));
@@ -72,6 +80,8 @@ class MaintenanceController extends Controller
             'equipment_status' => $data['equipment_status'],
             'performed_at' => now(),
         ]);
+
+        Cache::store('file')->forget('admin:maintenance:total_cost');
 
         return back()->with('success', 'Repair record saved to the equipment history.');
     }

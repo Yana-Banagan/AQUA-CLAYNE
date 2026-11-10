@@ -17,7 +17,7 @@ class DriverController extends Controller
 
     public function index()
     {
-        $drivers = Driver::with('user')
+        $drivers = Driver::with('user:id,name,phone,status,avatar_path')
             ->latest()
             ->paginate(15);
 

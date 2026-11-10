@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CreditAccount;
 use App\Models\Customer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class CreditController extends Controller
 {
@@ -13,7 +14,11 @@ class CreditController extends Controller
     {
         $search = $request->get('search');
 
-        $query = CreditAccount::with(['customer.user', 'customer.addresses'])
+        $query = CreditAccount::with([
+            'customer:id,user_id',
+            'customer.user:id,name,phone,avatar_path',
+            'customer.addresses:id,customer_id,address_line',
+        ])
             ->where('balance', '>', 0)
             ->latest();
 
@@ -26,10 +31,17 @@ class CreditController extends Controller
 
         $accounts = $query->paginate(15)->withQueryString();
 
-        $stats = [
-            'totalOutstanding' => CreditAccount::sum('balance'),
-            'customersWithDebt' => CreditAccount::where('balance', '>', 0)->count(),
-        ];
+        $stats = Cache::store('file')->remember('admin:credit:stats', now()->addSeconds(20), function () {
+            $row = CreditAccount::selectRaw("
+                COALESCE(SUM(balance), 0) AS total_outstanding,
+                SUM(CASE WHEN balance > 0 THEN 1 ELSE 0 END) AS customers_with_debt
+            ")->first();
+
+            return [
+                'totalOutstanding' => (float) ($row?->total_outstanding ?? 0),
+                'customersWithDebt' => (int) ($row?->customers_with_debt ?? 0),
+            ];
+        });
 
         return view('admin.credit.index', compact('accounts', 'stats', 'search'));
     }

@@ -8,7 +8,7 @@
     background-color: #041a33;
     background-image:
         linear-gradient(180deg, rgba(3, 27, 55, .84), rgba(2, 20, 43, .94)),
-        url('/images/aqua-clayne-sidebar-bg.png');
+        url('/images/aqua-clayne-sidebar-bg.webp');
     background-size: cover;
     background-position: left center;
     box-shadow: 8px 0 28px rgba(0, 22, 48, .2);

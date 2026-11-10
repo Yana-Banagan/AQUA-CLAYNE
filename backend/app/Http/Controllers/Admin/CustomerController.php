@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class CustomerController extends Controller
 {
@@ -12,7 +13,11 @@ class CustomerController extends Controller
     {
         $search = $request->get('search');
 
-        $query = Customer::with(['user:id,name,email,phone,status,avatar_path', 'addresses', 'creditAccount'])
+        $query = Customer::with([
+            'user:id,name,email,phone,status,avatar_path',
+            'addresses:id,customer_id,address_line',
+            'creditAccount:id,customer_id,balance',
+        ])
             ->withCount('orders')
             ->latest();
 
@@ -26,20 +31,20 @@ class CustomerController extends Controller
 
         $customers = $query->paginate(5)->withQueryString();
 
-        $stats = \Illuminate\Support\Facades\Cache::remember('admin:customers:stats', now()->addSeconds(15), function () {
-            $withCredit = 0;
-            try {
-                if (\Illuminate\Support\Facades\Schema::hasTable('credit_accounts')) {
-                    $withCredit = Customer::whereHas('creditAccount', fn($q) => $q->where('balance', '>', 0))->count();
-                }
-            } catch (\Throwable) {
-                $withCredit = 0;
-            }
+        $stats = Cache::store('file')->remember('admin:customers:stats', now()->addSeconds(30), function () {
+            $row = Customer::leftJoin('users', 'customers.user_id', '=', 'users.id')
+                ->leftJoin('credit_accounts', 'customers.id', '=', 'credit_accounts.customer_id')
+                ->selectRaw("
+                    COUNT(DISTINCT customers.id) AS total,
+                    COUNT(DISTINCT CASE WHEN users.status = 'active' THEN customers.id END) AS active,
+                    COUNT(DISTINCT CASE WHEN credit_accounts.balance > 0 THEN customers.id END) AS with_credit
+                ")
+                ->first();
 
             return [
-                'total' => Customer::count(),
-                'active' => Customer::whereHas('user', fn($q) => $q->where('status', 'active'))->count(),
-                'withCredit' => $withCredit,
+                'total' => (int) ($row?->total ?? 0),
+                'active' => (int) ($row?->active ?? 0),
+                'withCredit' => (int) ($row?->with_credit ?? 0),
             ];
         });
 
