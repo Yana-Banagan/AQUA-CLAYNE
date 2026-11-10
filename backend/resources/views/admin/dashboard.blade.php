@@ -606,15 +606,26 @@
                     </div>
                 </div>
                 <div class="bento-card-body bento-items-body">
-                    @forelse(collect($maintenanceItems)->take(2) as $index => $item)
+                    @php
+                        $maintenanceEntries = collect($maintenanceItems ?? [])->take(2)->values();
+                    @endphp
+                    @forelse($maintenanceEntries as $index => $item)
+                        @php
+                            $equipmentName = is_array($item)
+                                ? ($item['equipment_name'] ?? $item['name'] ?? 'Equipment')
+                                : ($item->equipment_name ?? $item->name ?? 'Equipment');
+                            $scheduleInterval = is_array($item)
+                                ? ($item['schedule_interval_days'] ?? null)
+                                : ($item->schedule_interval_days ?? null);
+                        @endphp
                         <div class="bento-pill-card">
                             <div class="bento-pill-left">
-                                <strong class="bento-pill-title">{{ $item->equipment_name }}</strong>
-                                <span class="bento-pill-subtitle">Next inspection: in {{ $item->schedule_interval_days ?? ($index == 0 ? 5 : 12) }} days</span>
+                                <strong class="bento-pill-title">{{ $equipmentName }}</strong>
+                                <span class="bento-pill-subtitle">Next inspection: in {{ $scheduleInterval ?? ($index == 0 ? 5 : 12) }} days</span>
                             </div>
                             <div class="bento-pill-right">
                                 <span class="bento-pill-badge bento-pill-badge--operational">Operational</span>
-                                <a href="{{ route('admin.maintenance.index') }}" class="bento-pill-chevron" aria-label="View {{ $item->equipment_name }}">
+                                <a href="{{ route('admin.maintenance.index') }}" class="bento-pill-chevron" aria-label="View {{ $equipmentName }}">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
                                 </a>
                             </div>

@@ -347,8 +347,33 @@ class DashboardController extends Controller
         $maintenanceItems = Cache::remember('admin:dashboard:maintenance-preview', now()->addSeconds(60), function () {
             return Maintenance::with(['records' => function ($q) {
                 $q->latest('performed_at')->limit(1);
-            }])->take(4)->get();
+            }])->take(4)->get()->map(function ($item) {
+                if (is_string($item)) {
+                    return (object) ['equipment_name' => $item, 'schedule_interval_days' => null];
+                }
+
+                if (is_array($item)) {
+                    return (object) $item;
+                }
+
+                return $item;
+            })->values();
         });
+
+        $maintenanceItems = collect($maintenanceItems)
+            ->map(function ($item) {
+                if (is_string($item)) {
+                    return (object) ['equipment_name' => $item, 'schedule_interval_days' => null];
+                }
+
+                if (is_array($item)) {
+                    return (object) $item;
+                }
+
+                return $item;
+            })
+            ->filter(fn ($item) => is_object($item) || is_array($item))
+            ->values();
 
         $lowStockItems = Cache::remember('admin:dashboard:lowstock-preview', now()->addSeconds(30), function () {
             return Inventory::with('product:id,name,type,price')
