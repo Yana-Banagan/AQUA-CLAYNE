@@ -471,4 +471,25 @@ Route::prefix('v1')->group(function () {
         Route::post('/driver/chat/messages', [ChatController::class, 'send']);
     });
 
+    /*
+    |--------------------------------------------------------------------------
+    | IoT Hardware & RFID Integration (ESP32)
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware(['rfid.device', 'throttle:120,1'])->prefix('iot/rfid')->group(function () {
+        Route::get('/registration-session/active', [\App\Http\Controllers\Api\Iot\RfidDeviceController::class, 'activeRegistrationSession']);
+        Route::post('/registration-scan', [\App\Http\Controllers\Api\Iot\RfidDeviceController::class, 'registrationScan']);
+        Route::post('/heartbeat', [\App\Http\Controllers\Api\Iot\RfidDeviceController::class, 'heartbeat']);
+        Route::post('/scan', [\App\Http\Controllers\Api\Iot\RfidDeviceController::class, 'scan']);
+    });
+
 });
+
+// Root /api/iot/rfid alias for direct hardware compatibility
+Route::middleware(['rfid.device', 'throttle:120,1'])->prefix('iot/rfid')->group(function () {
+    Route::get('/registration-session/active', [\App\Http\Controllers\Api\Iot\RfidDeviceController::class, 'activeRegistrationSession']);
+    Route::post('/registration-scan', [\App\Http\Controllers\Api\Iot\RfidDeviceController::class, 'registrationScan']);
+    Route::post('/heartbeat', [\App\Http\Controllers\Api\Iot\RfidDeviceController::class, 'heartbeat']);
+    Route::post('/scan', [\App\Http\Controllers\Api\Iot\RfidDeviceController::class, 'scan']);
+});
+

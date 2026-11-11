@@ -1,0 +1,44 @@
+#include "rfid_manager.h"
+
+RFIDManager::RFIDManager(uint8_t ssPin, uint8_t rstPin)
+    : _mfrc522(ssPin, rstPin) {}
+
+void RFIDManager::begin() {
+    SPI.begin();
+    _mfrc522.PCD_Init();
+    delay(10);
+    byte version = _mfrc522.PCD_ReadRegister(MFRC522::VersionReg);
+    Serial.printf("[RFID] RC522 Reader initialized. Firmware version: 0x%02X\n", version);
+}
+
+bool RFIDManager::isTagPresent() {
+    if (!_mfrc522.PICC_IsNewCardPresent()) {
+        return false;
+    }
+    if (!_mfrc522.PICC_ReadCardSerial()) {
+        return false;
+    }
+    return true;
+}
+
+String RFIDManager::readUID() {
+    String uid = formatUID(_mfrc522.uid.uidByte, _mfrc522.uid.size);
+    halt();
+    return uid;
+}
+
+String RFIDManager::formatUID(byte* buffer, byte bufferSize) {
+    String formatted = "";
+    for (byte i = 0; i < bufferSize; i++) {
+        if (buffer[i] < 0x10) formatted += "0";
+        formatted += String(buffer[i], HEX);
+    }
+    formatted.toUpperCase();
+    return formatted;
+}
+
+void RFIDManager::halt() {
+    _mfrc522.PICC_HaltA();
+    _mfrc522.PCD_StopCrypto1();
+}
+

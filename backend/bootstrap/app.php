@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(\App\Http\Middleware\LogSlowRequests::class);
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureRole::class,
+            'rfid.device' => \App\Http\Middleware\AuthenticateRfidDevice::class,
         ]);
 
         $middleware->validateCsrfTokens(except: [

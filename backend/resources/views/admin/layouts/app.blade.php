@@ -221,6 +221,18 @@
                             </span>
                         @endif
                     </a>
+
+                    <a href="{{ route('admin.rfid.index') }}" class="nav-link {{ request()->routeIs('admin.rfid.*') ? 'active-nav' : '' }}">
+                        <span class="nav-icon" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                                <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+                                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                                <line x1="12" y1="20" x2="12.01" y2="20"></line>
+                            </svg>
+                        </span>
+                        <span class="nav-label">RFID &amp; Gallons</span>
+                    </a>
                 </div>
 
                 <!-- COMMUNICATION -->

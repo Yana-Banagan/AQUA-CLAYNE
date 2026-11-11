@@ -43,9 +43,23 @@ class RefillOperationController extends Controller
                 'damaged_count' => 'nullable|integer|min:0',
                 'rejected_count' => 'nullable|integer|min:0',
                 'condition_notes' => 'nullable|string|max:2000',
+                'scanned_uids' => 'nullable|array',
+                'scanned_uids.*' => 'string|max:64',
             ]);
 
             $intake = $queue->receiveIntake($order, $data, $request->user());
+
+            if (!empty($data['scanned_uids'])) {
+                $txService = app(\App\Services\RfidTransactionService::class);
+                $device = \App\Models\RfidDevice::where('status', 'online')->orderByDesc('last_heartbeat_at')->first()
+                    ?? \App\Models\RfidDevice::first();
+
+                if ($device) {
+                    foreach ($data['scanned_uids'] as $uid) {
+                        $txService->validateAndRecordScan($device, $uid, 'STATION_INTAKE', $order->id, $request->user());
+                    }
+                }
+            }
 
             $hasDiscrepancy = $intake->completed_at === null;
             $refillStarted = false;

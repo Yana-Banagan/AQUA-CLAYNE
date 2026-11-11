@@ -16,7 +16,7 @@ class RealtimeEventService
         // Keep this list aligned with the database check constraint.
         if (!in_array(
             $entityType,
-            ['order', 'delivery', 'refill_queue', 'notification', 'payment', 'pickup_batch', 'delivery_route', 'chat'],
+            ['order', 'delivery', 'refill_queue', 'notification', 'payment', 'pickup_batch', 'delivery_route', 'chat', 'rfid'],
             true
         )) {
             return;
@@ -60,6 +60,11 @@ class RealtimeEventService
 
             if ($entityType === 'chat') {
                 $cache->forget('admin-unread-chats-count');
+            }
+
+            if ($entityType === 'rfid') {
+                $cache->forget('admin:rfid:stats');
+                $cache->forget('admin:rfid:active-devices');
             }
         } catch (\Throwable) {
             // Silently continue if cache store is temporarily unreachable

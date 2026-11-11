@@ -43,6 +43,11 @@ class Customer extends Model
         return $this->hasMany(Order::class);
     }
 
+    public function containers(): HasMany
+    {
+        return $this->hasMany(CustomerContainer::class);
+    }
+
     public function creditAccount(): HasOne
     {
         return $this->hasOne(CreditAccount::class);

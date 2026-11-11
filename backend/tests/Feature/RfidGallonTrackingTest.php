@@ -1,0 +1,486 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Customer;
+use App\Models\CustomerAddress;
+use App\Models\CustomerContainer;
+use App\Models\CustomerContainerRfidTag;
+use App\Models\Order;
+use App\Models\RfidDevice;
+use App\Models\RfidRegistrationSession;
+use App\Models\RfidTransaction;
+use App\Models\User;
+use App\Services\RfidDeviceService;
+use App\Services\RfidRegistrationService;
+use App\Services\RfidTransactionService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class RfidGallonTrackingTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User $admin;
+    private User $customerUser;
+    private Customer $customer;
+    private RfidDevice $device;
+    private string $deviceToken = 'test_device_secret_token_12345';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->admin = User::factory()->create([
+            'role' => 'admin',
+            'status' => 'active',
+            'name' => 'Station Manager',
+            'email' => 'admin@aquaclayne.test',
+        ]);
+
+        $this->customerUser = User::factory()->create([
+            'role' => 'customer',
+            'status' => 'active',
+            'name' => 'Juan Dela Cruz',
+            'phone' => '09171234567',
+        ]);
+
+        $this->customer = Customer::create([
+            'user_id' => $this->customerUser->id,
+        ]);
+
+        $this->device = RfidDevice::create([
+            'device_code' => 'ESP32-TEST-01',
+            'device_name' => 'Test RFID Scanner',
+            'location' => 'Test Refill Bay',
+            'device_token_hash' => hash('sha256', $this->deviceToken),
+            'status' => 'online',
+            'firmware_version' => '1.0.0',
+            'last_heartbeat_at' => now(),
+        ]);
+    }
+
+    public function test_device_authentication_valid_token_succeeds(): void
+    {
+        $response = $this->withHeader('X-Device-Token', $this->deviceToken)
+            ->postJson('/api/iot/rfid/heartbeat', [
+                'firmware_version' => '1.0.1',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'device' => [
+                'code' => 'ESP32-TEST-01',
+                'status' => 'online',
+            ],
+        ]);
+
+        $this->device->refresh();
+        $this->assertEquals('1.0.1', $this->device->firmware_version);
+        $this->assertNotNull($this->device->last_heartbeat_at);
+    }
+
+    public function test_device_authentication_missing_token_returns_401(): void
+    {
+        $response = $this->postJson('/api/iot/rfid/heartbeat');
+        $response->assertStatus(401);
+        $response->assertJson([
+            'success' => false,
+            'error' => 'UNAUTHORIZED',
+        ]);
+    }
+
+    public function test_device_authentication_invalid_token_returns_401(): void
+    {
+        $response = $this->withHeader('X-Device-Token', 'wrong_token')
+            ->postJson('/api/iot/rfid/heartbeat');
+
+        $response->assertStatus(401);
+        $response->assertJson([
+            'success' => false,
+            'error' => 'INVALID_CREDENTIAL',
+        ]);
+    }
+
+    public function test_admin_can_create_customer_container_and_start_registration_session(): void
+    {
+        $container = CustomerContainer::create([
+            'customer_id' => $this->customer->id,
+            'container_code' => 'AC-JUA-001',
+            'container_type' => '5-Gallon Standard Slim',
+            'capacity' => 5.00,
+            'status' => 'active',
+        ]);
+
+        // Start session as admin
+        $response = $this->actingAs($this->admin)
+            ->postJson('/admin/rfid/registration-sessions', [
+                'customer_container_id' => $container->id,
+                'station_device_id' => $this->device->id,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'session' => [
+                'container_code' => 'AC-JUA-001',
+                'customer_name' => 'Juan Dela Cruz',
+            ],
+        ]);
+
+        $sessionId = $response->json('session.id');
+        $this->assertDatabaseHas('rfid_registration_sessions', [
+            'id' => $sessionId,
+            'customer_container_id' => $container->id,
+            'status' => 'pending',
+        ]);
+
+        // ESP32 checks for active session
+        $deviceCheck = $this->withHeader('X-Device-Token', $this->deviceToken)
+            ->getJson('/api/iot/rfid/registration-session/active');
+
+        $deviceCheck->assertStatus(200);
+        $deviceCheck->assertJson([
+            'success' => true,
+            'has_session' => true,
+            'session' => [
+                'session_id' => $sessionId,
+                'container_code' => 'AC-JUA-001',
+                'customer_name' => 'Juan Dela Cruz',
+            ],
+        ]);
+    }
+
+    public function test_esp32_submits_rfid_scan_and_completes_registration(): void
+    {
+        $container = CustomerContainer::create([
+            'customer_id' => $this->customer->id,
+            'container_code' => 'AC-JUA-002',
+            'container_type' => '5-Gallon Round',
+            'status' => 'active',
+        ]);
+
+        $session = RfidRegistrationSession::create([
+            'customer_container_id' => $container->id,
+            'station_device_id' => $this->device->id,
+            'created_by' => $this->admin->id,
+            'status' => 'pending',
+            'expires_at' => now()->addMinutes(3),
+        ]);
+
+        $uid = 'E280116060000204759B99E1';
+
+        // ESP32 sends scan
+        $scanResponse = $this->withHeader('X-Device-Token', $this->deviceToken)
+            ->postJson('/api/iot/rfid/registration-scan', [
+                'session_id' => $session->id,
+                'uid' => $uid,
+            ]);
+
+        $scanResponse->assertStatus(200);
+        $scanResponse->assertJson([
+            'success' => true,
+            'message' => 'RFID tag registered successfully.',
+            'tag' => [
+                'uid' => $uid,
+            ],
+        ]);
+
+        // Verify database records
+        $this->assertDatabaseHas('customer_container_rfid_tags', [
+            'customer_container_id' => $container->id,
+            'uid' => $uid,
+            'status' => 'active',
+        ]);
+
+        $this->assertDatabaseHas('rfid_registration_sessions', [
+            'id' => $session->id,
+            'status' => 'completed',
+            'scanned_uid' => $uid,
+        ]);
+
+        $this->assertDatabaseHas('rfid_transactions', [
+            'customer_container_id' => $container->id,
+            'device_id' => $this->device->id,
+            'transaction_type' => 'REGISTRATION',
+            'scan_result' => 'accepted',
+        ]);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $this->admin->id,
+            'action' => 'rfid.tag_registered',
+        ]);
+    }
+
+    public function test_duplicate_rfid_uid_is_rejected(): void
+    {
+        $container1 = CustomerContainer::create([
+            'customer_id' => $this->customer->id,
+            'container_code' => 'AC-JUA-003',
+            'status' => 'active',
+        ]);
+
+        $existingUid = 'A1B2C3D4';
+        CustomerContainerRfidTag::create([
+            'customer_container_id' => $container1->id,
+            'uid' => $existingUid,
+            'status' => 'active',
+            'registered_at' => now(),
+        ]);
+
+        $container2 = CustomerContainer::create([
+            'customer_id' => $this->customer->id,
+            'container_code' => 'AC-JUA-004',
+            'status' => 'active',
+        ]);
+
+        $session = RfidRegistrationSession::create([
+            'customer_container_id' => $container2->id,
+            'station_device_id' => $this->device->id,
+            'created_by' => $this->admin->id,
+            'status' => 'pending',
+            'expires_at' => now()->addMinutes(3),
+        ]);
+
+        // Attempt to register the same UID
+        $response = $this->withHeader('X-Device-Token', $this->deviceToken)
+            ->postJson('/api/iot/rfid/registration-scan', [
+                'session_id' => $session->id,
+                'uid' => $existingUid,
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJson([
+            'success' => false,
+            'error' => 'DUPLICATE_RFID_TAG',
+        ]);
+
+        // Session remains pending, no new tag created
+        $session->refresh();
+        $this->assertEquals('pending', $session->status);
+        $this->assertDatabaseMissing('customer_container_rfid_tags', [
+            'customer_container_id' => $container2->id,
+        ]);
+    }
+
+    public function test_expired_registration_session_is_rejected(): void
+    {
+        $container = CustomerContainer::create([
+            'customer_id' => $this->customer->id,
+            'container_code' => 'AC-JUA-005',
+            'status' => 'active',
+        ]);
+
+        $session = RfidRegistrationSession::create([
+            'customer_container_id' => $container->id,
+            'station_device_id' => $this->device->id,
+            'created_by' => $this->admin->id,
+            'status' => 'pending',
+            'expires_at' => now()->subMinute(), // Expired
+        ]);
+
+        $response = $this->withHeader('X-Device-Token', $this->deviceToken)
+            ->postJson('/api/iot/rfid/registration-scan', [
+                'session_id' => $session->id,
+                'uid' => 'F1F2F3F4',
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJson([
+            'success' => false,
+            'error' => 'SESSION_EXPIRED',
+        ]);
+
+        $session->refresh();
+        $this->assertEquals('expired', $session->status);
+    }
+
+    public function test_admin_can_replace_rfid_tag_atomically(): void
+    {
+        $container = CustomerContainer::create([
+            'customer_id' => $this->customer->id,
+            'container_code' => 'AC-JUA-006',
+            'status' => 'active',
+        ]);
+
+        $oldTag = CustomerContainerRfidTag::create([
+            'customer_container_id' => $container->id,
+            'uid' => 'OLD_UID_123',
+            'status' => 'active',
+            'registered_at' => now(),
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->postJson("/admin/rfid/tags/{$oldTag->id}/replace", [
+                'new_uid' => 'NEW_UID_456',
+                'reason' => 'Physical tag peeling off',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'message' => 'RFID tag replaced successfully.',
+        ]);
+
+        $oldTag->refresh();
+        $this->assertEquals('replaced', $oldTag->status);
+        $this->assertNotNull($oldTag->deactivated_at);
+
+        $this->assertDatabaseHas('customer_container_rfid_tags', [
+            'customer_container_id' => $container->id,
+            'uid' => 'NEW_UID_456',
+            'status' => 'active',
+        ]);
+
+        $this->assertDatabaseHas('rfid_transactions', [
+            'customer_container_id' => $container->id,
+            'transaction_type' => 'TAG_REPLACEMENT',
+            'scan_result' => 'accepted',
+        ]);
+    }
+
+    public function test_admin_can_deactivate_rfid_tag(): void
+    {
+        $container = CustomerContainer::create([
+            'customer_id' => $this->customer->id,
+            'container_code' => 'AC-JUA-007',
+            'status' => 'active',
+        ]);
+
+        $tag = CustomerContainerRfidTag::create([
+            'customer_container_id' => $container->id,
+            'uid' => 'DEACT_UID_789',
+            'status' => 'active',
+            'registered_at' => now(),
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->postJson("/admin/rfid/tags/{$tag->id}/deactivate", [
+                'reason' => 'Container broken during home use',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+        ]);
+
+        $tag->refresh();
+        $this->assertEquals('inactive', $tag->status);
+        $this->assertNotNull($tag->deactivated_at);
+    }
+
+    public function test_station_intake_scan_validates_customer_and_order(): void
+    {
+        $container = CustomerContainer::create([
+            'customer_id' => $this->customer->id,
+            'container_code' => 'AC-JUA-008',
+            'status' => 'active',
+        ]);
+
+        $tag = CustomerContainerRfidTag::create([
+            'customer_container_id' => $container->id,
+            'uid' => 'INTAKE_UID_101',
+            'status' => 'active',
+            'registered_at' => now(),
+        ]);
+
+        // Customer's order awaiting intake
+        $address = CustomerAddress::create([
+            'customer_id' => $this->customer->id,
+            'address_line' => '123 Main St',
+            'barangay' => 'Gatid',
+            'city' => 'Santa Cruz',
+        ]);
+
+        $validOrder = Order::create([
+            'customer_id' => $this->customer->id,
+            'address_id' => $address->id,
+            'order_number' => '1001',
+            'status' => 'picked_up',
+            'delivery_method' => 'home_delivery',
+            'expected_empty_gallons' => 2,
+            'total_amount' => 100.00,
+        ]);
+
+        // Valid scan: container matches order customer
+        $validScan = $this->withHeader('X-Device-Token', $this->deviceToken)
+            ->postJson('/api/iot/rfid/scan', [
+                'uid' => 'INTAKE_UID_101',
+                'scan_type' => 'STATION_INTAKE',
+                'order_id' => $validOrder->id,
+            ]);
+
+        $validScan->assertStatus(200);
+        $validScan->assertJson([
+            'success' => true,
+            'message' => 'RFID tag verified successfully.',
+        ]);
+
+        // Other customer's order
+        $otherCustomerUser = User::factory()->create([
+            'role' => 'customer',
+            'status' => 'active',
+            'name' => 'Maria Santos',
+        ]);
+        $otherCustomer = Customer::create(['user_id' => $otherCustomerUser->id]);
+        $otherAddress = CustomerAddress::create([
+            'customer_id' => $otherCustomer->id,
+            'address_line' => '456 Elm St',
+            'barangay' => 'Duhat',
+            'city' => 'Santa Cruz',
+        ]);
+
+        $otherOrder = Order::create([
+            'customer_id' => $otherCustomer->id,
+            'address_id' => $otherAddress->id,
+            'order_number' => '1002',
+            'status' => 'picked_up',
+            'delivery_method' => 'home_delivery',
+            'expected_empty_gallons' => 2,
+            'total_amount' => 100.00,
+        ]);
+
+        // Mismatched scan: container belongs to Juan, but order is for Maria
+        $invalidScan = $this->withHeader('X-Device-Token', $this->deviceToken)
+            ->postJson('/api/iot/rfid/scan', [
+                'uid' => 'INTAKE_UID_101',
+                'scan_type' => 'STATION_INTAKE',
+                'order_id' => $otherOrder->id,
+            ]);
+
+        $invalidScan->assertStatus(422);
+        $invalidScan->assertJson([
+            'success' => false,
+            'error' => 'CUSTOMER_MISMATCH',
+        ]);
+
+        $this->assertDatabaseHas('rfid_transactions', [
+            'customer_container_id' => $container->id,
+            'transaction_type' => 'STATION_INTAKE',
+            'scan_result' => 'rejected',
+        ]);
+    }
+
+    public function test_admin_can_rotate_device_security_token(): void
+    {
+        $response = $this->actingAs($this->admin)
+            ->postJson("/admin/rfid/devices/{$this->device->id}/rotate-token");
+
+        $response->assertStatus(200);
+        $newToken = $response->json('plain_token');
+        $this->assertNotEmpty($newToken);
+        $this->assertNotEquals($this->deviceToken, $newToken);
+
+        // Old token should now be rejected
+        $oldResponse = $this->withHeader('X-Device-Token', $this->deviceToken)
+            ->postJson('/api/iot/rfid/heartbeat');
+        $oldResponse->assertStatus(401);
+
+        // New token should work
+        $newResponse = $this->withHeader('X-Device-Token', $newToken)
+            ->postJson('/api/iot/rfid/heartbeat');
+        $newResponse->assertStatus(200);
+    }
+}
+
