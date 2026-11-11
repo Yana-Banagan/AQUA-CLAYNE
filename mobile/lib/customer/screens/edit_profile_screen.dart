@@ -25,6 +25,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _phoneCtrl;
 
   bool _saving = false;
+  bool _loadingProfile = false;
   String? _error;
   File? _profilePhoto;
 
@@ -37,6 +38,46 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _nameCtrl = TextEditingController(text: user?.name ?? '');
     _emailCtrl = TextEditingController(text: user?.email ?? '');
     _phoneCtrl = TextEditingController(text: user?.phone ?? '');
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadProfile());
+  }
+
+  Future<void> _loadProfile() async {
+    if (!mounted) return;
+    setState(() {
+      _loadingProfile = true;
+      _error = null;
+    });
+
+    try {
+      final repo = context.read<AuthRepository>();
+      final data = await repo.me();
+      if (!mounted) return;
+      if (data.isNotEmpty) {
+        final freshUser = UserModel.fromMap(data['user'] ?? data);
+        context.read<AuthProvider>().updateUser(freshUser);
+        if (_nameCtrl.text.isEmpty || _nameCtrl.text == freshUser.name) {
+          _nameCtrl.text = freshUser.name;
+        }
+        if (_emailCtrl.text.isEmpty || _emailCtrl.text == freshUser.email) {
+          _emailCtrl.text = freshUser.email;
+        }
+        if (_phoneCtrl.text.isEmpty || _phoneCtrl.text == freshUser.phone) {
+          _phoneCtrl.text = freshUser.phone ?? '';
+        }
+      }
+    } catch (e) {
+      debugPrint('[EditProfile] Failed to fetch latest profile: $e');
+      if (!mounted) return;
+      final rawMsg = e.toString().replaceFirst('Exception: ', '').replaceFirst('ApiException: ', '');
+      // If no cached user is available, display error banner
+      if (context.read<AuthProvider>().user == null) {
+        setState(() => _error = rawMsg);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loadingProfile = false);
+      }
+    }
   }
 
   @override
@@ -138,7 +179,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
       );
 
-      Navigator.pop(context);
+      Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString().replaceFirst('Exception: ', '').replaceFirst('ApiException: ', '');
@@ -212,6 +253,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           color: Color(0xFF12344D),
                         ),
                       ),
+                      const Spacer(),
+                      if (_loadingProfile)
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0878C9)),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -376,6 +427,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                             ),
                                           ),
                                         ),
+                                        if (!_saving)
+                                          TextButton(
+                                            onPressed: () {
+                                              setState(() => _error = null);
+                                              _loadProfile();
+                                            },
+                                            style: TextButton.styleFrom(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                                              minimumSize: Size.zero,
+                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                            ),
+                                            child: const Text(
+                                              'Retry',
+                                              style: TextStyle(
+                                                color: AppColors.error,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ),
                                       ],
                                     ),
                                   ),

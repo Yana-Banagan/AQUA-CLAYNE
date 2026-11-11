@@ -640,11 +640,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           // Edit Profile Action Button
           OutlinedButton.icon(
-            onPressed: () {
-              Navigator.push(
+            onPressed: () async {
+              final updated = await Navigator.push<bool>(
                 context,
                 MaterialPageRoute(builder: (_) => const EditProfileScreen()),
               );
+              if (updated == true && context.mounted) {
+                try {
+                  await context.read<AuthProvider>().restoreSession();
+                } catch (_) {}
+              }
             },
             icon: const Icon(
               Icons.edit_outlined,

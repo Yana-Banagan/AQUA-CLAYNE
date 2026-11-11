@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/env.dart';
@@ -52,6 +53,13 @@ class ApiClient {
   // status changes still appear promptly if a realtime signal is missed.
   static const Duration _dashboardCacheLifetime = Duration(seconds: 2);
 
+  static const String userFriendlyConnectionError =
+      'Unable to connect to Aqua Clayne. Please check your internet connection and try again.';
+  static const String userFriendlyTimeoutError =
+      'Connection timed out. Please check your internet connection and try again.';
+  static const String userFriendlyUploadTimeoutError =
+      'Upload timed out. Please check your internet connection and try again.';
+
   final String baseUrl;
   final TokenStorage tokenStorage;
   void Function()? onSessionExpired;
@@ -101,12 +109,15 @@ class ApiClient {
       final response = await http.Response.fromStream(streamed);
 
       return _handle(response, path: path, auth: true);
-    } on TimeoutException {
-      throw ApiException('Upload timed out. Check your connection.');
-    } on SocketException {
-      throw ApiException(
-        'Cannot reach the server at $baseUrl. Check that the Laravel API is running.',
-      );
+    } on TimeoutException catch (e) {
+      debugPrint('[ApiClient] Upload TimeoutException on $path ($baseUrl): $e');
+      throw ApiException(userFriendlyUploadTimeoutError);
+    } on SocketException catch (e) {
+      debugPrint('[ApiClient] Upload SocketException on $path ($baseUrl): $e');
+      throw ApiException(userFriendlyConnectionError);
+    } on http.ClientException catch (e) {
+      debugPrint('[ApiClient] Upload ClientException on $path ($baseUrl): $e');
+      throw ApiException(userFriendlyConnectionError);
     }
   }
 
@@ -150,17 +161,18 @@ class ApiClient {
           .timeout(_requestTimeout);
 
       return _handle(response, path: path, auth: auth);
-    } on TimeoutException {
+    } on TimeoutException catch (e) {
+      debugPrint('[ApiClient] POST TimeoutException on $path ($baseUrl): $e');
       if (await _queueIfSafe('POST', path, body, authenticated: auth)) return OfflineQueuedResult(path);
-      throw ApiException('Request timed out. Check your connection.');
-    } on SocketException {
+      throw ApiException(userFriendlyTimeoutError);
+    } on SocketException catch (e) {
+      debugPrint('[ApiClient] POST SocketException on $path ($baseUrl): $e');
       if (await _queueIfSafe('POST', path, body, authenticated: auth)) return OfflineQueuedResult(path);
-      throw ApiException(
-        'Cannot reach the server at $baseUrl. Check that the Laravel API is running.',
-      );
-    } on http.ClientException {
+      throw ApiException(userFriendlyConnectionError);
+    } on http.ClientException catch (e) {
+      debugPrint('[ApiClient] POST ClientException on $path ($baseUrl): $e');
       if (await _queueIfSafe('POST', path, body, authenticated: auth)) return OfflineQueuedResult(path);
-      throw ApiException('Cannot reach the server at $baseUrl. Check your connection.');
+      throw ApiException(userFriendlyConnectionError);
     }
   }
 
@@ -397,14 +409,15 @@ class ApiClient {
           .timeout(_requestTimeout);
 
       return _handle(response, path: path, auth: auth);
-    } on TimeoutException {
-      throw ApiException('Request timed out. Check your connection.');
-    } on SocketException {
-      throw ApiException(
-        'Cannot reach the server at $baseUrl. Check that the Laravel API is running.',
-      );
-    } on http.ClientException {
-      throw ApiException('Cannot reach the server at $baseUrl. Check your connection.');
+    } on TimeoutException catch (e) {
+      debugPrint('[ApiClient] GET TimeoutException on $path ($baseUrl): $e');
+      throw ApiException(userFriendlyTimeoutError);
+    } on SocketException catch (e) {
+      debugPrint('[ApiClient] GET SocketException on $path ($baseUrl): $e');
+      throw ApiException(userFriendlyConnectionError);
+    } on http.ClientException catch (e) {
+      debugPrint('[ApiClient] GET ClientException on $path ($baseUrl): $e');
+      throw ApiException(userFriendlyConnectionError);
     }
   }
 
@@ -427,12 +440,15 @@ class ApiClient {
           .timeout(_requestTimeout);
 
       return _handle(response, path: path, auth: auth);
-    } on TimeoutException {
-      throw ApiException('Request timed out. Check your connection.');
-    } on SocketException {
-      throw ApiException(
-        'Cannot reach the server at $baseUrl. Check that the Laravel API is running.',
-      );
+    } on TimeoutException catch (e) {
+      debugPrint('[ApiClient] PUT TimeoutException on $path ($baseUrl): $e');
+      throw ApiException(userFriendlyTimeoutError);
+    } on SocketException catch (e) {
+      debugPrint('[ApiClient] PUT SocketException on $path ($baseUrl): $e');
+      throw ApiException(userFriendlyConnectionError);
+    } on http.ClientException catch (e) {
+      debugPrint('[ApiClient] PUT ClientException on $path ($baseUrl): $e');
+      throw ApiException(userFriendlyConnectionError);
     }
   }
 
@@ -455,17 +471,18 @@ class ApiClient {
           .timeout(_requestTimeout);
 
       return _handle(response, path: path, auth: auth);
-    } on TimeoutException {
+    } on TimeoutException catch (e) {
+      debugPrint('[ApiClient] PATCH TimeoutException on $path ($baseUrl): $e');
       if (await _queueIfSafe('PATCH', path, body, authenticated: auth)) return OfflineQueuedResult(path);
-      throw ApiException('Request timed out. Check your connection.');
-    } on SocketException {
+      throw ApiException(userFriendlyTimeoutError);
+    } on SocketException catch (e) {
+      debugPrint('[ApiClient] PATCH SocketException on $path ($baseUrl): $e');
       if (await _queueIfSafe('PATCH', path, body, authenticated: auth)) return OfflineQueuedResult(path);
-      throw ApiException(
-        'Cannot reach the server at $baseUrl. Check that the Laravel API is running.',
-      );
-    } on http.ClientException {
+      throw ApiException(userFriendlyConnectionError);
+    } on http.ClientException catch (e) {
+      debugPrint('[ApiClient] PATCH ClientException on $path ($baseUrl): $e');
       if (await _queueIfSafe('PATCH', path, body, authenticated: auth)) return OfflineQueuedResult(path);
-      throw ApiException('Cannot reach the server at $baseUrl. Check your connection.');
+      throw ApiException(userFriendlyConnectionError);
     }
   }
 
@@ -483,12 +500,15 @@ class ApiClient {
           .timeout(_requestTimeout);
 
       return _handle(response, path: path, auth: auth);
-    } on TimeoutException {
-      throw ApiException('Request timed out. Check your connection.');
-    } on SocketException {
-      throw ApiException(
-        'Cannot reach the server at $baseUrl. Check that the Laravel API is running.',
-      );
+    } on TimeoutException catch (e) {
+      debugPrint('[ApiClient] DELETE TimeoutException on $path ($baseUrl): $e');
+      throw ApiException(userFriendlyTimeoutError);
+    } on SocketException catch (e) {
+      debugPrint('[ApiClient] DELETE SocketException on $path ($baseUrl): $e');
+      throw ApiException(userFriendlyConnectionError);
+    } on http.ClientException catch (e) {
+      debugPrint('[ApiClient] DELETE ClientException on $path ($baseUrl): $e');
+      throw ApiException(userFriendlyConnectionError);
     }
   }
 
