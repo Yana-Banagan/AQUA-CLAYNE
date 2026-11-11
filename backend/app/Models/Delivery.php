@@ -27,6 +27,8 @@ class Delivery extends Model
         'driver_latitude',
         'driver_longitude',
         'location_updated_at',
+        'assignment_source',
+        'assigned_at',
     ];
 
     protected function casts(): array
@@ -36,6 +38,7 @@ class Delivery extends Model
             'created_at' => 'datetime',
             'delivered_at' => 'datetime',
             'location_updated_at' => 'datetime',
+            'assigned_at' => 'datetime',
             'customer_confirmed' => 'boolean',
             'driver_latitude' => 'float',
             'driver_longitude' => 'float',

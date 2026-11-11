@@ -8,6 +8,7 @@ use App\Models\Inventory;
 use App\Models\Order;
 use App\Models\WalkInOrder;
 use App\Services\OrderWorkflowService;
+use App\Services\DeliveryService;
 use Illuminate\Http\Request;
 
 class OrderController extends Controller
@@ -329,6 +330,15 @@ class OrderController extends Controller
                 $data['reason'] ?? null
             );
 
+            $automaticallyAssigned = 0;
+            if ($data['status'] === 'confirmed') {
+                try {
+                    $automaticallyAssigned = app(DeliveryService::class)->assignAutomaticBatches($request->user());
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+            }
+
             $statusFormatted = ucwords(str_replace('_', ' ', $data['status']));
 
             if ($request->wantsJson() || $request->ajax()) {
@@ -336,6 +346,7 @@ class OrderController extends Controller
                     'success' => true,
                     'message' => "Order #{$order->order_number} status updated to {$statusFormatted}.",
                     'status' => $data['status'],
+                    'automatically_assigned' => $automaticallyAssigned,
                 ]);
             }
 
@@ -358,5 +369,31 @@ class OrderController extends Controller
             }
             return back()->withErrors(['status' => $e->getMessage()]);
         }
+    }
+
+    /** Confirm eligible pending orders individually and report row-level failures. */
+    public function confirmAll(Request $request, OrderWorkflowService $workflow, DeliveryService $deliveryService)
+    {
+        $eligible = Order::query()->where('status', 'pending')->orderBy('created_at')->orderBy('id')->pluck('id');
+        $result = ['confirmed' => 0, 'failed' => [], 'skipped' => 0, 'automatically_assigned' => 0];
+
+        foreach ($eligible as $id) {
+            try {
+                $order = Order::find($id);
+                if (!$order || $order->status !== 'pending') { $result['skipped']++; continue; }
+                $workflow->transition($order, 'confirmed', $request->user());
+                $result['confirmed']++;
+            } catch (\Throwable $e) {
+                $result['failed'][] = ['order_id' => $id, 'reason' => $e->getMessage() ?: 'Order validation failed.'];
+            }
+        }
+
+        try {
+            $result['automatically_assigned'] = $deliveryService->assignAutomaticBatches($request->user());
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return response()->json($result);
     }
 }

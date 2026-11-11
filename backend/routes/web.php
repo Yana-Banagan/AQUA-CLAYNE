@@ -276,6 +276,8 @@ Route::middleware(['auth', 'role:admin,staff'])
             'pendingCount'
         ])->name('orders.pending-count');
 
+        Route::post('/orders/confirm-all', [OrderController::class, 'confirmAll'])->name('orders.confirm-all');
+
 
         Route::get('/orders/{order}', [
             OrderController::class,

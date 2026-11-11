@@ -129,6 +129,7 @@ class OrderController extends Controller
                 $request->user()->customer,
                 $data
             );
+            $order->setAttribute('qr_code', $order->qrPayload());
 
             return $this->success(
                 $order,
@@ -211,6 +212,8 @@ class OrderController extends Controller
             ->latest()
             ->get();
 
+        $orders->each(fn (Order $order) => $order->setAttribute('qr_code', $order->qrPayload()));
+
         return $this->success($orders);
     }
 
@@ -275,6 +278,7 @@ class OrderController extends Controller
         );
 
         $responseArray = $loadedOrder->toArray();
+        $responseArray['qr_code'] = $loadedOrder->qrPayload();
         $responseArray['station_location'] = [
             'name' => 'Aqua Clayne Water Refilling Station',
             'address' => config('services.station.address', 'Aqua Clayne Water Refilling Station, Batisan, Gatid, Santa Cruz, Laguna'),

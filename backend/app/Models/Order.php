@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
 
 class Order extends Model
 {
@@ -29,6 +30,20 @@ class Order extends Model
         'cancelled_at',
         'completed_at',
     ];
+
+    protected $hidden = ['qr_token'];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Order $order) {
+            $order->qr_token ??= hash('sha256', Str::random(80));
+        });
+    }
+
+    public function qrPayload(): string
+    {
+        return 'AQUA-CLAYNE:' . $this->qr_token;
+    }
 
     protected function casts(): array
     {

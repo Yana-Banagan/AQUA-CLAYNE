@@ -22,8 +22,7 @@ class DeliveryService
         ?User $actor = null,
         ?string $eta = null
     ): Delivery {
-        return DB::transaction(
-            function () use ($order, $driver, $actor, $eta) {
+        $execute = function () use ($order, $driver, $actor, $eta) {
 
                 // Lock the order to prevent conflicting assignments.
                 $order = Order::query()
@@ -158,8 +157,49 @@ class DeliveryService
                 );
 
                 return $delivery;
+            };
+
+        return DB::transactionLevel() > 0 ? $execute() : DB::transaction($execute);
+    }
+
+    /** Assign complete FIFO batches of confirmed home-delivery orders. */
+    public function assignAutomaticBatches(?User $actor = null): int
+    {
+        $batchSize = max(1, (int) config('dispatch.assignment_batch_size', 10));
+        $assigned = 0;
+
+        // A global advisory lock serializes dispatchers across web workers.
+        return DB::transaction(function () use ($actor, $batchSize, &$assigned) {
+            if (DB::getDriverName() === 'pgsql') {
+                DB::select('select pg_advisory_xact_lock(68241017)');
             }
-        );
+
+            $drivers = Driver::with([
+                'user',
+                'deliveries' => fn ($q) => $q->whereIn('status', ['assigned', 'en_route_for_pickup', 'picked_up', 'out_for_delivery']),
+            ])->whereHas('user', fn ($q) => $q->where('status', 'active'))->orderBy('created_at')->orderBy('id')->get()
+                ->filter(fn (Driver $driver) => $driver->deliveries->count() < 4)->values();
+            if ($drivers->isEmpty()) return 0;
+
+            do {
+                $orders = Order::query()->where('status', 'confirmed')
+                    ->where('delivery_method', 'home_delivery')
+                    ->whereHas('payment', fn ($q) => $q->where('method', '!=', 'online')->orWhere(fn ($online) => $online->where('method', 'online')->where('status', 'paid')))
+                    ->whereDoesntHave('delivery', fn ($q) => $q->whereNotNull('driver_id'))
+                    ->orderBy('created_at')->orderBy('id')->limit($batchSize)->lockForUpdate()->get();
+                if ($orders->count() < $batchSize) break;
+
+                $completedBatches = (int) Delivery::where('assignment_source', 'automatic')->count() / $batchSize;
+                $driver = $drivers[$completedBatches % $drivers->count()];
+                foreach ($orders as $order) {
+                    $delivery = $this->assign($order, $driver, $actor);
+                    $delivery->update(['assignment_source' => 'automatic', 'assigned_at' => now()]);
+                    $assigned++;
+                }
+            } while (true);
+
+            return $assigned;
+        });
     }
 
     /**
@@ -172,8 +212,7 @@ class DeliveryService
         ?string $eta = null,
         ?User $actor = null
     ): Delivery {
-        return DB::transaction(
-            function () use ($delivery, $status, $note, $eta, $actor) {
+        $execute = function () use ($delivery, $status, $note, $eta, $actor) {
 
                 // Lock the delivery to prevent conflicting updates.
                 $delivery = Delivery::query()
@@ -481,7 +520,8 @@ class DeliveryService
                 }
 
                 return $delivery->fresh();
-            }
-        );
+            };
+
+        return DB::transactionLevel() > 0 ? $execute() : DB::transaction($execute);
     }
 }

@@ -668,6 +668,30 @@
         OrdersFilter.init();
         OrderSelection.init();
         OrderRealtime.init();
+
+        const confirmAllButton = document.getElementById('confirmAllOrders');
+        confirmAllButton?.addEventListener('click', async () => {
+            const count = Number(confirmAllButton.dataset.count || 0);
+            if (!count) { Toast.show('There are no pending orders to confirm.', 'info'); return; }
+            if (!window.confirm(`Confirm All Pending Orders?\n\nYou are about to confirm ${count} pending customer orders. This action will update their order statuses and process eligible delivery assignments.`)) return;
+            confirmAllButton.disabled = true;
+            try {
+                const response = await fetch(confirmAllButton.dataset.url, {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': getCsrfToken(), 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.message || 'Bulk confirmation failed.');
+                const failures = (result.failed || []).map(item => `${item.order_id}: ${item.reason}`).join('\n');
+                const summary = `Successfully Confirmed: ${result.confirmed}\nFailed: ${(result.failed || []).length}\nSkipped: ${result.skipped}\nAutomatically Assigned: ${result.automatically_assigned}`;
+                window.alert(summary + (failures ? `\n\nFailure details:\n${failures}` : ''));
+                window.location.reload();
+            } catch (error) {
+                Toast.show(error.message || 'Bulk confirmation failed.', 'error', 6000);
+            } finally {
+                confirmAllButton.disabled = false;
+            }
+        });
     });
 
 })();

@@ -321,6 +321,8 @@ Route::prefix('v1')->group(function () {
     ])->group(function () {
 
         Route::post('/driver/deliveries/{delivery}/rfid-scans', [RfidScanController::class, 'store']);
+        Route::post('/driver/orders/scan-qr', [DeliveryController::class, 'scanOrderQr']);
+        Route::post('/driver/deliveries/out-for-delivery/bulk', [DeliveryController::class, 'bulkOutForDelivery']);
 
         /*
          * Assigned Deliveries

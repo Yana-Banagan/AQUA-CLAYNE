@@ -6,6 +6,7 @@ import '../../customer/data/payment_repository.dart';
 import '../../customer/providers/order_provider.dart';
 import 'customer_shell.dart';
 import 'order_detail_screen.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class OrderSuccessScreen extends StatefulWidget {
   final OrderModel order;
@@ -337,6 +338,13 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                     ),
 
                     const SizedBox(height: 24),
+
+                    if (order.qrCode.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      const Text('Show this code to your driver at pickup', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF064B87))),
+                      const SizedBox(height: 8),
+                      QrImageView(data: order.qrCode, size: 180),
+                    ],
 
                     // Primary Button: Track Order
                     SizedBox(

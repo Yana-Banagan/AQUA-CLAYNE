@@ -7,12 +7,14 @@ use App\Models\Delivery;
 use App\Models\DeliveryRoute;
 use App\Models\DeliveryStop;
 use App\Models\Driver;
+use App\Models\Order;
 use App\Models\PickupBatch;
 use App\Models\PickupBatchItem;
 use App\Services\DeliveryService;
 use App\Services\OrderWorkflowService;
 use App\Services\PaymentService;
 use App\Services\SupabaseStorageService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 
 class DeliveryController extends Controller
@@ -28,6 +30,62 @@ class DeliveryController extends Controller
     private function driver(Request $request): Driver
     {
         return $request->user()->driver;
+    }
+
+    /** Verify an order QR payload and record its assigned driver's pickup. */
+    public function scanOrderQr(Request $request)
+    {
+        $data = $request->validate(['qr_code' => ['required', 'string', 'max:200']]);
+        $token = preg_replace('/^AQUA-CLAYNE:/', '', trim($data['qr_code']));
+        $driver = $this->driver($request);
+
+        return DB::transaction(function () use ($token, $driver, $request) {
+            $order = Order::query()->where('qr_token', $token)->lockForUpdate()->first();
+            if (!$order) return response()->json(['message' => 'Invalid Aqua Clayne order QR code.'], 422);
+            if (in_array($order->status, ['cancelled', 'rejected'], true)) return response()->json(['message' => 'This order has been cancelled and cannot be picked up.'], 422);
+            if ($order->status === 'picked_up') return response()->json(['message' => 'This order has already been picked up.'], 409);
+            if ($order->status !== 'assigned') return response()->json(['message' => 'This order is not yet eligible for pickup.'], 422);
+
+            $delivery = Delivery::where('order_id', $order->id)->lockForUpdate()->first();
+            if (!$delivery || $delivery->driver_id !== $driver->id) return response()->json(['message' => 'This order is assigned to another driver.'], 403);
+
+            $updated = $this->deliveryService->updateStatus($delivery, 'picked_up', 'Pickup verified by customer order QR scan.', null, $request->user());
+            $order->load('customer.user');
+            return $this->success([
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'customer_name' => $order->customer?->user?->name,
+                'expected_gallons' => $order->expected_empty_gallons,
+                'delivery_status' => $updated->status,
+            ], 'Order picked up successfully.');
+        });
+    }
+
+    /** Start delivery for this driver's individually validated refill-ready orders. */
+    public function bulkOutForDelivery(Request $request)
+    {
+        $driver = $this->driver($request);
+        $deliveries = Delivery::query()->where('driver_id', $driver->id)
+            ->where('status', 'ready_for_delivery')->with('order.containerIntake')->get();
+        $result = ['updated' => 0, 'failed' => []];
+
+        foreach ($deliveries as $delivery) {
+            $order = $delivery->order;
+            $intake = $order?->containerIntake;
+            $expected = max(1, (int) ($order?->expected_empty_gallons ?? 0));
+            if ($order?->status !== 'ready_for_delivery' || !$intake?->completed_at || (int) $intake->accepted_count < $expected) {
+                $result['failed'][] = ['order_id' => $delivery->order_id, 'reason' => 'Refill or physical intake verification is incomplete.'];
+                continue;
+            }
+            try {
+                $this->deliveryService->updateStatus($delivery, 'out_for_delivery', null, null, $request->user());
+                $result['updated']++;
+            } catch (\Throwable $e) {
+                $result['failed'][] = ['order_id' => $delivery->order_id, 'reason' => $e->getMessage() ?: 'Order could not be dispatched.'];
+            }
+        }
+
+        return $this->success($result);
     }
 
     /**

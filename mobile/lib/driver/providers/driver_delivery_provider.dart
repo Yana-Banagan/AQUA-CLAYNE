@@ -43,6 +43,23 @@ class DriverDeliveryProvider extends ChangeNotifier {
   bool get actionLoading => _actionLoading;
   String? get error => _error;
 
+  Future<bool> bulkOutForDelivery() async {
+    _actionLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final result = await _repo.bulkOutForDelivery();
+      await loadAssigned();
+      return (result['updated'] as num? ?? 0) > 0;
+    } catch (e) {
+      _error = e.toString();
+      return false;
+    } finally {
+      _actionLoading = false;
+      notifyListeners();
+    }
+  }
+
   List<DeliveryModel> get pickupPhase =>
       _assigned.where((d) => d.isPickupPhase).toList();
 

@@ -79,6 +79,7 @@ class QueueInfoModel {
 
 class OrderModel {
   final String id;
+  final String qrCode;
   final String orderNumber;
   final String status;
   final String containerOwnership;
@@ -102,6 +103,7 @@ class OrderModel {
 
   const OrderModel({
     required this.id,
+    this.qrCode = '',
     required this.orderNumber,
     required this.status,
     this.containerOwnership = 'CUSTOMER_OWNED',
@@ -139,6 +141,7 @@ class OrderModel {
 
     return OrderModel(
       id: m['id']?.toString() ?? '',
+      qrCode: m['qr_code']?.toString() ?? '',
       orderNumber: m['order_number']?.toString() ?? '',
       status: m['status']?.toString() ?? 'PENDING',
       containerOwnership:
@@ -251,6 +254,7 @@ class OrderModel {
   }) {
     return OrderModel(
       id: id ?? this.id,
+      qrCode: qrCode,
       orderNumber: orderNumber ?? this.orderNumber,
       status: status ?? this.status,
       containerOwnership: containerOwnership ?? this.containerOwnership,

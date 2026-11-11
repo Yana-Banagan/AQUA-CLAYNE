@@ -15,6 +15,7 @@ import 'driver_notifications_screen.dart';
 import 'pickup_batches_screen.dart';
 import 'delivery_routes_screen.dart';
 import 'driver_shell.dart';
+import 'driver_order_qr_scanner.dart';
 
 class DriverDashboardScreen extends StatefulWidget {
   const DriverDashboardScreen({super.key});
@@ -24,6 +25,19 @@ class DriverDashboardScreen extends StatefulWidget {
 }
 
 class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
+  Future<void> _bulkStartDelivery(int count) async {
+    final confirmed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+      title: const Text('Start Delivery for All Ready Orders?'),
+      content: Text('Are you sure you want to mark $count ready orders as Out for Delivery? Customers will receive a notification that their orders are on the way.'),
+      actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirm All'))],
+    ));
+    if (confirmed != true || !mounted) return;
+    final provider = context.read<DriverDeliveryProvider>();
+    final ok = await provider.bulkOutForDelivery();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? 'Eligible orders are out for delivery.' : provider.error ?? 'No ready orders were updated.')));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -547,6 +561,28 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: AppSpacing.compact),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      icon: const Icon(Icons.qr_code_scanner),
+                      label: const Text('SCAN CUSTOMER ORDER QR'),
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DriverOrderQrScanner())).then((_) => _loadData()),
+                    ),
+                  ),
+                  Builder(builder: (context) {
+                    final readyCount = prov.assigned.where((d) => d.status.toLowerCase() == 'ready_for_delivery').length;
+                    if (readyCount == 0) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.compact),
+                      child: SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                        icon: const Icon(Icons.local_shipping_outlined),
+                        label: Text('MARK ALL $readyCount READY ORDERS OUT FOR DELIVERY'),
+                        onPressed: prov.actionLoading ? null : () => _bulkStartDelivery(readyCount),
+                      )),
+                    );
+                  }),
                   const SizedBox(height: AppSpacing.compact),
 
                   // ── Quick Actions ────────────────────────────────────────

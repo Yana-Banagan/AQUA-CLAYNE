@@ -29,6 +29,9 @@
         </div>
 
         <div class="header-action-group">
+            <button type="button" class="btn-queue-link" id="confirmAllOrders" data-url="{{ route('admin.orders.confirm-all') }}" data-count="{{ $stats['pending'] }}">
+                Confirm All Orders
+            </button>
             <a href="{{ route('admin.refill-queue.index') }}" class="btn-queue-link">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <polyline points="23 4 23 10 17 10"></polyline>

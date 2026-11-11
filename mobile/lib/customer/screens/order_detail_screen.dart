@@ -19,6 +19,7 @@ import 'submit_complaint_screen.dart';
 import '../../core/config/station_config.dart';
 import '../data/payment_repository.dart';
 import '../widgets/order_driver_tracking_map.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final String orderId;
@@ -982,6 +983,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
           _buildOrderSummaryCard(order),
           const Divider(height: 24, color: Color(0xFFEAF4FC)),
           _buildPaymentCard(order),
+          if (order.qrCode.isNotEmpty) ...[
+            const Divider(height: 24, color: Color(0xFFEAF4FC)),
+            Center(child: Column(children: [
+              const Text('PRESENT THIS QR CODE AT PICKUP', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF064B87))),
+              const SizedBox(height: 10),
+              GestureDetector(
+                onTap: () => showDialog(context: context, builder: (_) => Dialog(child: Padding(padding: const EdgeInsets.all(24), child: QrImageView(data: order.qrCode, size: 280)))),
+                child: QrImageView(data: order.qrCode, size: 170),
+              ),
+              const Text('Tap to enlarge • Available in Order Details'),
+            ])),
+          ],
           if (!order.isStationPickup && _hasProofOfDelivery(order)) ...[
             const Divider(height: 24, color: Color(0xFFEAF4FC)),
             _buildProofOfDeliveryCard(context, order),

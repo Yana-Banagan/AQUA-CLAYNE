@@ -47,6 +47,12 @@ class DeliveryRepository {
     }, auth: true);
   }
 
+  Future<Map<String, dynamic>> bulkOutForDelivery() async {
+    final result = await _api.post('/driver/deliveries/out-for-delivery/bulk', const {}, auth: true);
+    if (result is Map && result['data'] is Map) return Map<String, dynamic>.from(result['data'] as Map);
+    return result is Map ? Map<String, dynamic>.from(result) : <String, dynamic>{};
+  }
+
   // ================================================================
   // STATUS TRANSITIONS (Laravel API PATCH /driver/deliveries/{id}/status)
   // ================================================================
