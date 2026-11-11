@@ -376,7 +376,7 @@ class DashboardController extends Controller
             ->values();
 
         $lowStockItems = Cache::remember('admin:dashboard:lowstock-preview', now()->addSeconds(30), function () {
-            return Inventory::with('product:id,name,type,price')
+            return Inventory::with('product:id,name,product_type,price')
                 ->whereColumn('quantity_on_hand', '<=', 'reorder_level')
                 ->take(4)
                 ->get()

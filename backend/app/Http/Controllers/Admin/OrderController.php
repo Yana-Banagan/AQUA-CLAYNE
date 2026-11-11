@@ -41,7 +41,7 @@ class OrderController extends Controller
             'customer.user:id,name,phone,email,avatar_path',
             'address:id,customer_id,address_line,barangay,city',
             'items:id,order_id,product_id,quantity,unit_price',
-            'items.product:id,name,type',
+            'items.product:id,name,product_type',
             'delivery:id,order_id,driver_id,status',
             'delivery.driver:id,user_id,vehicle_plate',
             'delivery.driver.user:id,name,phone',
@@ -105,7 +105,7 @@ class OrderController extends Controller
                 'customer.user:id,name,phone',
                 'address:id,customer_id,address_line,barangay,city',
                 'items:id,order_id,product_id,quantity,unit_price',
-                'items.product:id,name,type',
+                'items.product:id,name,product_type',
                 'rfidTransactions' => fn ($query) => $query->with('rfidTag.gallon')->orderByDesc('created_at')->orderByDesc('id'),
             ])
             ->latest('created_at')
