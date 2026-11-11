@@ -45,7 +45,7 @@ class OrderController extends Controller
             'delivery:id,order_id,driver_id,status',
             'delivery.driver:id,user_id,vehicle_plate',
             'delivery.driver.user:id,name,phone',
-            'containerIntake:id,order_id,status,accepted_count,rejected_count',
+            'containerIntake',
             'payment:id,order_id,status,method,amount',
         ])->latest('created_at');
 

@@ -30,6 +30,11 @@ class CustomerAddress extends Model
         'is_default' => 'boolean',
     ];
 
+    public function getAddressLine1Attribute(): ?string
+    {
+        return $this->attributes['address_line'] ?? null;
+    }
+
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);

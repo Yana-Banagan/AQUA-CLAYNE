@@ -2,7 +2,7 @@ name: mobile
 description: "A new Flutter project."
 publish_to: "none"
 
-version: 1.0.0+1
+version: 1.0.0+3
 
 environment:
   sdk: ^3.13.1
@@ -53,4 +53,3 @@ flutter:
     - assets/images/driver_dashboard_bg.png
     - assets/images/driver_dashboard_background.png
     - assets/videos/aqua_clayne_tutorial.mp4
-

@@ -212,9 +212,9 @@ class DeliveryController extends Controller
         $archivedDeliveries = Delivery::whereIn('status', $completedStatuses)
             ->whereRaw('COALESCE(delivered_at, created_at) < ?', [$archiveCutoff])
             ->with([
-                'order:id,order_number,customer_id',
+                'order:id,order_number,customer_id,address_id',
                 'order.customer.user:id,name,phone',
-                'order.address:id,order_id,address_line1,barangay',
+                'order.address:id,customer_id,address_line,barangay,city',
                 'driver.user:id,name',
             ])
             ->orderByRaw('COALESCE(delivered_at, created_at) DESC')
@@ -300,12 +300,12 @@ class DeliveryController extends Controller
             ->whereDoesntHave('delivery', fn($q) => $q->whereNotNull('driver_id'))
             ->with([
                 'customer.user:id,name',
-                'address:id,order_id,address_line',
+                'address:id,customer_id,address_line,barangay,city',
                 'delivery:id,order_id',
             ])
             ->latest('created_at')
             ->take(20)
-            ->get(['id', 'order_number', 'customer_id', 'created_at']);
+            ->get(['id', 'order_number', 'customer_id', 'address_id', 'created_at']);
 
         // ------------------------------------------------------------------
         // SIDEBAR BADGE COUNTS — populated via AdminSharedDataService
