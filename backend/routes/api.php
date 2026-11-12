@@ -70,8 +70,9 @@ Route::prefix('v1')->group(function () {
     )->middleware('auth:sanctum');
 
     // Social OAuth routes (Google & Facebook)
-    Route::get('/auth/social/{provider}/redirect', [SocialAuthController::class, 'redirect']);
-    Route::get('/auth/social/{provider}/callback', [SocialAuthController::class, 'callback']);
+    Route::get('/auth/social/{provider}/redirect', [SocialAuthController::class, 'redirect'])->middleware('throttle:auth-login');
+    Route::post('/auth/social/{provider}/mobile/redirect', [SocialAuthController::class, 'mobileRedirect'])->middleware('throttle:auth-login');
+    Route::post('/auth/social/exchange', [SocialAuthController::class, 'exchange'])->middleware('throttle:auth-login');
     Route::post('/auth/social/{provider}/token', [SocialAuthController::class, 'verifyToken'])->middleware('throttle:auth-login');
     Route::post('/auth/social/link', [SocialAuthController::class, 'linkAccount'])->middleware('throttle:auth-login');
     Route::post('/auth/social/{provider}/link-current', [SocialAuthController::class, 'linkCurrentAccount'])->middleware('auth:sanctum');
@@ -494,4 +495,3 @@ Route::middleware(['rfid.device', 'throttle:120,1'])->prefix('iot/rfid')->group(
     Route::post('/heartbeat', [\App\Http\Controllers\Api\Iot\RfidDeviceController::class, 'heartbeat']);
     Route::post('/scan', [\App\Http\Controllers\Api\Iot\RfidDeviceController::class, 'scan']);
 });
-

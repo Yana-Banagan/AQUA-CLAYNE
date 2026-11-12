@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../api/api_client.dart';
 import '../models/user_model.dart';
 import '../repositories/auth_repository.dart';
@@ -7,13 +8,7 @@ import '../services/realtime_service.dart';
 
 enum AuthStatus { initial, authenticated, unauthenticated, loading }
 
-enum SocialAuthStatus {
-  success,
-  needsLinking,
-  unconfigured,
-  canceled,
-  error,
-}
+enum SocialAuthStatus { success, needsLinking, unconfigured, canceled, error }
 
 class SocialAuthResult {
   final SocialAuthStatus status;
@@ -107,9 +102,12 @@ class AuthProvider extends ChangeNotifier {
       _status = AuthStatus.authenticated;
       _onAuthenticated();
     } catch (error) {
-      final isNetworkFailure = error is ApiException &&
+      final isNetworkFailure =
+          error is ApiException &&
           (error.statusCode == null || error.statusCode! >= 500);
-      final offlineUser = isNetworkFailure ? await _repo.tokenStorage.readOfflineUser() : null;
+      final offlineUser = isNetworkFailure
+          ? await _repo.tokenStorage.readOfflineUser()
+          : null;
       if (offlineUser != null && offlineUser['id'] != null) {
         _user = UserModel.fromMap(offlineUser);
         _repo.api.setOfflineOwner(_user!.id);
@@ -229,7 +227,10 @@ class AuthProvider extends ChangeNotifier {
       final redirectUrl = await _repo.getSocialRedirectUrl(provider);
       if (redirectUrl != null && redirectUrl.isNotEmpty) {
         final uri = Uri.parse(redirectUrl);
-        final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        final launched = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
         if (!launched) {
           _socialLoadingProvider = null;
           _error = 'Could not open browser for $provider sign in.';
@@ -255,13 +256,16 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
 
       if (e is ApiException) {
-        if (e.statusCode == 503 || e.message.toLowerCase().contains('not configured')) {
+        if (e.statusCode == 503 ||
+            e.message.toLowerCase().contains('not configured')) {
           return SocialAuthResult(
             status: SocialAuthStatus.unconfigured,
             message: e.message,
           );
         }
-        if (e.statusCode == 409 && e.errors != null && e.errors!['needs_linking'] == true) {
+        if (e.statusCode == 409 &&
+            e.errors != null &&
+            e.errors!['needs_linking'] == true) {
           return SocialAuthResult(
             status: SocialAuthStatus.needsLinking,
             message: e.message,
@@ -313,22 +317,22 @@ class AuthProvider extends ChangeNotifier {
       } catch (_) {}
 
       _onAuthenticated();
-      return SocialAuthResult(
-        status: SocialAuthStatus.success,
-        user: _user,
-      );
+      return SocialAuthResult(status: SocialAuthStatus.success, user: _user);
     } catch (e) {
       _socialLoadingProvider = null;
       notifyListeners();
 
       if (e is ApiException) {
-        if (e.statusCode == 503 || e.message.toLowerCase().contains('not configured')) {
+        if (e.statusCode == 503 ||
+            e.message.toLowerCase().contains('not configured')) {
           return SocialAuthResult(
             status: SocialAuthStatus.unconfigured,
             message: e.message,
           );
         }
-        if (e.statusCode == 409 && e.errors != null && e.errors!['needs_linking'] == true) {
+        if (e.statusCode == 409 &&
+            e.errors != null &&
+            e.errors!['needs_linking'] == true) {
           return SocialAuthResult(
             status: SocialAuthStatus.needsLinking,
             message: e.message,
@@ -345,6 +349,44 @@ class AuthProvider extends ChangeNotifier {
         status: SocialAuthStatus.error,
         message: _formatError(e),
       );
+    }
+  }
+
+  Future<SocialAuthResult> completeMobileSocialAuth(String code) async {
+    _socialLoadingProvider = 'social';
+    _error = null;
+    notifyListeners();
+
+    try {
+      final data = await _repo.exchangeSocialAuthCode(code);
+      final user = UserModel.fromMap(data['user'] as Map<String, dynamic>);
+      if (user.id.isEmpty || !user.isCustomer) {
+        throw ApiException(
+          'This account is not permitted to sign in to the customer app.',
+          statusCode: 403,
+        );
+      }
+
+      _user = user;
+      _repo.api.setOfflineOwner(user.id);
+      try {
+        await _repo.tokenStorage.saveOfflineUser(user.toMap());
+      } catch (_) {}
+      _status = AuthStatus.authenticated;
+      _socialLoadingProvider = null;
+      notifyListeners();
+
+      try {
+        await _repo.registerFcmToken();
+      } catch (_) {}
+      _onAuthenticated();
+
+      return SocialAuthResult(status: SocialAuthStatus.success, user: user);
+    } catch (e) {
+      _socialLoadingProvider = null;
+      _error = _formatError(e);
+      notifyListeners();
+      return SocialAuthResult(status: SocialAuthStatus.error, message: _error);
     }
   }
 

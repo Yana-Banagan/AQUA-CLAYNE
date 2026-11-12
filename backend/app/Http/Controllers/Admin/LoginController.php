@@ -3,12 +3,16 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\SocialAuthController;
 use App\Models\SocialAccount;
+use App\Models\SocialAuthAttempt;
 use App\Models\User;
+use App\Services\SupabaseStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 
@@ -121,6 +125,14 @@ class LoginController extends Controller
         }
 
         try {
+            $state = 'acw_' . rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+            SocialAuthAttempt::create([
+                'flow' => 'web',
+                'provider' => $provider,
+                'state_hash' => hash('sha256', $state),
+                'expires_at' => now()->addMinutes(10),
+            ]);
+
             // Prefer the configured redirect URI from services config (.env GOOGLE_REDIRECT_URI)
             $callbackUrl = config("services.{$provider}.redirect");
             if (empty($callbackUrl)) {
@@ -142,7 +154,10 @@ class LoginController extends Controller
                 }
             }
 
-            $driver = Socialite::driver($provider)->stateless()->redirectUrl($callbackUrl);
+            $driver = Socialite::driver($provider)
+                ->stateless()
+                ->redirectUrl($callbackUrl)
+                ->with(['state' => $state]);
 
             if ($provider === 'google') {
                 $driver->scopes(['openid', 'profile', 'email']);
@@ -163,12 +178,28 @@ class LoginController extends Controller
     /**
      * Handle the OAuth callback from Google or Facebook (Web).
      */
-    public function handleProviderCallback(string $provider, Request $request)
-    {
+    public function handleProviderCallback(
+        string $provider,
+        Request $request,
+        SocialAuthController $mobileSocialAuth,
+        SupabaseStorageService $storage
+    ) {
         $provider = strtolower(trim($provider));
 
         if (!in_array($provider, $this->supportedProviders, true)) {
             return redirect()->route('admin.login')->with('error', "Unsupported social provider: {$provider}");
+        }
+
+        $state = (string) $request->query('state', '');
+        if (str_starts_with($state, 'acm_')) {
+            return $mobileSocialAuth->mobileCallback($provider, $request, $storage);
+        }
+
+        if (!preg_match('/\Aacw_[A-Za-z0-9_-]{43}\z/D', $state) || !$this->consumeWebState($provider, $state)) {
+            return redirect()->route('admin.login')->with(
+                'error',
+                'This sign-in attempt is invalid, expired, or already used. Please try again.'
+            );
         }
 
         // Check if user canceled or provider returned error
@@ -324,12 +355,35 @@ class LoginController extends Controller
             return redirect()->intended(route('customer.index'));
 
         } catch (\Throwable $e) {
-            report($e);
+            Log::warning('Web social sign-in failed', [
+                'provider' => $provider,
+                'exception' => get_class($e),
+            ]);
             return redirect()->route('admin.login')->with(
                 'error',
                 'Authentication with ' . ucfirst($provider) . ' failed. Please try again.'
             );
         }
+    }
+
+    protected function consumeWebState(string $provider, string $state): bool
+    {
+        return DB::transaction(function () use ($provider, $state) {
+            $attempt = SocialAuthAttempt::where('flow', 'web')
+                ->where('provider', $provider)
+                ->where('state_hash', hash('sha256', $state))
+                ->lockForUpdate()
+                ->first();
+
+            if (!$attempt || $attempt->expires_at->isPast() || $attempt->state_used_at !== null) {
+                return false;
+            }
+
+            $attempt->state_used_at = now();
+            $attempt->save();
+
+            return true;
+        });
     }
 
     /**

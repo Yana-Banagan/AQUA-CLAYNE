@@ -194,8 +194,13 @@ Route::middleware('guest')->group(function () {
     // Social Authentication (Google & Facebook)
     Route::get('/auth/{provider}/redirect', [LoginController::class, 'redirectToProvider'])->name('auth.social.redirect');
     Route::get('/auth/{provider}/callback', [LoginController::class, 'handleProviderCallback'])->name('auth.social.callback');
-    Route::get('/api/v1/auth/social/{provider}/callback', [LoginController::class, 'handleProviderCallback'])->name('auth.social.callback.api-alias');
 });
+
+// OAuth providers return here for both web and mobile sign-ins. The signed
+// flow state determines which destination is used; this route must not be
+// behind guest middleware because a browser may already have a web session.
+Route::get('/api/v1/auth/social/{provider}/callback', [LoginController::class, 'handleProviderCallback'])
+    ->name('auth.social.callback.api-alias');
 
 // Staff Dashboard Route Alias
 Route::middleware(['auth', 'role:admin,staff'])->group(function () {

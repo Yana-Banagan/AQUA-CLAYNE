@@ -4,11 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\Customer;
 use App\Models\SocialAccount;
+use App\Models\SocialAuthAttempt;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Hash;
+use Laravel\Socialite\Facades\Socialite;
+use Laravel\Socialite\Two\User as SocialiteUser;
 use Tests\TestCase;
 
 class SocialAuthTest extends TestCase
@@ -28,6 +31,113 @@ class SocialAuthTest extends TestCase
                 'status' => 'unconfigured',
                 'provider' => 'google',
             ]);
+    }
+
+    public function test_mobile_redirect_stores_hashed_state_and_uses_backend_callback(): void
+    {
+        Config::set('services.google.client_id', 'google-client-id');
+        Config::set('services.google.client_secret', 'google-client-secret');
+        Config::set('services.google.redirect', 'https://aqua-clayne-production.up.railway.app/api/v1/auth/social/google/callback');
+
+        $response = $this->postJson('/api/v1/auth/social/google/mobile/redirect');
+        $response->assertOk()
+            ->assertJsonPath('data.provider', 'google');
+
+        $redirectUrl = $response->json('data.redirect_url');
+        parse_str((string) parse_url($redirectUrl, PHP_URL_QUERY), $query);
+        $state = $query['state'] ?? '';
+
+        $this->assertMatchesRegularExpression('/\Aacm_[A-Za-z0-9_-]{43}\z/', $state);
+        $this->assertSame(
+            'https://aqua-clayne-production.up.railway.app/api/v1/auth/social/google/callback',
+            $query['redirect_uri'] ?? null
+        );
+        $this->assertDatabaseHas('social_auth_attempts', [
+            'flow' => 'mobile',
+            'provider' => 'google',
+            'state_hash' => hash('sha256', $state),
+            'code_hash' => null,
+        ]);
+        $this->assertDatabaseMissing('social_auth_attempts', ['state_hash' => $state]);
+    }
+
+    public function test_web_redirect_keeps_a_separate_validated_state(): void
+    {
+        Config::set('services.google.client_id', 'google-client-id');
+        Config::set('services.google.client_secret', 'google-client-secret');
+        Config::set('services.google.redirect', 'https://aqua-clayne-production.up.railway.app/api/v1/auth/social/google/callback');
+
+        $response = $this->get('/auth/google/redirect');
+        $response->assertRedirect();
+
+        parse_str((string) parse_url($response->headers->get('Location'), PHP_URL_QUERY), $query);
+        $state = $query['state'] ?? '';
+
+        $this->assertMatchesRegularExpression('/\Aacw_[A-Za-z0-9_-]{43}\z/', $state);
+        $this->assertDatabaseHas('social_auth_attempts', [
+            'flow' => 'web',
+            'provider' => 'google',
+            'state_hash' => hash('sha256', $state),
+        ]);
+    }
+
+    public function test_mobile_callback_redirects_with_only_a_hashed_one_time_code(): void
+    {
+        Config::set('services.google.client_id', 'google-client-id');
+        Config::set('services.google.client_secret', 'google-client-secret');
+
+        $user = User::create([
+            'name' => 'OAuth Customer',
+            'username' => 'oauth.customer',
+            'email' => 'oauth.customer@example.com',
+            'password_hash' => Hash::make('Secret123!'),
+            'role' => 'customer',
+            'status' => 'active',
+        ]);
+        $user->customer()->create();
+        SocialAccount::create([
+            'user_id' => $user->id,
+            'provider' => 'google',
+            'provider_user_id' => 'google_oauth_customer',
+            'provider_email' => $user->email,
+        ]);
+
+        $state = 'acm_' . rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+        $attempt = SocialAuthAttempt::create([
+            'flow' => 'mobile',
+            'provider' => 'google',
+            'state_hash' => hash('sha256', $state),
+            'expires_at' => now()->addMinutes(10),
+        ]);
+
+        $socialUser = (new SocialiteUser())->map([
+            'id' => 'google_oauth_customer',
+            'name' => 'OAuth Customer',
+            'email' => $user->email,
+        ]);
+        $provider = \Mockery::mock();
+        $provider->shouldReceive('scopes')->once()->andReturnSelf();
+        $provider->shouldReceive('stateless')->once()->andReturnSelf();
+        $provider->shouldReceive('user')->once()->andReturn($socialUser);
+        Socialite::shouldReceive('driver')->once()->with('google')->andReturn($provider);
+
+        $response = $this->get('/api/v1/auth/social/google/callback?' . http_build_query([
+            'state' => $state,
+            'code' => 'provider-authorization-code',
+        ]));
+
+        $response->assertOk()
+            ->assertSee('aquaclayne://auth/callback?status=authenticated', false)
+            ->assertDontSee('token=', false)
+            ->assertDontSee('provider-authorization-code', false);
+
+        $this->assertSame(
+            1,
+            preg_match('/status=authenticated&amp;code=([A-Za-z0-9_-]{43})/', $response->getContent(), $matches)
+        );
+        $this->assertSame(hash('sha256', $matches[1]), $attempt->fresh()->code_hash);
+        $this->assertNotSame($matches[1], $attempt->fresh()->code_hash);
+        $this->assertNotNull($attempt->fresh()->state_used_at);
     }
 
     public function test_unsupported_provider_is_rejected(): void
@@ -236,6 +346,82 @@ class SocialAuthTest extends TestCase
             'provider' => 'facebook',
             'provider_user_id' => 'fb_phone_only_user_777',
         ]);
+    }
+
+    public function test_mobile_social_code_exchange_returns_sanctum_token_once(): void
+    {
+        $user = User::create([
+            'name' => 'Mobile Customer',
+            'username' => 'mobile.customer',
+            'email' => 'mobile.customer@example.com',
+            'password_hash' => Hash::make('Secret123!'),
+            'role' => 'customer',
+            'status' => 'active',
+        ]);
+        $user->customer()->create();
+
+        $code = str_repeat('a', 43);
+        $attempt = SocialAuthAttempt::create([
+            'flow' => 'mobile',
+            'provider' => 'google',
+            'state_hash' => hash('sha256', 'state_' . str_repeat('b', 32)),
+            'code_hash' => hash('sha256', $code),
+            'user_id' => $user->id,
+            'expires_at' => now()->addSeconds(60),
+            'state_used_at' => now(),
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/social/exchange', ['code' => $code]);
+        $response->assertOk()
+            ->assertJsonPath('message', 'Authentication successful.')
+            ->assertJsonPath('data.user.id', $user->id)
+            ->assertJsonPath('data.user.role', 'customer')
+            ->assertJsonStructure(['data' => ['token', 'user' => ['id', 'name', 'email', 'role']]]);
+
+        $this->assertNotEmpty($response->json('data.token'));
+        $this->assertNotSame($code, $response->json('data.token'));
+        $this->assertNotNull($attempt->fresh()->used_at);
+
+        $this->postJson('/api/v1/auth/social/exchange', ['code' => $code])
+            ->assertStatus(422);
+    }
+
+    public function test_mobile_social_code_exchange_rejects_expired_and_invalid_codes(): void
+    {
+        $user = User::create([
+            'name' => 'Expired Customer',
+            'username' => 'expired.customer',
+            'email' => 'expired.customer@example.com',
+            'password_hash' => Hash::make('Secret123!'),
+            'role' => 'customer',
+            'status' => 'active',
+        ]);
+        $user->customer()->create();
+
+        $expiredCode = str_repeat('c', 43);
+        SocialAuthAttempt::create([
+            'flow' => 'mobile',
+            'provider' => 'facebook',
+            'state_hash' => hash('sha256', 'state_' . str_repeat('d', 32)),
+            'code_hash' => hash('sha256', $expiredCode),
+            'user_id' => $user->id,
+            'expires_at' => now()->subSecond(),
+            'state_used_at' => now()->subMinute(),
+        ]);
+
+        $this->postJson('/api/v1/auth/social/exchange', ['code' => $expiredCode])
+            ->assertStatus(422);
+        $this->postJson('/api/v1/auth/social/exchange', ['code' => str_repeat('e', 43)])
+            ->assertStatus(422);
+    }
+
+    public function test_invalid_mobile_callback_state_does_not_redirect_to_web_dashboard(): void
+    {
+        $response = $this->get('/api/v1/auth/social/google/callback?state=acm_invalid');
+
+        $response->assertOk()
+            ->assertSee('This sign-in attempt is invalid or has expired')
+            ->assertDontSee('customer.index');
     }
 
     public function test_unlink_account_prevents_lockout_if_no_password(): void

@@ -17,6 +17,7 @@ import 'core/config/env.dart';
 import 'core/theme/app_theme.dart';
 import 'core/providers/auth_provider.dart';
 import 'core/screens/splash_screen.dart';
+import 'core/widgets/social_auth_link_handler.dart';
 import 'customer/screens/customer_shell.dart';
 
 // Customer data
@@ -240,7 +241,11 @@ class AquaClayneApp extends StatelessWidget {
                 ),
               );
             }),
-            Expanded(child: OfflineSyncGate(child: child ?? const SizedBox.shrink())),
+            Expanded(
+              child: SocialAuthLinkHandler(
+                child: OfflineSyncGate(child: child ?? const SizedBox.shrink()),
+              ),
+            ),
           ],
         ),
         home: const SplashScreen(),

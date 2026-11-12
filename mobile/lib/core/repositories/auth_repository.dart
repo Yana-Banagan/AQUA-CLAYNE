@@ -2,6 +2,7 @@ import 'dart:io';
 
 import '../api/api_client.dart';
 import '../services/token_storage.dart';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 class AuthRepository {
@@ -73,14 +74,18 @@ class AuthRepository {
   // ================================================================
   // UPDATE PROFILE
   // ================================================================
-  Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> payload) async {
+  Future<Map<String, dynamic>> updateProfile(
+    Map<String, dynamic> payload,
+  ) async {
     final data = await api.patch('/auth/profile', payload);
     if (data is Map<String, dynamic>) return data;
     return {};
   }
 
   Future<Map<String, dynamic>> uploadProfilePhoto(File photo) async {
-    final data = await api.postMultipart('/auth/profile/photo', {'photo': photo});
+    final data = await api.postMultipart('/auth/profile/photo', {
+      'photo': photo,
+    });
     if (data is Map<String, dynamic>) return data;
     return {};
   }
@@ -105,13 +110,23 @@ class AuthRepository {
   }
 
   Future<String> verifyPasswordOtp(String email, String otp) async {
-    final data = await api.post('/auth/password/verify-otp', {'email': email, 'otp': otp}, auth: false);
+    final data = await api.post('/auth/password/verify-otp', {
+      'email': email,
+      'otp': otp,
+    }, auth: false);
     return data['reset_token']?.toString() ?? '';
   }
 
-  Future<void> resetPassword({required String email, required String resetToken, required String password}) async {
+  Future<void> resetPassword({
+    required String email,
+    required String resetToken,
+    required String password,
+  }) async {
     await api.post('/auth/password/reset', {
-      'email': email, 'reset_token': resetToken, 'password': password, 'password_confirmation': password,
+      'email': email,
+      'reset_token': resetToken,
+      'password': password,
+      'password_confirmation': password,
     }, auth: false);
   }
 
@@ -131,11 +146,39 @@ class AuthRepository {
 
   /// Request the official OAuth authorization URL for Google or Facebook from the backend.
   Future<String?> getSocialRedirectUrl(String provider) async {
-    final data = await api.get('/auth/social/$provider/redirect?format=json', auth: false);
+    final data = await api.post(
+      '/auth/social/$provider/mobile/redirect',
+      {},
+      auth: false,
+    );
     if (data is Map<String, dynamic>) {
       return data['redirect_url']?.toString();
     }
     return null;
+  }
+
+  Future<Map<String, dynamic>> exchangeSocialAuthCode(String code) async {
+    final data = await api.post('/auth/social/exchange', {
+      'code': code,
+    }, auth: false);
+    if (data is! Map<String, dynamic>) {
+      throw ApiException('The sign-in response was invalid.');
+    }
+
+    final token = data['token']?.toString();
+    if (token == null || token.isEmpty) {
+      throw ApiException(
+        'The sign-in response did not contain an access token.',
+      );
+    }
+    if (data['user'] is! Map<String, dynamic>) {
+      throw ApiException(
+        'The sign-in response did not contain a customer profile.',
+      );
+    }
+
+    await tokenStorage.saveToken(token);
+    return data;
   }
 
   /// Verify and sign in using a social OAuth token or credentials.
@@ -148,7 +191,11 @@ class AuthRepository {
     if (token != null) payload['access_token'] = token;
     if (mockUser != null) payload['mock_user'] = mockUser;
 
-    final data = await api.post('/auth/social/$provider/token', payload, auth: false);
+    final data = await api.post(
+      '/auth/social/$provider/token',
+      payload,
+      auth: false,
+    );
 
     if (data is Map<String, dynamic>) {
       final authToken = data['token']?.toString();
@@ -181,7 +228,10 @@ class AuthRepository {
   }
 
   /// Link social identity for an already authenticated customer.
-  Future<Map<String, dynamic>> linkCurrentAccount(String provider, {required String token}) async {
+  Future<Map<String, dynamic>> linkCurrentAccount(
+    String provider, {
+    required String token,
+  }) async {
     final data = await api.post('/auth/social/$provider/link-current', {
       'access_token': token,
     }, auth: true);
@@ -202,4 +252,3 @@ class AuthRepository {
     return {};
   }
 }
-

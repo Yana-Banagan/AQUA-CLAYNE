@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\SocialAccount;
+use App\Models\SocialAuthAttempt;
 use App\Models\User;
 use App\Services\SupabaseStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 
@@ -18,9 +20,15 @@ class SocialAuthController extends Controller
     protected array $supportedProviders = ['google', 'facebook'];
 
     /**
-     * Start the official OAuth redirect flow for Google or Facebook.
+     * Start the mobile OAuth flow. The legacy redirect URL remains an alias
+     * so older clients are not sent through an uncorrelated OAuth request.
      */
     public function redirect(string $provider, Request $request)
+    {
+        return $this->mobileRedirect($provider, $request);
+    }
+
+    public function mobileRedirect(string $provider, Request $request)
     {
         $provider = strtolower(trim($provider));
         if (!in_array($provider, $this->supportedProviders, true)) {
@@ -41,13 +49,17 @@ class SocialAuthController extends Controller
         }
 
         try {
-            $driver = Socialite::driver($provider)->stateless();
+            $state = 'acm_' . rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+            SocialAuthAttempt::create([
+                'flow' => 'mobile',
+                'provider' => $provider,
+                'state_hash' => hash('sha256', $state),
+                'expires_at' => now()->addMinutes(10),
+            ]);
 
-            if ($provider === 'google') {
-                $driver->scopes(['openid', 'profile', 'email']);
-            } elseif ($provider === 'facebook') {
-                $driver->scopes(['email', 'public_profile']);
-            }
+            $driver = $this->configuredProviderDriver($provider)
+                ->stateless()
+                ->with(['state' => $state]);
 
             $targetUrl = $driver->redirect()->getTargetUrl();
 
@@ -66,57 +78,119 @@ class SocialAuthController extends Controller
     }
 
     /**
-     * Handle the OAuth callback from Google or Facebook.
+     * Handle an OAuth callback correlated to a mobile sign-in attempt.
      */
     public function callback(string $provider, Request $request, SupabaseStorageService $storage)
     {
+        return $this->mobileCallback($provider, $request, $storage);
+    }
+
+    public function mobileCallback(string $provider, Request $request, SupabaseStorageService $storage)
+    {
         $provider = strtolower(trim($provider));
         if (!in_array($provider, $this->supportedProviders, true)) {
-            return $this->error("Unsupported social provider: {$provider}", 422);
+            return $this->renderMobileCallbackPage('error', null, 'Unsupported sign-in provider. Please return to the app and try again.');
         }
 
-        // Check for error returned by provider (e.g. user canceled consent)
-        if ($request->has('error') || $request->has('error_code')) {
-            $errorCode = $request->input('error') ?? $request->input('error_code');
-            $errorMessage = $request->input('error_description') ?? 'Authentication was canceled or denied by the user.';
+        $state = (string) $request->query('state', '');
+        if (!preg_match('/\Aacm_[A-Za-z0-9_-]{43}\z/D', $state)) {
+            return $this->renderMobileCallbackPage('error', null, 'This sign-in attempt is invalid or has expired. Please return to the app and try again.');
+        }
 
-            if ($request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'status' => 'canceled',
-                    'message' => $errorMessage,
-                    'error_code' => $errorCode,
-                ], 400);
+        $attempt = DB::transaction(function () use ($provider, $state) {
+            $attempt = SocialAuthAttempt::where('flow', 'mobile')
+                ->where('provider', $provider)
+                ->where('state_hash', hash('sha256', $state))
+                ->lockForUpdate()
+                ->first();
+
+            if (!$attempt || $attempt->expires_at->isPast() || $attempt->state_used_at !== null) {
+                return null;
             }
 
-            return $this->renderCallbackHtml([
-                'success' => false,
-                'status' => 'canceled',
-                'message' => $errorMessage,
-            ]);
+            $attempt->state_used_at = now();
+            $attempt->save();
+
+            return $attempt;
+        });
+
+        if (!$attempt) {
+            return $this->renderMobileCallbackPage('error', null, 'This sign-in attempt is invalid, expired, or already used. Please return to the app and try again.');
+        }
+
+        if ($request->has('error') || $request->has('error_code')) {
+            return $this->renderMobileCallbackPage('canceled', null, ucfirst($provider) . ' sign-in was canceled. You can return to the app and try again.');
         }
 
         if (!$this->isProviderConfigured($provider)) {
-            return $this->error(ucfirst($provider) . ' Sign-In is not configured on the server.', 503);
+            return $this->renderMobileCallbackPage('error', null, ucfirst($provider) . ' sign-in is not configured on the server. Please try again later.');
         }
 
         try {
-            $socialiteUser = Socialite::driver($provider)->stateless()->user();
-            return $this->processSocialUser($provider, $socialiteUser, $storage, $request);
+            $socialiteUser = $this->configuredProviderDriver($provider)->stateless()->user();
+            return $this->processSocialUser($provider, $socialiteUser, $storage, $request, $attempt);
         } catch (\Throwable $e) {
-            report($e);
-            $msg = 'Failed to validate ' . ucfirst($provider) . ' credentials. Please try again.';
+            Log::warning('Mobile social sign-in failed', [
+                'provider' => $provider,
+                'exception' => get_class($e),
+            ]);
+            return $this->renderMobileCallbackPage('error', null, 'Could not verify your ' . ucfirst($provider) . ' sign-in. Please return to the app and try again.');
+        }
+    }
 
-            if ($request->wantsJson()) {
-                return $this->error($msg, 401);
+    /**
+     * Exchange a short-lived, single-use mobile authorization code for a
+     * Sanctum token. Only the code hash is persisted.
+     */
+    public function exchange(Request $request, SupabaseStorageService $storage)
+    {
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'regex:/\A[A-Za-z0-9_-]{43}\z/D'],
+        ]);
+        $codeHash = hash('sha256', $validated['code']);
+
+        $result = DB::transaction(function () use ($codeHash) {
+            $attempt = SocialAuthAttempt::where('flow', 'mobile')
+                ->whereIn('provider', $this->supportedProviders)
+                ->where('code_hash', $codeHash)
+                ->lockForUpdate()
+                ->first();
+
+            if (
+                !$attempt ||
+                !$attempt->state_used_at ||
+                $attempt->expires_at->isPast() ||
+                $attempt->used_at !== null
+            ) {
+                return ['status' => 'invalid'];
             }
 
-            return $this->renderCallbackHtml([
-                'success' => false,
-                'status' => 'error',
-                'message' => $msg,
-            ]);
+            $attempt->used_at = now();
+            $attempt->save();
+
+            $user = User::with('customer')->find($attempt->user_id);
+            if (!$user || $user->status !== 'active' || $user->role !== 'customer' || !$user->customer) {
+                return ['status' => 'forbidden'];
+            }
+
+            return [
+                'status' => 'ok',
+                'user' => $user,
+                'token' => $user->createToken('api')->plainTextToken,
+            ];
+        });
+
+        if ($result['status'] === 'forbidden') {
+            return $this->error('This customer account is no longer available for sign-in.', 403);
         }
+        if ($result['status'] !== 'ok') {
+            return $this->error('The sign-in code is invalid, expired, or already used. Please try again.', 422);
+        }
+
+        return $this->success([
+            'token' => $result['token'],
+            'user' => $this->userData($result['user'], $storage),
+        ], 'Authentication successful.');
     }
 
     /**
@@ -161,7 +235,10 @@ class SocialAuthController extends Controller
             $socialiteUser = Socialite::driver($provider)->stateless()->userFromToken($token);
             return $this->processSocialUser($provider, $socialiteUser, $storage, $request);
         } catch (\Throwable $e) {
-            report($e);
+            Log::warning('Social provider token verification failed', [
+                'provider' => $provider,
+                'exception' => get_class($e),
+            ]);
             return $this->error('Invalid or expired ' . ucfirst($provider) . ' authentication token.', 401);
         }
     }
@@ -169,7 +246,13 @@ class SocialAuthController extends Controller
     /**
      * Process social user: login, link, or register.
      */
-    protected function processSocialUser(string $provider, $socialiteUser, SupabaseStorageService $storage, Request $request)
+    protected function processSocialUser(
+        string $provider,
+        $socialiteUser,
+        SupabaseStorageService $storage,
+        Request $request,
+        ?SocialAuthAttempt $mobileAttempt = null
+    )
     {
         $providerId = (string) $socialiteUser->getId();
         $email = $socialiteUser->getEmail();
@@ -177,6 +260,9 @@ class SocialAuthController extends Controller
         $avatar = $socialiteUser->getAvatar();
 
         if (empty($providerId)) {
+            if ($mobileAttempt) {
+                return $this->renderMobileCallbackPage('error', null, 'Could not verify your provider account. Please return to the app and try again.');
+            }
             return $this->error('Failed to obtain provider identifier.', 422);
         }
 
@@ -189,11 +275,21 @@ class SocialAuthController extends Controller
             $user = $socialAccount->user;
 
             if ($user->status !== 'active') {
+                if ($mobileAttempt) {
+                    return $this->renderMobileCallbackPage('error', null, 'Your account is inactive. Please contact the administrator.');
+                }
                 return $this->error('Your account is inactive. Please contact the administrator.', 403);
+            }
+            if ($mobileAttempt && ($user->role !== 'customer' || !$user->customer)) {
+                return $this->renderMobileCallbackPage('error', null, 'This account is not permitted to sign in to the customer app.');
             }
 
             if ($avatar && empty($socialAccount->avatar_url)) {
                 $socialAccount->update(['avatar_url' => $avatar]);
+            }
+
+            if ($mobileAttempt) {
+                return $this->completeMobileSignIn($user, $mobileAttempt);
             }
 
             $token = $user->createToken('api')->plainTextToken;
@@ -221,7 +317,18 @@ class SocialAuthController extends Controller
 
             if ($existingUser) {
                 if ($existingUser->status !== 'active') {
+                    if ($mobileAttempt) {
+                        return $this->renderMobileCallbackPage('error', null, 'Your account is inactive. Please contact the administrator.');
+                    }
                     return $this->error('Your account is inactive. Please contact the administrator.', 403);
+                }
+
+                if ($mobileAttempt) {
+                    return $this->renderMobileCallbackPage(
+                        'needs_linking',
+                        null,
+                        'An Aqua Clayne account already uses this email. Sign in with that account first, then link your social account from your profile.'
+                    );
                 }
 
                 // Security requirement: DO NOT automatically merge accounts solely because the email matches.
@@ -309,6 +416,10 @@ class SocialAuthController extends Controller
 
             return $user;
         });
+
+        if ($mobileAttempt) {
+            return $this->completeMobileSignIn($newUser, $mobileAttempt);
+        }
 
         $token = $newUser->createToken('api')->plainTextToken;
         $data = [
@@ -432,7 +543,10 @@ class SocialAuthController extends Controller
                 'user' => $this->userData($user->fresh(), $storage),
             ], ucfirst($provider) . ' account successfully linked.');
         } catch (\Throwable $e) {
-            report($e);
+            Log::warning('Social account linking failed', [
+                'provider' => $provider,
+                'exception' => get_class($e),
+            ]);
             return $this->error('Failed to link ' . ucfirst($provider) . ' account.', 401);
         }
     }
@@ -488,6 +602,78 @@ class SocialAuthController extends Controller
         return !empty($clientId) && !empty($clientSecret);
     }
 
+    protected function configuredProviderDriver(string $provider)
+    {
+        $driver = Socialite::driver($provider);
+        if ($provider === 'google') {
+            $driver->scopes(['openid', 'profile', 'email']);
+        } elseif ($provider === 'facebook') {
+            $driver->scopes(['email', 'public_profile']);
+        }
+
+        return $driver;
+    }
+
+    protected function completeMobileSignIn(User $user, SocialAuthAttempt $attempt)
+    {
+        if ($user->status !== 'active' || $user->role !== 'customer' || !$user->customer) {
+            return $this->renderMobileCallbackPage('error', null, 'This account is not permitted to sign in to the customer app.');
+        }
+
+        $code = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+        $attempt->forceFill([
+            'user_id' => $user->id,
+            'code_hash' => hash('sha256', $code),
+            'expires_at' => now()->addSeconds(60),
+        ])->save();
+
+        return $this->renderMobileCallbackPage('authenticated', $code, 'Sign-in complete. Returning to the Aqua Clayne app.');
+    }
+
+    protected function renderMobileCallbackPage(string $status, ?string $code, string $message)
+    {
+        $query = ['status' => $status];
+        if ($code !== null) {
+            $query['code'] = $code;
+        }
+        $deepLink = 'aquaclayne://auth/callback?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+        $escapedDeepLink = htmlspecialchars($deepLink, ENT_QUOTES, 'UTF-8');
+        $javascriptDeepLink = json_encode(
+            $deepLink,
+            JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR
+        );
+        $escapedMessage = htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
+
+        return response(<<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Aqua Clayne sign-in</title>
+</head>
+<body>
+    <main>
+        <h1>Aqua Clayne</h1>
+        <p>{$escapedMessage}</p>
+        <p>If the app does not open automatically, reopen it and try signing in again.</p>
+        <a href="{$escapedDeepLink}">Return to the Aqua Clayne app</a>
+    </main>
+    <script>window.location.replace({$javascriptDeepLink});</script>
+</body>
+</html>
+HTML, 200, ['Content-Type' => 'text/html; charset=UTF-8']);
+    }
+
+    protected function renderCallbackHtml(array $payload)
+    {
+        return $this->renderMobileCallbackPage(
+            (string) ($payload['status'] ?? 'error'),
+            null,
+            (string) ($payload['message'] ?? 'Sign-in could not be completed. Please return to the app and try again.')
+        );
+    }
+
     protected function userData(User $user, SupabaseStorageService $storage): array
     {
         return [
@@ -504,87 +690,4 @@ class SocialAuthController extends Controller
         ];
     }
 
-    protected function renderCallbackHtml(array $payload)
-    {
-        $json = htmlspecialchars(json_encode($payload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
-        $token = htmlspecialchars($payload['data']['token'] ?? '', ENT_QUOTES, 'UTF-8');
-        $status = htmlspecialchars($payload['status'] ?? '', ENT_QUOTES, 'UTF-8');
-        $message = htmlspecialchars($payload['message'] ?? 'Authentication complete.', ENT_QUOTES, 'UTF-8');
-        $deepLink = "aquaclayne://auth/callback?status={$status}&token={$token}";
-
-        return response(<<<HTML
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AQUA CLAYNE - Authentication</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #0878C9 0%, #064B87 100%);
-            color: #ffffff;
-            text-align: center;
-            padding: 24px;
-            box-sizing: border-box;
-        }
-        .card {
-            background: rgba(255, 255, 255, 0.98);
-            color: #12344D;
-            padding: 36px 28px;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-            max-width: 420px;
-            width: 100%;
-        }
-        .logo {
-            font-size: 26px;
-            font-weight: 800;
-            color: #0878C9;
-            letter-spacing: 1px;
-            margin-bottom: 12px;
-        }
-        .message {
-            font-size: 15px;
-            color: #52718B;
-            margin: 16px 0 24px;
-            line-height: 1.5;
-        }
-        .btn {
-            display: inline-block;
-            background: linear-gradient(135deg, #0878C9, #064B87);
-            color: #ffffff;
-            text-decoration: none;
-            padding: 14px 28px;
-            border-radius: 14px;
-            font-weight: 700;
-            font-size: 15px;
-            transition: opacity 0.2s;
-        }
-        .btn:hover { opacity: 0.92; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <div class="logo">AQUA CLAYNE</div>
-        <p class="message">{$message}</p>
-        <a class="btn" href="{$deepLink}">Return to AQUA CLAYNE</a>
-    </div>
-    <script>
-        // Attempt automatic deep link navigation
-        window.location.href = "{$deepLink}";
-        // Send postMessage if inside web popup
-        if (window.opener) {
-            window.opener.postMessage({$json}, "*");
-        }
-    </script>
-</body>
-</html>
-HTML, 200, ['Content-Type' => 'text/html']);
-    }
 }
