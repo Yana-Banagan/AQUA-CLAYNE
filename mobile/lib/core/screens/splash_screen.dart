@@ -160,19 +160,17 @@ class _SplashScreenState extends State<SplashScreen>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         // ── Authentic Aqua Clayne Logo ──────────────────────────
-                        // Preserves exact 1:1 square proportions and genuine artwork.
-                        // ClipOval eliminates any square background corner edges.
+                        // Use the transparent launch artwork without a circular
+                        // mask so the logo is not given an unwanted border.
                         SizedBox(
                           width: logoSize,
                           height: logoSize,
-                          child: ClipOval(
-                            child: Image.asset(
-                              'assets/images/aqua_clayne_logo.png',
-                              width: logoSize,
-                              height: logoSize,
-                              fit: BoxFit.contain,
-                              filterQuality: FilterQuality.high,
-                            ),
+                          child: Image.asset(
+                            'assets/images/aqua_clayne_logo_splash.png',
+                            width: logoSize,
+                            height: logoSize,
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.high,
                           ),
                         ),
 

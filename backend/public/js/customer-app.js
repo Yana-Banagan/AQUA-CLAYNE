@@ -3327,7 +3327,7 @@ function navigateTo(viewId, param = null, pushHistory = true) {
 
         try {
             // 1. Update text profile info
-            const res = await apiRequest('/auth/profile', 'POST', {
+            const res = await apiRequest('/auth/profile', 'PATCH', {
                 name: name,
                 email: email,
                 phone: phone,
@@ -3356,6 +3356,10 @@ function navigateTo(viewId, param = null, pushHistory = true) {
                     body: photoData
                 });
                 const photoJson = await photoRes.json().catch(() => null);
+                if (!photoRes.ok) {
+                    const uploadMessage = photoJson?.message || 'We couldn\'t upload your profile picture. Please try again.';
+                    throw new Error(uploadMessage);
+                }
                 if (photoJson?.data?.user) {
                     AppState.user = photoJson.data.user;
                 }

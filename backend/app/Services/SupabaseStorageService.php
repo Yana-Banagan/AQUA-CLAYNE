@@ -30,12 +30,15 @@ class SupabaseStorageService
             $response = Http::withHeaders([
                 'Authorization' => "Bearer {$this->key}",
                 'Content-Type' => $mime,
+                // Profile uploads keep a stable path per user so the latest
+                // picture replaces the previous object instead of failing.
+                'x-upsert' => 'true',
             ])
                 ->connectTimeout(5)
                 ->timeout(20)
                 ->withBody($contents, $mime)
                 ->put(
-                    "{$this->url}/storage/v1/object/{$bucket}/{$path}"
+                    rtrim($this->url, '/') . "/storage/v1/object/{$bucket}/{$path}"
                 );
 
             if (!$response->successful()) {
