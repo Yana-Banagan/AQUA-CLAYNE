@@ -1,10 +1,11 @@
 #include "rfid_manager.h"
+#include "config.h"
 
 RFIDManager::RFIDManager(uint8_t ssPin, uint8_t rstPin)
     : _mfrc522(ssPin, rstPin) {}
 
 void RFIDManager::begin() {
-    SPI.begin();
+    SPI.begin(RC522_SCK_PIN, RC522_MISO_PIN, RC522_MOSI_PIN, RC522_SS_PIN);
     _mfrc522.PCD_Init();
     delay(10);
     byte version = _mfrc522.PCD_ReadRegister(MFRC522::VersionReg);

@@ -54,7 +54,7 @@ Hardware integration and firmware for the Aqua Clayne Water Refilling Station Ga
 
 ## 3. Firmware Configuration
 
-All configuration is centralized in `AquaClayne_RFID/include/config.h`:
+Hardware and server settings are in `AquaClayne_RFID/include/config.h`. Local Wi-Fi and device credentials belong in the ignored `include/secrets.h` file. Copy `include/secrets.example.h` to `include/secrets.h` on a fresh checkout.
 
 ```cpp
 // 1. Wi-Fi Settings

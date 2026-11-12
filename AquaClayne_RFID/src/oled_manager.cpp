@@ -1,9 +1,26 @@
 #include "oled_manager.h"
+#include "config.h"
 
 OLEDManager::OLEDManager(uint8_t width, uint8_t height, int8_t resetPin)
-    : _display(width, height, &Wire, resetPin), _isAvailable(false), _currentState(STATE_BOOTING) {}
+    : _display(width, height, &Wire, resetPin),
+      _lcd(LCD_I2C_ADDR, LCD_COLUMNS, LCD_ROWS),
+      _isAvailable(false), _lcdAvailable(false), _currentState(STATE_BOOTING) {}
 
 bool OLEDManager::begin(uint8_t i2cAddr) {
+    Wire.begin(LCD_SDA_PIN, LCD_SCL_PIN);
+
+    _lcd.init();
+    _lcd.backlight();
+    _lcdAvailable = true;
+    _lcd.clear();
+    writeLcdLine(0, "AQUA CLAYNE RFID");
+    writeLcdLine(1, "Starting...");
+
+    pinMode(GREEN_LED_PIN, OUTPUT);
+    pinMode(RED_LED_PIN, OUTPUT);
+    digitalWrite(GREEN_LED_PIN, LOW);
+    digitalWrite(RED_LED_PIN, LOW);
+
     if (!_display.begin(SSD1306_SWITCHCAPVCC, i2cAddr)) {
         Serial.println("[OLED] Warning: SSD1306 display not detected on I2C bus.");
         _isAvailable = false;
@@ -25,6 +42,29 @@ void OLEDManager::drawHeader() {
 
 void OLEDManager::setState(DisplayState state, const String& extraText) {
     _currentState = state;
+    updateStatusLeds(state);
+
+    String lcdLine1 = "AQUA CLAYNE RFID";
+    String lcdLine2 = "Scanner starting";
+    switch (state) {
+        case STATE_BOOTING: lcdLine1 = "STARTING DEVICE"; lcdLine2 = "Please wait"; break;
+        case STATE_CONNECTING_WIFI: lcdLine1 = "CONNECTING WIFI"; lcdLine2 = extraText; break;
+        case STATE_WIFI_CONNECTED: lcdLine1 = "WIFI CONNECTED"; lcdLine2 = extraText; break;
+        case STATE_CONNECTING_SERVER: lcdLine1 = "CONNECTING SERVER"; lcdLine2 = "Please wait"; break;
+        case STATE_DEVICE_ONLINE:
+        case STATE_WAITING_FOR_ADMIN: lcdLine1 = "SCANNER ONLINE"; lcdLine2 = "Waiting for tag"; break;
+        case STATE_READY_TO_SCAN: lcdLine1 = "RFID REGISTRATION"; lcdLine2 = "Tap tag to scan"; break;
+        case STATE_RFID_DETECTED: lcdLine1 = "TAG DETECTED"; lcdLine2 = extraText; break;
+        case STATE_REGISTERING_TAG: lcdLine1 = "REGISTERING TAG"; lcdLine2 = "Sending to server"; break;
+        case STATE_REGISTER_SUCCESS: lcdLine1 = "TAG REGISTERED"; lcdLine2 = extraText; break;
+        case STATE_DUPLICATE_TAG: lcdLine1 = "DUPLICATE TAG"; lcdLine2 = "Already assigned"; break;
+        case STATE_SESSION_EXPIRED: lcdLine1 = "SESSION EXPIRED"; lcdLine2 = "Restart registration"; break;
+        case STATE_UNAUTHORIZED: lcdLine1 = "NOT AUTHORIZED"; lcdLine2 = "Check device token"; break;
+        case STATE_SERVER_ERROR: lcdLine1 = "SERVER ERROR"; lcdLine2 = extraText; break;
+        case STATE_WIFI_DISCONNECTED: lcdLine1 = "WIFI DISCONNECTED"; lcdLine2 = "Reconnecting..."; break;
+    }
+    writeLcdLine(0, lcdLine1);
+    writeLcdLine(1, lcdLine2);
     if (!_isAvailable) return;
 
     _display.clearDisplay();
@@ -137,6 +177,11 @@ void OLEDManager::setState(DisplayState state, const String& extraText) {
 }
 
 void OLEDManager::showCustom(const String& line1, const String& line2, const String& line3) {
+    writeLcdLine(0, line1);
+    writeLcdLine(1, line2.length() > 0 ? line2 : line3);
+    const bool isError = line1.indexOf("FAILED") >= 0 || line1.indexOf("REJECTED") >= 0;
+    digitalWrite(GREEN_LED_PIN, isError ? LOW : HIGH);
+    digitalWrite(RED_LED_PIN, isError ? HIGH : LOW);
     if (!_isAvailable) return;
     _display.clearDisplay();
     drawHeader();
@@ -149,8 +194,27 @@ void OLEDManager::showCustom(const String& line1, const String& line2, const Str
 }
 
 void OLEDManager::clear() {
+    if (_lcdAvailable) _lcd.clear();
     if (!_isAvailable) return;
     _display.clearDisplay();
     _display.display();
+}
+
+void OLEDManager::writeLcdLine(uint8_t row, const String& text) {
+    if (!_lcdAvailable) return;
+    _lcd.setCursor(0, row);
+    String line = text;
+    if (line.length() > LCD_COLUMNS) line = line.substring(0, LCD_COLUMNS);
+    _lcd.print(line);
+    for (size_t i = line.length(); i < LCD_COLUMNS; ++i) _lcd.print(' ');
+}
+
+void OLEDManager::updateStatusLeds(DisplayState state) {
+    const bool isOnline = state == STATE_WIFI_CONNECTED || state == STATE_DEVICE_ONLINE ||
+        state == STATE_WAITING_FOR_ADMIN || state == STATE_READY_TO_SCAN || state == STATE_REGISTER_SUCCESS;
+    const bool isError = state == STATE_WIFI_DISCONNECTED || state == STATE_UNAUTHORIZED ||
+        state == STATE_SERVER_ERROR || state == STATE_DUPLICATE_TAG || state == STATE_SESSION_EXPIRED;
+    digitalWrite(GREEN_LED_PIN, isOnline ? HIGH : LOW);
+    digitalWrite(RED_LED_PIN, isError ? HIGH : LOW);
 }
 

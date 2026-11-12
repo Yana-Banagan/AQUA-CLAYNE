@@ -5,6 +5,7 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <LiquidCrystal_I2C.h>
 
 enum DisplayState {
     STATE_BOOTING,
@@ -34,9 +35,13 @@ public:
 
 private:
     Adafruit_SSD1306 _display;
+    LiquidCrystal_I2C _lcd;
     bool _isAvailable;
+    bool _lcdAvailable;
     DisplayState _currentState;
     void drawHeader();
+    void writeLcdLine(uint8_t row, const String& text);
+    void updateStatusLeds(DisplayState state);
 };
 
 #endif // OLED_MANAGER_H

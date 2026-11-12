@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 !.env.*.example
+# Local ESP32 Wi-Fi and device credentials
+AquaClayne_RFID/include/secrets.h
+AquaClayne_RFID/.vscode/
+.vscode/c_cpp_properties.json
 *.key
 *.pem
 *.keystore
@@ -37,6 +41,7 @@ mobile/ios/Pods/
 mobile/.pub/
 mobile/.pub-cache/
 **/build/
+**/.pio/
 **/.gradle/
 
 # SQLite / Local DBs

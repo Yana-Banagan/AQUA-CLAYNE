@@ -1,5 +1,6 @@
 #include "api_client.h"
 #include <HTTPClient.h>
+#include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include "config.h"
@@ -180,7 +181,10 @@ bool APIClient::submitOperationalScan(
         return true;
     }
 
-    outError = resDoc["error"] | ("HTTP_" + String(statusCode));
+    outError = resDoc["error"].as<String>();
+    if (outError.length() == 0) {
+        outError = String("HTTP_") + String(statusCode);
+    }
     return false;
 }
 

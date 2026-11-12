@@ -13,8 +13,10 @@ DeviceManager::DeviceManager(
     _activeCustomerName(""), _sessionExpiresIn(0) {}
 
 void DeviceManager::begin() {
-    pinMode(BUZZER_PIN, OUTPUT);
-    digitalWrite(BUZZER_PIN, LOW);
+    pinMode(BUZZER_1_PIN, OUTPUT);
+    pinMode(BUZZER_2_PIN, OUTPUT);
+    digitalWrite(BUZZER_1_PIN, LOW);
+    digitalWrite(BUZZER_2_PIN, LOW);
 
     _oled.setState(STATE_BOOTING);
     _wifi.begin();
@@ -38,9 +40,11 @@ void DeviceManager::begin() {
 }
 
 void DeviceManager::beep(int ms) {
-    digitalWrite(BUZZER_PIN, HIGH);
+    digitalWrite(BUZZER_1_PIN, HIGH);
+    digitalWrite(BUZZER_2_PIN, HIGH);
     delay(ms);
-    digitalWrite(BUZZER_PIN, LOW);
+    digitalWrite(BUZZER_1_PIN, LOW);
+    digitalWrite(BUZZER_2_PIN, LOW);
 }
 
 void DeviceManager::loop() {
