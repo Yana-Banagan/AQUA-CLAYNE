@@ -581,7 +581,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   Widget _buildHeroBanner(BuildContext context) {
     return Container(
       width: double.infinity,
-      height: 172,
+      height: 190,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFFDDF2FE), Color(0xFFC7E8FD), Color(0xFFBCE3FC)],
@@ -607,10 +607,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               left: 16,
               top: 16,
               bottom: 16,
-              width: MediaQuery.of(context).size.width * 0.48,
+              width: MediaQuery.of(context).size.width * 0.52,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.start,
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -618,7 +618,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       Text(
                         'Pure Water,\nHealthier You',
                         style: TextStyle(
-                          fontSize: 20,
+                          fontSize: 19,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF064B87),
                           height: 1.18,
@@ -626,15 +626,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       ),
                       SizedBox(height: 6),
                       Text(
-                        'Stay hydrated with\nAqua Clayne.',
+                        'Stay hydrated with Aqua Clayne.',
                         style: TextStyle(
                           fontSize: 12.5,
                           color: Color(0xFF4A6B82),
-                          height: 1.25,
+                          height: 1.2,
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 10),
                   // Order Now Pill Button
                   Material(
                     color: Colors.transparent,
