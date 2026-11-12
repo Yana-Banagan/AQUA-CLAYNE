@@ -17,8 +17,8 @@ import 'core/config/env.dart';
 import 'core/theme/app_theme.dart';
 import 'core/providers/auth_provider.dart';
 import 'core/screens/splash_screen.dart';
+import 'core/navigation/auth_navigation.dart';
 import 'core/widgets/social_auth_link_handler.dart';
-import 'customer/screens/customer_shell.dart';
 
 // Customer data
 import 'customer/data/product_repository.dart';
@@ -101,23 +101,49 @@ class AquaClayneApp extends StatelessWidget {
     offlineService.initialize();
     final authRepo = AuthRepository(apiClient, tokenStorage);
 
+    var sessionExpirationInProgress = false;
     apiClient.onSessionExpired = () {
+      if (sessionExpirationInProgress) return;
+      sessionExpirationInProgress = true;
       final appContext = navigatorKey.currentContext;
-      if (appContext != null) {
-        appContext.read<AuthProvider>().expireSession();
-        try { appContext.read<NotificationProvider>().clearSessionData(); } catch (_) {}
-        try { appContext.read<OrderProvider>().clearSessionData(); } catch (_) {}
-        try { appContext.read<PaymentProvider>().clearSessionData(); } catch (_) {}
-        try { appContext.read<AddressProvider>().clearSessionData(); } catch (_) {}
-        try { appContext.read<CreditProvider>().clearSessionData(); } catch (_) {}
-        try { appContext.read<QueueProvider>().clearSessionData(); } catch (_) {}
-        try { appContext.read<ComplaintProvider>().clearSessionData(); } catch (_) {}
-        try { appContext.read<CartProvider>().clearCart(); } catch (_) {}
+      if (appContext == null) {
+        sessionExpirationInProgress = false;
+        return;
       }
-      navigatorKey.currentState?.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const CustomerShell()),
-        (route) => false,
-      );
+
+      unawaited(() async {
+        final expiredUser = appContext.read<AuthProvider>().user;
+        appContext.read<NotificationProvider>().clearSessionData();
+        appContext.read<OrderProvider>().clearSessionData();
+        appContext.read<PaymentProvider>().clearSessionData();
+        appContext.read<AddressProvider>().clearSessionData();
+        appContext.read<CreditProvider>().clearSessionData();
+        appContext.read<QueueProvider>().clearSessionData();
+        appContext.read<ComplaintProvider>().clearSessionData();
+        if (expiredUser?.isCustomer == true) {
+          appContext.read<CartProvider>().clearCart();
+        }
+        appContext.read<DriverDeliveryProvider>().clearSessionData();
+
+        var cleanupComplete = false;
+        try {
+          cleanupComplete = await appContext
+              .read<AuthProvider>()
+              .expireSession();
+        } catch (error) {
+          debugPrint('[AquaClayneApp] Session cleanup failed: $error');
+        }
+
+        if (appContext.mounted) {
+          replaceWithLogin(
+            appContext,
+            noticeMessage: cleanupComplete
+                ? 'Your session has expired. Please sign in again.'
+                : 'Your session has expired, but some local session data could not be cleared. Please restart the app.',
+          );
+        }
+        sessionExpirationInProgress = false;
+      }());
     };
 
     // ── Repositories ───────────────────────────────────────────────
@@ -156,9 +182,7 @@ class AquaClayneApp extends StatelessWidget {
         Provider<PaymentRepository>.value(value: paymentRepo),
 
         // ── Customer state ──────────────────────────────────────────
-        ChangeNotifierProvider<CartProvider>(
-          create: (_) => CartProvider(),
-        ),
+        ChangeNotifierProvider<CartProvider>(create: (_) => CartProvider()),
         ChangeNotifierProvider<OrderProvider>(
           create: (_) => OrderProvider(orderRepo, realtimeService),
         ),
@@ -166,7 +190,8 @@ class AquaClayneApp extends StatelessWidget {
           create: (_) => AddressProvider(addressRepo),
         ),
         ChangeNotifierProvider<NotificationProvider>(
-          create: (_) => NotificationProvider(notificationRepo, realtimeService),
+          create: (_) =>
+              NotificationProvider(notificationRepo, realtimeService),
         ),
         ChangeNotifierProvider<QueueProvider>(
           create: (_) => QueueProvider(queueRepo, realtimeService),
@@ -184,8 +209,7 @@ class AquaClayneApp extends StatelessWidget {
         // ── Driver ─────────────────────────────────────────────────
         Provider<DeliveryRepository>.value(value: deliveryRepo),
         ChangeNotifierProvider<DriverDeliveryProvider>(
-          create: (_) =>
-              DriverDeliveryProvider(deliveryRepo, realtimeService),
+          create: (_) => DriverDeliveryProvider(deliveryRepo, realtimeService),
         ),
       ],
       child: MaterialApp(
@@ -196,51 +220,80 @@ class AquaClayneApp extends StatelessWidget {
         navigatorKey: navigatorKey,
         builder: (context, child) => Column(
           children: [
-            Builder(builder: (context) {
-              final offline = context.watch<OfflineService>();
-              if (!offline.isOffline && offline.pendingSyncCount == 0) return const SizedBox.shrink();
-              final message = offline.isOffline
-                  ? offline.pendingSyncCount > 0
-                      ? 'Offline · ${offline.pendingSyncCount} safe change(s) saved on this device and waiting to sync.'
-                      : 'Offline · Showing saved information where available. Some actions require a connection.'
-                  : offline.syncError != null
-                      ? '${offline.pendingSyncCount} saved change(s) still need to sync: ${offline.syncError}'
-                      : '${offline.pendingSyncCount} saved change(s) are queued for sync when the server is available.';
-              return Material(
-                color: offline.isOffline ? const Color(0xFF7C2D12) : const Color(0xFF075985),
-                child: SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Row(children: [
-                      Icon(offline.isOffline ? Icons.cloud_off_rounded : Icons.sync_rounded, color: Colors.white, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(message, style: const TextStyle(color: Colors.white, fontSize: 12))),
-                      if (!offline.isOffline && offline.pendingSyncCount > 0)
-                        TextButton(
-                          onPressed: () async {
-                            final result = await context.read<ApiClient>().syncPendingMutations();
-                            if (!context.mounted) return;
-                            context.read<OfflineService>().updateSyncState(
-                              pendingCount: result.pending,
-                              error: result.error,
-                            );
-                            if (result.synced > 0) {
-                              await Future.wait([
-                                context.read<OrderProvider>().loadOrders(),
-                                context.read<AddressProvider>().load(),
-                                context.read<NotificationProvider>().load(),
-                                context.read<PaymentProvider>().loadPayments(),
-                              ]);
-                            }
-                          },
-                          child: const Text('Retry', style: TextStyle(color: Colors.white)),
-                        ),
-                    ]),
+            Builder(
+              builder: (context) {
+                final offline = context.watch<OfflineService>();
+                if (!offline.isOffline && offline.pendingSyncCount == 0)
+                  return const SizedBox.shrink();
+                final message = offline.isOffline
+                    ? offline.pendingSyncCount > 0
+                          ? 'Offline · ${offline.pendingSyncCount} safe change(s) saved on this device and waiting to sync.'
+                          : 'Offline · Showing saved information where available. Some actions require a connection.'
+                    : offline.syncError != null
+                    ? '${offline.pendingSyncCount} saved change(s) still need to sync: ${offline.syncError}'
+                    : '${offline.pendingSyncCount} saved change(s) are queued for sync when the server is available.';
+                return Material(
+                  color: offline.isOffline
+                      ? const Color(0xFF7C2D12)
+                      : const Color(0xFF075985),
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Row(
+                        children: [
+                          Icon(
+                            offline.isOffline
+                                ? Icons.cloud_off_rounded
+                                : Icons.sync_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              message,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          if (!offline.isOffline &&
+                              offline.pendingSyncCount > 0)
+                            TextButton(
+                              onPressed: () async {
+                                final result = await context
+                                    .read<ApiClient>()
+                                    .syncPendingMutations();
+                                if (!context.mounted) return;
+                                context.read<OfflineService>().updateSyncState(
+                                  pendingCount: result.pending,
+                                  error: result.error,
+                                );
+                                if (result.synced > 0) {
+                                  await Future.wait([
+                                    context.read<OrderProvider>().loadOrders(),
+                                    context.read<AddressProvider>().load(),
+                                    context.read<NotificationProvider>().load(),
+                                    context
+                                        .read<PaymentProvider>()
+                                        .loadPayments(),
+                                  ]);
+                                }
+                              },
+                              child: const Text(
+                                'Retry',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              );
-            }),
+                );
+              },
+            ),
             Expanded(
               child: SocialAuthLinkHandler(
                 child: OfflineSyncGate(child: child ?? const SizedBox.shrink()),
@@ -293,27 +346,44 @@ class _OfflineSyncGateState extends State<OfflineSyncGate> {
         _updatePendingCount();
       };
       _retryTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-        if (!mounted || context.read<OfflineService>().isOffline || !context.read<AuthProvider>().isAuthenticated) return;
+        if (!mounted ||
+            context.read<OfflineService>().isOffline ||
+            !context.read<AuthProvider>().isAuthenticated)
+          return;
         context.read<ApiClient>().pendingMutationCount().then((count) {
-          if (mounted && count > 0) _syncAndRefresh(refreshAllOnReconnect: false);
+          if (mounted && count > 0)
+            _syncAndRefresh(refreshAllOnReconnect: false);
         });
       });
     }
-    final shouldSync = auth.isAuthenticated && !offline &&
+    final shouldSync =
+        auth.isAuthenticated &&
+        !offline &&
         (_wasOffline || ownerId != _lastOwnerId);
-    final shouldRefreshOfflineCount = auth.isAuthenticated && offline && ownerId != _lastOwnerId;
+    final shouldRefreshOfflineCount =
+        auth.isAuthenticated && offline && ownerId != _lastOwnerId;
     final reconnected = _wasOffline && !offline;
     _wasOffline = offline;
     _lastOwnerId = ownerId;
-    if (shouldSync) WidgetsBinding.instance.addPostFrameCallback((_) => _syncAndRefresh(refreshAllOnReconnect: reconnected));
-    if (shouldRefreshOfflineCount) WidgetsBinding.instance.addPostFrameCallback((_) => _updatePendingCount());
+    if (shouldSync)
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _syncAndRefresh(refreshAllOnReconnect: reconnected),
+      );
+    if (shouldRefreshOfflineCount)
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _updatePendingCount(),
+      );
   }
 
   Future<void> _updatePendingCount() async {
     if (!mounted) return;
     final api = context.read<ApiClient>();
     final count = await api.pendingMutationCount();
-    if (mounted) context.read<OfflineService>().updateSyncState(pendingCount: count, error: null);
+    if (mounted)
+      context.read<OfflineService>().updateSyncState(
+        pendingCount: count,
+        error: null,
+      );
   }
 
   Future<void> _syncAndRefresh({required bool refreshAllOnReconnect}) async {
@@ -323,7 +393,10 @@ class _OfflineSyncGateState extends State<OfflineSyncGate> {
       final api = context.read<ApiClient>();
       final result = await api.syncPendingMutations();
       if (!mounted) return;
-      context.read<OfflineService>().updateSyncState(pendingCount: result.pending, error: result.error);
+      context.read<OfflineService>().updateSyncState(
+        pendingCount: result.pending,
+        error: result.error,
+      );
       if (!context.read<AuthProvider>().isAuthenticated) return;
       if (refreshAllOnReconnect || result.synced > 0) {
         await Future.wait([

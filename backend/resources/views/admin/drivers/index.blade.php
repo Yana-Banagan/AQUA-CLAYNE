@@ -9,12 +9,14 @@
         <h1>Station Drivers</h1>
         <p>Manage authorized station personnel responsible for customer gallon pickup and return delivery.</p>
     </div>
-    <div class="header-actions">
-        <button class="primary-button" type="button" id="openRegisterDriverModal">
-            <span>＋</span>
-            <span>Register New Driver</span>
-        </button>
-    </div>
+    @if(auth()->user()->role === 'admin')
+        <div class="header-actions">
+            <button class="primary-button" type="button" id="openRegisterDriverModal">
+                <span>＋</span>
+                <span>Register New Driver</span>
+            </button>
+        </div>
+    @endif
 </div>
 
 <!-- KPI Cards -->
@@ -92,7 +94,7 @@
                                     Edit Details
                                 </a>
 
-                                <form method="POST" action="{{ route('admin.drivers.toggle-status', $driver) }}" data-confirm="{{ $driver->user?->status === 'active' ? 'Deactivate driver '.$driver->user?->name.'? Historical deliveries will be kept intact.' : 'Reactivate driver '.$driver->user?->name.'?' }}" style="display: inline;">
+                                <form method="POST" action="{{ route('admin.drivers.toggle-status', $driver) }}" data-disable-on-submit data-confirm="{{ $driver->user?->status === 'active' ? 'Deactivate driver '.$driver->user?->name.'? Historical deliveries will be kept intact.' : 'Reactivate driver '.$driver->user?->name.'?' }}" style="display: inline;">
                                     @csrf
                                     <button type="submit" class="table-action {{ $driver->user?->status === 'active' ? 'danger' : 'success' }}">
                                         {{ $driver->user?->status === 'active' ? 'Deactivate' : 'Reactivate' }}
@@ -122,5 +124,7 @@
         </div>
     @endif
 </section>
-@include('admin.drivers.partials.register-modal')
+@if(auth()->user()->role === 'admin')
+    @include('admin.drivers.partials.register-modal')
+@endif
 @endsection

@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
 use App\Models\Customer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class CustomerController extends Controller
 {
@@ -62,9 +65,58 @@ class CustomerController extends Controller
             },
             'complaints' => function ($q) {
                 $q->latest();
-            }
+            },
         ]);
 
         return view('admin.customers.show', compact('customer'));
+    }
+
+    public function edit(Customer $customer)
+    {
+        $customer->load('user');
+
+        return view('admin.customers.edit', compact('customer'));
+    }
+
+    public function update(Request $request, Customer $customer)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:150',
+            'email' => [
+                'required',
+                'email',
+                'max:150',
+                Rule::unique('users', 'email')->ignore($customer->user_id),
+            ],
+            'phone' => 'nullable|string|max:30',
+            'status' => 'required|in:active,inactive',
+            'birthdate' => 'nullable|date|before_or_equal:today',
+        ]);
+
+        DB::transaction(function () use ($customer, $data, $request) {
+            $customer->user->update([
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'phone' => $data['phone'] ?? null,
+                'status' => $data['status'],
+            ]);
+            $customer->update(['birthdate' => $data['birthdate'] ?? null]);
+
+            AuditLog::create([
+                'actor_id' => $request->user()->id,
+                'action' => 'customer.updated',
+                'table_name' => 'customers',
+                'record_id' => $customer->id,
+            ]);
+        });
+
+        Cache::store('file')->forget('admin:customers:stats');
+
+        return redirect()
+            ->route('admin.customers.show', array_merge(
+                ['customer' => $customer],
+                $request->query()
+            ))
+            ->with('success', 'Customer profile updated.');
     }
 }

@@ -2,22 +2,19 @@
 #define CONFIG_H
 
 #include <Arduino.h>
+#include "firmware_secrets.h"
 
 // =============================================================================
 // NETWORK & SERVER CONFIGURATION
 // =============================================================================
-// Update with local Wi-Fi credentials during physical setup
-#define DEFAULT_WIFI_SSID " No Internet"
-#define DEFAULT_WIFI_PASS "fyjE@561"
+#define DEFAULT_WIFI_SSID WIFI_SSID
+#define DEFAULT_WIFI_PASS WIFI_PASSWORD
 
 // Aqua Clayne Backend Base URL
 // In development, use local computer IP: e.g. "http://192.168.1.108:8000"
 // In production, use HTTPS URL: e.g. "https://aqua-clayne-production.up.railway.app"
 #define API_BASE_URL "https://aqua-clayne-production.up.railway.app"
 
-// Device Authentication Token (hashed on Laravel backend)
-// Corresponds to seeded device 'ESP32-STA-01' in rfid_devices table
-#define DEVICE_AUTH_TOKEN "ac_dev_rfid_station_bay1_secret2026"
 #define DEVICE_CODE "ESP32-STA-01"
 
 #define FIRMWARE_VERSION "1.0.0"

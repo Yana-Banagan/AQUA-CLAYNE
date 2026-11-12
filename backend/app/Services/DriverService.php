@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
-use App\Models\User;
-use App\Models\Driver;
 use App\Models\AuditLog;
+use App\Models\Driver;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
@@ -49,7 +49,7 @@ class DriverService
         ?User $actor = null
     ): void {
         $driver->user->update([
-            'status' => $status
+            'status' => $status,
         ]);
 
         AuditLog::create([
@@ -58,5 +58,29 @@ class DriverService
             'table_name' => 'drivers',
             'record_id' => $driver->id,
         ]);
+    }
+
+    public function update(Driver $driver, array $data, ?User $actor = null): void
+    {
+        DB::transaction(function () use ($driver, $data, $actor) {
+            $driver->user->update([
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'phone' => $data['phone'] ?? null,
+                'status' => $data['status'],
+            ]);
+
+            $driver->update([
+                'license_number' => $data['license_number'] ?? null,
+                'vehicle_plate' => $data['vehicle_plate'] ?? null,
+            ]);
+
+            AuditLog::create([
+                'actor_id' => $actor?->id,
+                'action' => 'driver.updated',
+                'table_name' => 'drivers',
+                'record_id' => $driver->id,
+            ]);
+        });
     }
 }

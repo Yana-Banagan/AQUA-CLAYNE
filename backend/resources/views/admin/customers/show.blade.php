@@ -3,10 +3,14 @@
 @section('title', 'Customer · ' . ($customer->user?->name ?? 'Customer'))
 
 @section('content')
+@if(session('success'))
+    <div class="flash-message success" role="status">{{ session('success') }}</div>
+@endif
+
 <div class="page-header">
     <div>
         <p class="eyebrow">
-            <a href="{{ route('admin.customers.index') }}" style="color: var(--primary); text-decoration: none;">← Back to Customers</a>
+            <a href="{{ route('admin.customers.index', request()->query()) }}" style="color: var(--primary); text-decoration: none;">← Back to Customers</a>
             &nbsp;·&nbsp; Profile Overview
         </p>
         <div style="display: flex; align-items: center; gap: 12px;">
@@ -18,6 +22,7 @@
         <p>Customer since {{ $customer->created_at?->format('F d, Y') }}</p>
     </div>
     <div class="header-actions">
+        <a class="primary-button" href="{{ route('admin.customers.edit', array_merge(['customer' => $customer], request()->query())) }}">Edit Customer</a>
         <span class="status-badge {{ $customer->user?->status === 'active' ? 'status-success' : 'status-danger' }}" style="font-size: 13px; padding: 6px 14px;">
             {{ strtoupper($customer->user?->status ?? 'ACTIVE') }}
         </span>

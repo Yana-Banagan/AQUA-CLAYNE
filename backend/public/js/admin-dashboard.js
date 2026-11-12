@@ -16,6 +16,22 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 5000);
     });
 
+    document.addEventListener('submit', function (event) {
+        var form = event.target;
+        if (!(form instanceof HTMLFormElement) || !form.matches('[data-disable-on-submit]')) return;
+        if (form.dataset.submitting === 'true') {
+            event.preventDefault();
+            return;
+        }
+
+        form.dataset.submitting = 'true';
+        form.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function (button) {
+            if (button.dataset.loadingText) button.textContent = button.dataset.loadingText;
+            button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
+        });
+    });
+
     // =========================================================================
     // 0. DARK / LIGHT MODE THEME TOGGLE
     //    - Persists choice in localStorage under 'aquaclayneTheme'
