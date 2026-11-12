@@ -21,6 +21,7 @@ class Payment extends Model
         'gateway',
         'gateway_reference',
         'gateway_checkout_session_id',
+        'gateway_payment_method',
         'gateway_checkout_idempotency_key',
         'gateway_payment_intent_id',
         'gateway_payment_id',

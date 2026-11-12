@@ -130,7 +130,11 @@ Route::get('/payment/paymongo/success', function (\Illuminate\Http\Request $requ
         : '';
     $statusBadge = $isPaid
         ? "<div style=\"display:inline-block;background:#D1FAE5;color:#059669;font-weight:800;padding:4px 12px;border-radius:8px;font-size:12px;margin-bottom:14px;\">STATUS: PAID &amp; CONFIRMED</div>"
-        : "<div style=\"display:inline-block;background:#FEF3C7;color:#D97706;font-weight:800;padding:4px 12px;border-radius:8px;font-size:12px;margin-bottom:14px;\">STATUS: PROCESSING</div>";
+        : "<div style=\"display:inline-block;background:#FEF3C7;color:#D97706;font-weight:800;padding:4px 12px;border-radius:8px;font-size:12px;margin-bottom:14px;\">STATUS: PAYMENT PENDING CONFIRMATION</div>";
+    $headline = $isPaid ? 'Payment Confirmed' : 'Payment Pending';
+    $message = $isPaid
+        ? 'PayMongo confirmed your payment. Switch back to the AQUA CLAYNE app to view your updated order.'
+        : 'We are waiting for PayMongo to confirm your payment. This page does not mark the order paid; refresh in a moment or check your order status in the app.';
 
     $html = <<<HTML
 <!DOCTYPE html>
@@ -152,11 +156,11 @@ Route::get('/payment/paymongo/success', function (\Illuminate\Http\Request $requ
 <body>
     <div class="card">
         <div class="icon-circle">✓</div>
-        <h1>Payment Successful!</h1>
+        <h1>{$headline}</h1>
         {$orderPill}
         <br>
         {$statusBadge}
-        <p>Your payment via PayMongo has been confirmed. Please switch back to the <strong>AQUA CLAYNE</strong> app to view your updated order details.</p>
+        <p>{$message}</p>
         <button class="btn" onclick="window.close()">Return to App</button>
     </div>
 </body>

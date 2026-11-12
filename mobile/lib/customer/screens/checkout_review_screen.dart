@@ -41,7 +41,7 @@ class _CheckoutReviewScreenState extends State<CheckoutReviewScreen> {
     final cart = context.read<CartProvider>();
     final payload = cart.toOrderPayload(
       addressId: widget.addressId,
-      paymentMethod: widget.paymentMethod,
+      paymentMethod: widget.paymentMethod.startsWith('ONLINE') ? 'ONLINE' : widget.paymentMethod,
       notes: widget.notes,
       deliveryMethod: cart.deliveryMethod,
     );
@@ -54,9 +54,9 @@ class _CheckoutReviewScreenState extends State<CheckoutReviewScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.read<OrderProvider>().error ?? 'Failed to place order.'), backgroundColor: const Color(0xFFC62828)));
       return;
     }
-    if (widget.paymentMethod == 'ONLINE') {
+    if (widget.paymentMethod.startsWith('ONLINE')) {
       try {
-        final checkout = await context.read<PaymentRepository>().createCheckout(order.id);
+        final checkout = await context.read<PaymentRepository>().createCheckout(order.id, paymentMethodType: widget.paymentMethod == 'ONLINE_GCASH' ? 'gcash' : 'qrph');
         final url = (checkout['checkout_url'] ??
                 (checkout['data'] is Map ? checkout['data']['checkout_url'] : null))
             ?.toString();
@@ -111,7 +111,7 @@ class _CheckoutReviewScreenState extends State<CheckoutReviewScreen> {
           ])),
           const CheckoutStepBar(step: 4),
           Expanded(child: ListView(padding: const EdgeInsets.all(16), children: [if (isOffline) _offlineNotice(), _reviewContainer(cart, address)])),
-          SafeArea(top: false, child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 16), child: SizedBox(width: double.infinity, height: 52, child: ElevatedButton.icon(onPressed: _placing || isOffline ? null : _placeOrder, icon: _placing ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.check_circle_rounded), label: Text(isOffline ? 'Connect to place order' : _placing ? 'Placing order...' : '${widget.paymentMethod == 'ONLINE' ? 'Pay Online' : 'Place Order'} (₱${cart.total.toStringAsFixed(2)})'))))),
+          SafeArea(top: false, child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 16), child: SizedBox(width: double.infinity, height: 52, child: ElevatedButton.icon(onPressed: _placing || isOffline ? null : _placeOrder, icon: _placing ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.check_circle_rounded), label: Text(isOffline ? 'Connect to place order' : _placing ? 'Placing order...' : '${widget.paymentMethod.startsWith('ONLINE') ? 'Continue to payment' : 'Place Order'} (₱${cart.total.toStringAsFixed(2)})'))))),
         ])),
       ),
     );
@@ -173,8 +173,8 @@ class _CheckoutReviewScreenState extends State<CheckoutReviewScreen> {
         onChange: () => Navigator.of(context).pop(),
       ), const SizedBox(height: 6),
       Text(
-        widget.paymentMethod == 'ONLINE'
-            ? 'Online Payment — PayMongo (GCash, Maya, or card)'
+        widget.paymentMethod.startsWith('ONLINE')
+            ? 'Online Payment — PayMongo (${widget.paymentMethod == 'ONLINE_GCASH' ? 'GCash' : 'QR Ph'})'
             : widget.paymentMethod == 'CASH'
                 ? (cart.isStationPickup ? 'Cash on Pickup' : 'Cash on Delivery')
                 : 'Debt',

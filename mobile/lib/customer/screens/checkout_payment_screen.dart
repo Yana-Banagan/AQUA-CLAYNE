@@ -18,14 +18,14 @@ class CheckoutPaymentScreen extends StatefulWidget {
 }
 
 class _CheckoutPaymentScreenState extends State<CheckoutPaymentScreen> {
-  String _method = 'ONLINE';
+  String _method = 'ONLINE_QRPH';
   bool _loading = true;
   bool _firstOrder = true;
 
   @override
   void initState() {
     super.initState();
-    _method = widget.initialMethod ?? 'ONLINE';
+    _method = widget.initialMethod == 'ONLINE' ? 'ONLINE_QRPH' : (widget.initialMethod ?? 'ONLINE_QRPH');
     _loadRules();
   }
 
@@ -35,7 +35,7 @@ class _CheckoutPaymentScreenState extends State<CheckoutPaymentScreen> {
       if (!mounted) return;
       setState(() {
         _firstOrder = rules['first_order'] == true;
-        if (_firstOrder) _method = 'ONLINE';
+        if (_firstOrder && !_method.startsWith('ONLINE')) _method = 'ONLINE_QRPH';
         _loading = false;
       });
     } catch (_) {
@@ -95,7 +95,9 @@ class _CheckoutPaymentScreenState extends State<CheckoutPaymentScreen> {
                     _methodTile('Debt', 'Record this order as payable to Aqua Clayne.', Icons.receipt_long_rounded, 'DEBT'),
                     const SizedBox(height: 12),
                   ],
-                  _methodTile('Pay Online', 'Secure checkout: choose GCash, Maya, or card through PayMongo.', Icons.account_balance_wallet_rounded, 'ONLINE'),
+                  _methodTile('QR Ph', 'Scan the QR code with a supported bank or e-wallet app.', Icons.qr_code_2_rounded, 'ONLINE_QRPH'),
+                  const SizedBox(height: 10),
+                  _methodTile('GCash', 'Pay securely through PayMongo using GCash.', Icons.account_balance_wallet_rounded, 'ONLINE_GCASH'),
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(16),

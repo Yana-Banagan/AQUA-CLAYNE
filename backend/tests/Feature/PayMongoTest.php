@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Services\PayMongoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class PayMongoTest extends TestCase
@@ -97,6 +98,30 @@ class PayMongoTest extends TestCase
                 'checkout_session_id' => 'cs_test_session_123',
             ],
         ]);
+    }
+
+    public function test_checkout_status_retrieval_uses_the_configured_paymongo_api_version(): void
+    {
+        config([
+            'services.paymongo.secret_key' => 'sk_test_paymongo_test_key',
+            'services.paymongo.api_url' => 'https://api.paymongo.com/v2',
+        ]);
+        Http::fake([
+            'https://api.paymongo.com/v2/checkout_sessions/cs_test_status' => Http::response([
+                'data' => [
+                    'id' => 'cs_test_status',
+                    'attributes' => ['status' => 'active'],
+                ],
+            ], 200),
+        ]);
+
+        $session = app(PayMongoService::class)->retrieveCheckout('cs_test_status');
+
+        $this->assertSame('cs_test_status', data_get($session, 'data.id'));
+        Http::assertSent(fn ($request) =>
+            $request->method() === 'GET' &&
+            $request->url() === 'https://api.paymongo.com/v2/checkout_sessions/cs_test_status'
+        );
     }
 
     public function test_checkout_creates_payment_if_missing(): void
@@ -279,5 +304,39 @@ class PayMongoTest extends TestCase
 
         $this->assertEquals('paid', $payment->fresh()->status);
         $this->assertEquals('confirmed', $order->fresh()->status);
+    }
+
+    public function test_customer_can_request_qrph_checkout_provider(): void
+    {
+        $order = Order::create([
+            'customer_id' => $this->customer->id,
+            'address_id' => $this->address->id,
+            'status' => 'pending',
+            'order_number' => 'TEST-QRPH',
+            'container_ownership' => 'customer_owned',
+            'expected_empty_gallons' => 1,
+            'payment_method' => 'online',
+            'total_amount' => 35.00,
+        ]);
+        $order->items()->create(['product_id' => $this->product->id, 'quantity' => 1, 'unit_price' => 35.00]);
+        Payment::create([
+            'order_id' => $order->id,
+            'method' => 'online',
+            'amount' => 35.00,
+            'status' => 'pending',
+            'gateway' => 'paymongo',
+            'gateway_reference' => "AC-ORDER-{$order->id}",
+        ]);
+
+        $this->mock(PayMongoService::class, function ($mock) {
+            $mock->shouldReceive('createCheckout')->once()
+                ->withArgs(fn ($order, $payment, $provider) => $provider === 'qrph')
+                ->andReturn(['checkout_url' => 'https://checkout.paymongo.com/qrph', 'checkout_session_id' => 'cs_qrph']);
+        });
+
+        $this->actingAs($this->user)
+            ->postJson("/api/v1/customer/orders/{$order->id}/payment/checkout", ['payment_method_type' => 'qrph'])
+            ->assertOk()
+            ->assertJsonPath('checkout_url', 'https://checkout.paymongo.com/qrph');
     }
 }

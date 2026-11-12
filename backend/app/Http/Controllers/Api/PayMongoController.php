@@ -75,6 +75,9 @@ class PayMongoController extends Controller
         Order $order,
         PayMongoService $payMongo
     ): JsonResponse {
+        $validated = $request->validate([
+            'payment_method_type' => 'nullable|in:gcash,qrph,card',
+        ]);
         $user = $request->user();
 
         /*
@@ -157,7 +160,7 @@ class PayMongoController extends Controller
         |--------------------------------------------------------------------------
         */
         try {
-            $checkout = $payMongo->createCheckout($order, $payment);
+            $checkout = $payMongo->createCheckout($order, $payment, $validated['payment_method_type'] ?? null);
 
             return response()->json([
                 'success' => true,
@@ -181,7 +184,7 @@ class PayMongoController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Unable to create the PayMongo checkout session: ' . $e->getMessage(),
+                'message' => 'Unable to create the secure checkout session. Please try again.',
             ], 500);
         }
     }
@@ -235,6 +238,7 @@ class PayMongoController extends Controller
                 'order_number' => $order->order_number,
                 'payment_id' => $payment->id,
                 'payment_method' => $payment->method,
+                'gateway_payment_method' => $payment->gateway_payment_method,
                 'amount' => (float) ($payment->amount ?? 0),
                 'status' => $payment->status,
                 'gateway_payment_id' => $payment->gateway_payment_id,
@@ -324,6 +328,7 @@ class PayMongoController extends Controller
         */
         $supportedEvents = [
             'checkout_session.payment.paid',
+            'checkout_session.expired',
             'payment.paid',
             'payment.failed',
         ];
@@ -361,7 +366,7 @@ class PayMongoController extends Controller
         | checkout_session.payment.paid
         |--------------------------------------------------------------------------
         */
-        if ($eventType === 'checkout_session.payment.paid') {
+        if (in_array($eventType, ['checkout_session.payment.paid', 'checkout_session.expired'], true)) {
             $checkoutSessionId = $resourceId;
 
             $referenceNumber = $attributes['reference_number'] ?? null;
@@ -375,7 +380,7 @@ class PayMongoController extends Controller
             */
             $payments = $attributes['payments'] ?? [];
 
-            if (!empty($payments) && isset($payments[0])) {
+            if ($eventType === 'checkout_session.payment.paid' && !empty($payments) && isset($payments[0])) {
                 $paymentResource = $payments[0];
 
                 $paymentId = $paymentResource['id'] ?? null;
@@ -536,9 +541,22 @@ class PayMongoController extends Controller
         */
         $paymentBecamePaid = false;
         $paymentBecameFailed = false;
+        $duplicateEvent = false;
 
         try {
-            DB::transaction(function () use ($payment, $eventType, $paymentId, $paymentIntentId, $checkoutSessionId, $referenceNumber, $paymentAttributes, $eventId, $livemode, &$paymentBecamePaid, &$paymentBecameFailed) {
+            DB::transaction(function () use ($payment, $eventType, $paymentId, $paymentIntentId, $checkoutSessionId, $referenceNumber, $paymentAttributes, $eventId, $livemode, &$paymentBecamePaid, &$paymentBecameFailed, &$duplicateEvent) {
+                if ($eventId) {
+                    $inserted = DB::table('paymongo_webhook_events')->insertOrIgnore([
+                        'event_id' => $eventId,
+                        'event_type' => $eventType,
+                        'payment_id' => $payment->id,
+                        'processed_at' => now(),
+                    ]);
+                    if ($inserted === 0) {
+                        $duplicateEvent = true;
+                        return;
+                    }
+                }
                 /*
                 |--------------------------------------------------------------------------
                 | Lock the payment row
@@ -587,6 +605,23 @@ class PayMongoController extends Controller
                     $eventType === 'checkout_session.payment.paid' ||
                     $eventType === 'payment.paid'
                 ) {
+                    $currency = strtoupper((string) ($paymentAttributes['currency'] ?? 'PHP'));
+                    $gatewayAmount = isset($paymentAttributes['amount']) ? (int) $paymentAttributes['amount'] : null;
+                    $expectedAmount = (int) round(((float) $lockedPayment->amount) * 100);
+                    if ($currency !== 'PHP' || ($gatewayAmount !== null && $gatewayAmount !== $expectedAmount)) {
+                        Log::error('PayMongo paid event amount/currency mismatch.', [
+                            'event_id' => $eventId,
+                            'payment_id' => $lockedPayment->id,
+                            'expected_amount' => $expectedAmount,
+                            'received_amount' => $gatewayAmount,
+                            'currency' => $currency,
+                        ]);
+                        return;
+                    }
+                    $sourceType = data_get($paymentAttributes, 'source.type');
+                    if (in_array($sourceType, ['qrph', 'gcash', 'card'], true)) {
+                        $lockedPayment->gateway_payment_method = $sourceType;
+                    }
                     $paymentBecamePaid = $lockedPayment->status !== 'paid';
                     $lockedPayment->status = 'paid';
 
@@ -696,7 +731,12 @@ class PayMongoController extends Controller
                 | Failed payment
                 |--------------------------------------------------------------------------
                 */
-                if ($eventType === 'payment.failed' && $lockedPayment->status !== 'paid') {
+                if ($eventType === 'checkout_session.expired' && $lockedPayment->status === 'pending') {
+                    $paymentBecameFailed = true;
+                    $lockedPayment->status = 'cancelled';
+                    $lockedPayment->failure_reason = 'PayMongo checkout session expired. Create a new checkout session to retry.';
+                    $lockedPayment->save();
+                } elseif ($eventType === 'payment.failed' && $lockedPayment->status !== 'paid') {
                     $paymentBecameFailed = $lockedPayment->status !== 'failed';
                     $lockedPayment->status = 'failed';
 
@@ -722,6 +762,10 @@ class PayMongoController extends Controller
                     );
                 }
             });
+
+            if ($duplicateEvent) {
+                return response()->json(['success' => true, 'message' => 'Duplicate webhook already processed.', 'event_id' => $eventId]);
+            }
 
             /*
             |--------------------------------------------------------------------------
@@ -1018,6 +1062,12 @@ class PayMongoController extends Controller
         if ($paidPayment) {
             $paymentId = data_get($paidPayment, 'id');
             $paymentAttributes = data_get($paidPayment, 'attributes', []);
+            $currency = strtoupper((string) data_get($paymentAttributes, 'currency', 'PHP'));
+            $actualAmount = data_get($paymentAttributes, 'amount');
+            if ($currency !== 'PHP' || ($actualAmount !== null && (int) $actualAmount !== (int) round(((float) $payment->amount) * 100))) {
+                Log::error('PayMongo checkout sync amount/currency mismatch.', ['payment_id' => $payment->id, 'currency' => $currency]);
+                return $payment;
+            }
             $this->confirmPaidPayment(
                 $payment,
                 $order,
@@ -1061,6 +1111,12 @@ class PayMongoController extends Controller
         ?string $eventId = null,
         bool $livemode = false
     ): void {
+        $currency = strtoupper((string) ($paymentAttributes['currency'] ?? 'PHP'));
+        $actualAmount = $paymentAttributes['amount'] ?? null;
+        if ($currency !== 'PHP' || ($actualAmount !== null && (int) $actualAmount !== (int) round(((float) $payment->amount) * 100))) {
+            Log::error('PayMongo payment confirmation amount/currency mismatch.', ['payment_id' => $payment->id, 'currency' => $currency]);
+            return;
+        }
         $paymentBecamePaid = false;
 
         DB::transaction(function () use (
@@ -1085,6 +1141,10 @@ class PayMongoController extends Controller
 
             if (!empty($paymentId)) {
                 $lockedPayment->gateway_payment_id = $paymentId;
+            }
+            $sourceType = data_get($paymentAttributes, 'source.type');
+            if (in_array($sourceType, ['qrph', 'gcash', 'card'], true)) {
+                $lockedPayment->gateway_payment_method = $sourceType;
             }
 
             if (array_key_exists('fee', $paymentAttributes)) {
@@ -1194,6 +1254,9 @@ class PayMongoController extends Controller
         Request $request,
         Order $order
     ): JsonResponse {
+        if (!app()->environment(['local', 'testing'])) {
+            abort(404);
+        }
         $user = $request->user();
         if (!$user) {
             return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);

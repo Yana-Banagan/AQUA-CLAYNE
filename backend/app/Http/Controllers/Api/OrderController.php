@@ -231,7 +231,7 @@ class OrderController extends Controller
             'methods' => $hasCompletedPayment
                 ? ['online', 'cash', 'debt']
                 : ['online'],
-            'online_providers' => ['gcash', 'maya', 'card'],
+            'online_providers' => ['gcash', 'qrph', 'card'],
         ]);
     }
 

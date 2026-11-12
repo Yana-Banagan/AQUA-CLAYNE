@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 class PayMongoService
 {
-    public function createCheckout(Order $order, Payment $payment): array
+    public function createCheckout(Order $order, Payment $payment, ?string $provider = null): array
     {
         $secret = config('services.paymongo.secret_key');
         if (blank($secret)) {
@@ -23,6 +23,16 @@ class PayMongoService
         if ($amount < 100) {
             throw ValidationException::withMessages(['payment' => ['This order does not have a payable amount.']]);
         }
+        if ((int) round(((float) $payment->amount) * 100) !== $amount) {
+            throw ValidationException::withMessages(['payment' => ['The payment record does not match the current order total. Please contact Aqua Clayne support.']]);
+        }
+
+        $configuredTypes = (array) config('services.paymongo.payment_method_types', ['gcash', 'qrph']);
+        $provider = strtolower((string) $provider);
+        if ($provider !== '' && (!in_array($provider, ['gcash', 'qrph', 'card'], true) || !in_array($provider, $configuredTypes, true))) {
+            throw ValidationException::withMessages(['payment_method_type' => ['The selected online payment method is unavailable.']]);
+        }
+        $paymentTypes = $provider !== '' ? [$provider] : $configuredTypes;
 
         $lineItems = $order->items->map(fn ($item) => [
             'amount' => (int) round(((float) $item->unit_price) * 100),
@@ -40,10 +50,7 @@ class PayMongoService
             ];
         }
 
-        $apiUrl = rtrim((string) (config('services.paymongo.api_url') ?: 'https://api.paymongo.com/v2'), '/');
-        if (blank($apiUrl)) {
-            $apiUrl = 'https://api.paymongo.com/v2';
-        }
+        $apiUrl = $this->apiBaseUrl();
 
         // A signed cancellation return may update only this pending payment.
         // The signature prevents arbitrary browser requests from changing a
@@ -109,7 +116,7 @@ class PayMongoService
             ->post($apiUrl . '/checkout_sessions', [
                 'data' => ['attributes' => [
                     'line_items' => $lineItems,
-                    'payment_method_types' => config('services.paymongo.payment_method_types'),
+                    'payment_method_types' => $paymentTypes,
                     'reference_number' => $payment->gateway_reference,
                     'success_url' => $successUrl,
                     'cancel_url' => $cancelUrl,
@@ -132,6 +139,7 @@ class PayMongoService
 
         $payment->update([
             'gateway_checkout_session_id' => $sessionId,
+            'gateway_payment_method' => $provider !== '' ? $provider : $payment->gateway_payment_method,
             'failure_reason' => null,
             'status' => 'pending',
         ]);
@@ -153,11 +161,16 @@ class PayMongoService
             $response = Http::acceptJson()
                 ->withBasicAuth($secret, '')
                 ->timeout(10)
-                ->get('https://api.paymongo.com/v1/checkout_sessions/' . $checkoutSessionId);
+                ->get($this->apiBaseUrl() . '/checkout_sessions/' . rawurlencode($checkoutSessionId));
 
             if ($response->successful()) {
                 return $response->json();
             }
+
+            \Illuminate\Support\Facades\Log::warning('PayMongo retrieve checkout returned an unsuccessful response.', [
+                'session_id' => $checkoutSessionId,
+                'status' => $response->status(),
+            ]);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('PayMongo retrieve checkout failed: ' . $e->getMessage(), [
                 'session_id' => $checkoutSessionId,
@@ -165,5 +178,12 @@ class PayMongoService
         }
 
         return null;
+    }
+
+    private function apiBaseUrl(): string
+    {
+        $apiUrl = rtrim((string) (config('services.paymongo.api_url') ?: 'https://api.paymongo.com/v2'), '/');
+
+        return $apiUrl !== '' ? $apiUrl : 'https://api.paymongo.com/v2';
     }
 }

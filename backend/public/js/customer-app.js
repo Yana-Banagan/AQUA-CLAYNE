@@ -35,6 +35,7 @@
         paymentSummary: { outstandingBalance: 0, totalPaid: 0, allPaidUp: true, totalCount: 0 },
         paymentFilter: 'ALL',
         paymentRules: { first_order: true, methods: ['online'] },
+        paymentProvider: 'qrph',
         creditAccount: null,
         notifications: [],
         unreadNotifCount: 0,
@@ -1332,6 +1333,7 @@ function navigateTo(viewId, param = null, pushHistory = true) {
 
             const paymentRadio = document.querySelector('input[name="payment_method"]:checked');
             const paymentMethod = paymentRadio ? paymentRadio.value : 'online';
+            const paymentProvider = document.getElementById('checkoutPaymentProvider')?.value || AppState.paymentProvider || 'qrph';
 
             const phone = document.getElementById('checkoutPhone')?.value.trim() || '';
             if (!phone) {
@@ -1402,7 +1404,7 @@ function navigateTo(viewId, param = null, pushHistory = true) {
                     return;
                 }
                 try {
-                    const payRes = await apiRequest(`/customer/orders/${orderId}/payment/checkout`, 'POST', {}, true);
+                    const payRes = await apiRequest(`/customer/orders/${orderId}/payment/checkout`, 'POST', { payment_method_type: paymentProvider }, true);
                     if (payRes?.checkout_url || payRes?.data?.checkout_url) {
                         window.location.href = payRes.checkout_url || payRes.data.checkout_url;
                         return;
@@ -1674,17 +1676,21 @@ function navigateTo(viewId, param = null, pushHistory = true) {
                 ` : ''}
 
                 <div class="payment-methods-list">
-                    <div class="payment-method-card ${AppState.cart.paymentMethod === 'online' ? 'selected' : ''}" onclick="window.aquaApp.selectCheckoutPaymentMethod('online')">
+                    <div class="payment-method-card ${AppState.cart.paymentMethod === 'online' && AppState.paymentProvider === 'qrph' ? 'selected' : ''}" onclick="window.aquaApp.selectCheckoutProvider('qrph')">
                         <div class="payment-method-left">
                             <div class="payment-icon-box">
                                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
                             </div>
                             <div>
-                                <div class="payment-method-name">Pay Online (PayMongo)</div>
-                                <div class="payment-method-desc">Instant GCash, Maya, credit or debit cards</div>
+                                <div class="payment-method-name">QR Ph</div>
+                                <div class="payment-method-desc">Scan with a supported bank or e-wallet app</div>
                             </div>
                         </div>
                         <span style="font-size:11px; font-weight:800; color:#059669; background:#D1FAE5; padding:3px 8px; border-radius:10px;">Fast & Secure</span>
+                    </div>
+
+                    <div class="payment-method-card ${AppState.cart.paymentMethod === 'online' && AppState.paymentProvider === 'gcash' ? 'selected' : ''}" onclick="window.aquaApp.selectCheckoutProvider('gcash')">
+                        <div class="payment-method-left"><div class="payment-icon-box">₱</div><div><div class="payment-method-name">GCash</div><div class="payment-method-desc">Pay securely with GCash via PayMongo</div></div></div>
                     </div>
 
                     ${!isFirst ? `
@@ -1834,6 +1840,13 @@ function navigateTo(viewId, param = null, pushHistory = true) {
         renderCheckoutStepView();
     }
 
+    function selectCheckoutProvider(provider) {
+        AppState.cart.paymentMethod = 'online';
+        AppState.paymentProvider = provider;
+        saveCart();
+        renderCheckoutStepView();
+    }
+
     function adjustExpectedGallons(delta) {
         const calcs = getCartCalculations();
         let cur = AppState.cart.expectedGallons || calcs.refillCount;
@@ -1890,7 +1903,7 @@ function navigateTo(viewId, param = null, pushHistory = true) {
             // Handle PayMongo Online Redirect if paymentMethod === 'online'
             if (AppState.cart.paymentMethod === 'online') {
                 try {
-                    const checkoutRes = await apiRequest(`/customer/orders/${createdOrder.id}/payment/checkout`, 'POST', {}, true);
+                    const checkoutRes = await apiRequest(`/customer/orders/${createdOrder.id}/payment/checkout`, 'POST', { payment_method_type: AppState.paymentProvider || 'qrph' }, true);
                     const checkoutUrl = checkoutRes?.checkout_url || checkoutRes?.data?.checkout_url;
 
                     if (checkoutUrl) {
@@ -3630,6 +3643,7 @@ function navigateTo(viewId, param = null, pushHistory = true) {
         setCheckoutDeliveryMethod,
         selectCheckoutAddress,
         selectCheckoutPaymentMethod,
+        selectCheckoutProvider,
         adjustExpectedGallons,
         updateCheckoutNotes,
         placeOrder,

@@ -7,10 +7,10 @@ class PaymentRepository {
 
   /// Starts a Hosted Checkout for an existing order. Laravel calculates the
   /// amount from the stored order; the mobile app never supplies an amount.
-  Future<Map<String, dynamic>> createCheckout(String orderId) async {
+  Future<Map<String, dynamic>> createCheckout(String orderId, {String? paymentMethodType}) async {
     final data = await _api.post(
       '/customer/orders/$orderId/payment/checkout',
-      {},
+      paymentMethodType == null ? {} : {'payment_method_type': paymentMethodType},
       auth: true,
     );
     if (data is Map<String, dynamic>) {

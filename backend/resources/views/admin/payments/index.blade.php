@@ -45,7 +45,7 @@
         <div>
             <strong style="color: var(--text-primary); font-size: 13.5px;">Active Payment Methods: Cash on Delivery &amp; Customer Debt</strong>
             <p style="margin: 3px 0 0; color: var(--text-secondary); font-size: 12.5px;">
-                Online GCash and card integrations are currently deferred. Cash collections require driver or station verification. Customer debt is recorded against authorized accounts.
+                PayMongo Hosted Checkout supports QR Ph and GCash. Cash collections require driver or station verification. Customer debt remains recorded against authorized accounts.
             </p>
         </div>
     </div>
@@ -64,6 +64,7 @@
             <option value="">All Payment Methods</option>
             <option value="cash" {{ $method === 'cash' ? 'selected' : '' }}>Cash</option>
             <option value="credit" {{ $method === 'credit' ? 'selected' : '' }}>Debt</option>
+            <option value="online" {{ $method === 'online' ? 'selected' : '' }}>PayMongo online</option>
         </select>
 
         <button type="submit" class="secondary-button" style="padding: 9px 16px;">
@@ -88,6 +89,7 @@
                     <th>Amount</th>
                     <th>Method</th>
                     <th>Status</th>
+                    <th>PayMongo Reference</th>
                     <th>Paid At</th>
                     <th>Action</th>
                 </tr>
@@ -121,6 +123,8 @@
                                     {{ $payment->order?->isStationPickup() ? 'Cash (Pickup)' : 'COD' }}
                                 @elseif($payment->method === 'credit')
                                     Debt
+                                @elseif($payment->method === 'online')
+                                    PayMongo {{ strtoupper($payment->gateway_payment_method ?? 'online') }}
                                 @else
                                     {{ ucfirst($payment->method) }}
                                 @endif
@@ -130,6 +134,11 @@
                             <span class="status-badge {{ $payment->status === 'paid' ? 'status-success' : 'status-warning' }}">
                                 {{ $payment->status }}
                             </span>
+                        </td>
+                        <td>
+                            <small style="color: var(--text-secondary);">
+                                {{ $payment->gateway_payment_id ?: $payment->gateway_checkout_session_id ?: '—' }}
+                            </small>
                         </td>
                         <td>
                             <small style="color: var(--text-secondary);">

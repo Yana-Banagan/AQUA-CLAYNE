@@ -862,13 +862,17 @@
                         <div class="radio-pill-group">
                             <label class="radio-pill-label">
                                 <input type="radio" name="payment_method" value="online" checked>
-                                <span>Online (PayMongo GCash / Card)</span>
+                                <span>Online (PayMongo)</span>
                             </label>
                             <label class="radio-pill-label">
                                 <input type="radio" name="payment_method" value="cod">
                                 <span>Cash on Delivery (COD)</span>
                             </label>
                         </div>
+                        <select id="checkoutPaymentProvider" class="modal-input-field" style="margin-top:10px;">
+                            <option value="qrph">QR Ph</option>
+                            <option value="gcash">GCash</option>
+                        </select>
                     </div>
 
                     <!-- 5. Order Summary Calculation Box -->
