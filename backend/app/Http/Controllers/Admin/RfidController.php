@@ -41,6 +41,9 @@ class RfidController extends Controller
 
         $activeTags = CustomerContainerRfidTag::where('status', 'active')->count() + $totalStationTags;
         $inactiveTags = CustomerContainerRfidTag::whereIn('status', ['inactive', 'replaced'])->count();
+        $containerCount = CustomerContainer::count();
+        $deviceCount = RfidDevice::count();
+        $transactionCount = RfidTransaction::count();
 
         $unassignedContainers = CustomerContainer::where('status', 'active')
             ->whereDoesntHave('activeTag')
@@ -186,6 +189,9 @@ class RfidController extends Controller
         return view('admin.rfid.index', compact(
             'activeTab',
             'stats',
+            'containerCount',
+            'deviceCount',
+            'transactionCount',
             'tags',
             'containers',
             'devices',

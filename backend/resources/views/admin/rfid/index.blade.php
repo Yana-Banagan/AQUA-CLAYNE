@@ -86,17 +86,17 @@
     <a href="{{ route('admin.rfid.index', ['tab' => 'containers']) }}" class="rfid-tab-btn {{ $activeTab === 'containers' ? 'active' : '' }}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
         Customer Containers
-        <span class="rfid-tab-badge">{{ number_format($containers->total()) }}</span>
+        <span class="rfid-tab-badge">{{ number_format($containerCount) }}</span>
     </a>
     <a href="{{ route('admin.rfid.index', ['tab' => 'devices']) }}" class="rfid-tab-btn {{ $activeTab === 'devices' ? 'active' : '' }}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect></svg>
         Hardware Scanners
-        <span class="rfid-tab-badge">{{ $devices->count() }}</span>
+        <span class="rfid-tab-badge">{{ number_format($deviceCount) }}</span>
     </a>
     <a href="{{ route('admin.rfid.index', ['tab' => 'transactions']) }}" class="rfid-tab-btn {{ $activeTab === 'transactions' ? 'active' : '' }}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
         Scan History &amp; Audit
-        <span class="rfid-tab-badge">{{ number_format($transactions->total()) }}</span>
+        <span class="rfid-tab-badge">{{ number_format($transactionCount) }}</span>
     </a>
 </nav>
 
