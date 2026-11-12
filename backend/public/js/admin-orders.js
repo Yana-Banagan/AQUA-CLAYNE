@@ -684,7 +684,7 @@
                 if (!response.ok) throw new Error(result.message || 'Bulk confirmation failed.');
                 const failures = (result.failed || []).map(item => `${item.order_id}: ${item.reason}`).join('\n');
                 const assignmentFailures = (result.assignment_failed || []).map(item => `${item.order_id}: ${item.reason}`).join('\n');
-                const summary = `Successfully Confirmed: ${result.confirmed}\nConfirmation Failed: ${(result.failed || []).length}\nSkipped: ${result.skipped}\nAutomatically Assigned to tesdriver123@example.com: ${result.automatically_assigned}\nAssignment Failed: ${(result.assignment_failed || []).length}`;
+                const summary = `Successfully Confirmed: ${result.confirmed}\nConfirmation Failed: ${(result.failed || []).length}\nSkipped: ${result.skipped}\nAutomatically Assigned to testdriver123@example.com: ${result.automatically_assigned}\nAssignment Failed: ${(result.assignment_failed || []).length}`;
                 window.alert(summary + (failures ? `\n\nConfirmation failure details:\n${failures}` : '') + (assignmentFailures ? `\n\nAssignment failure details:\n${assignmentFailures}` : ''));
                 window.location.reload();
             } catch (error) {
