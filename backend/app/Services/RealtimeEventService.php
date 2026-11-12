@@ -54,6 +54,7 @@ class RealtimeEventService
 
             if (in_array($entityType, ['delivery', 'pickup_batch', 'delivery_route'], true)) {
                 $cache->forget('dispatch:driver-statuses');
+                $cache->forget('dispatch:driver-statuses:no-avatars');
                 $cache->forget('admin:deliveries:history-batches');
                 $cache->forget('admin:deliveries:history-routes');
             }

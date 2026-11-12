@@ -77,10 +77,22 @@ class DeliveryController extends Controller
             'failed' => (int) $summary->failed,
         ];
 
-        $mapDeliveries = Delivery::whereIn('status', [
+        $mapDeliveries = Delivery::query()->whereIn('status', [
             'assigned', 'en_route', 'en_route_for_pickup', 'picked_up',
             'at_station', 'ready_for_delivery', 'out_for_delivery',
-        ])->with(['order.address', 'driver.user'])->get();
+        ])->whereNotNull('driver_id')
+            ->whereNotNull('driver_latitude')
+            ->whereNotNull('driver_longitude')
+            ->select(['id', 'order_id', 'driver_id', 'status', 'driver_latitude', 'driver_longitude', 'location_updated_at'])
+            ->with([
+                'order:id,order_number,address_id',
+                'order.address:id,address_line,barangay,city,province,latitude,longitude',
+                'driver:id,user_id',
+                'driver.user:id,name',
+            ])
+            ->latest('location_updated_at')
+            ->limit(50)
+            ->get();
         $liveLocations = $mapDeliveries->map(function (Delivery $delivery) {
             $address = $delivery->order?->address;
 
@@ -125,10 +137,16 @@ class DeliveryController extends Controller
 
     public function index(Request $request, DispatchService $dispatchService)
     {
-        $search   = trim((string) $request->get('search', ''));
-        $status   = $request->get('status');
-        $driverId = $request->get('driver_id');
-        $date     = $request->get('date');
+        $filters = $request->validate([
+            'search' => 'nullable|string|max:120',
+            'status' => 'nullable|in:pending,assigned,en_route,en_route_for_pickup,picked_up,at_station,ready_for_delivery,out_for_delivery,delivered,completed,failed,pickup_failed,delivery_failed',
+            'driver_id' => 'nullable|uuid',
+            'date' => 'nullable|date_format:Y-m-d',
+        ]);
+        $search   = trim((string) ($filters['search'] ?? ''));
+        $status   = $filters['status'] ?? null;
+        $driverId = $filters['driver_id'] ?? null;
+        $date     = $filters['date'] ?? null;
 
         // ------------------------------------------------------------------
         // RECENT DELIVERIES — paginated, server-side filtered
@@ -138,7 +156,6 @@ class DeliveryController extends Controller
             'order.address',
             'order.payment:id,order_id,method,status',
             'driver.user:id,name',
-            'statusHistory',
         ]);
 
         // Server-side search (Delivery ID / Order # / Customer name-phone / Driver name)
@@ -187,9 +204,14 @@ class DeliveryController extends Controller
 
         // Date filter (created_at or delivered_at)
         if ($date) {
-            $query->where(function ($q) use ($date) {
-                $q->whereDate('created_at', $date)
-                    ->orWhereDate('delivered_at', $date);
+            $dayStart = Carbon::createFromFormat('Y-m-d', $date)->startOfDay();
+            $dayEnd = $dayStart->copy()->addDay();
+            $query->where(function ($q) use ($dayStart, $dayEnd) {
+                $q->where(function ($created) use ($dayStart, $dayEnd) {
+                    $created->where('created_at', '>=', $dayStart)->where('created_at', '<', $dayEnd);
+                })->orWhere(function ($delivered) use ($dayStart, $dayEnd) {
+                    $delivered->where('delivered_at', '>=', $dayStart)->where('delivered_at', '<', $dayEnd);
+                });
             });
         }
 
@@ -201,16 +223,26 @@ class DeliveryController extends Controller
         $deliveries = (clone $query)
             ->where(function ($q) use ($archiveCutoff, $completedStatuses) {
                 $q->whereNotIn('status', $completedStatuses)
-                    ->orWhereRaw('COALESCE(delivered_at, created_at) >= ?', [$archiveCutoff]);
+                    ->orWhere(function ($q) use ($archiveCutoff) {
+                        $q->where('delivered_at', '>=', $archiveCutoff)
+                            ->orWhere(function ($q) use ($archiveCutoff) {
+                                $q->whereNull('delivered_at')->where('created_at', '>=', $archiveCutoff);
+                            });
+                    });
             })
             ->orderByRaw('COALESCE(delivered_at, created_at) DESC')
-            ->paginate(5, ['*'], 'recent_history_page')
+            ->paginate(10, ['*'], 'recent_history_page')
             ->withQueryString()
             ->fragment('tabDeliveryHistory');
 
         // Archive deliveries only needs order, customer, address, driver (no payment/statusHistory)
         $archivedDeliveries = Delivery::whereIn('status', $completedStatuses)
-            ->whereRaw('COALESCE(delivered_at, created_at) < ?', [$archiveCutoff])
+            ->where(function ($q) use ($archiveCutoff) {
+                $q->where('delivered_at', '<', $archiveCutoff)
+                    ->orWhere(function ($q) use ($archiveCutoff) {
+                        $q->whereNull('delivered_at')->where('created_at', '<', $archiveCutoff);
+                    });
+            })
             ->with([
                 'order:id,order_number,customer_id,address_id',
                 'order.customer.user:id,name,phone',
@@ -218,7 +250,7 @@ class DeliveryController extends Controller
                 'driver.user:id,name',
             ])
             ->orderByRaw('COALESCE(delivered_at, created_at) DESC')
-            ->paginate(5, ['*'], 'archive_history_page')
+            ->paginate(10, ['*'], 'archive_history_page')
             ->withQueryString()
             ->fragment('tabDeliveryHistory');
 
@@ -320,7 +352,9 @@ class DeliveryController extends Controller
         // ------------------------------------------------------------------
         // DISPATCH & BATCHING DATA FOR TWO DRIVERS (Reusing active drivers collection)
         // ------------------------------------------------------------------
-        $driverBoard = $dispatchService->getDriverStatuses();
+        // Do not synchronously sign private Supabase profile images while
+        // rendering the dispatch page. The initials fallback is immediate.
+        $driverBoard = $dispatchService->getDriverStatuses(includeAvatars: false);
 
         $dispatchBundle = \Illuminate\Support\Facades\Cache::store('file')->remember('admin:deliveries:dispatch-bundle', now()->addSeconds(30), function () use ($dispatchService, $activeDrivers) {
             return [
@@ -348,10 +382,15 @@ class DeliveryController extends Controller
             ->latest()
             ->paginate(5, ['*'], 'active_pickup_page')
             ->withQueryString();
-        $activeDeliveryRoutes = DeliveryRoute::with(['driver.user:id,name', 'stops.order.address', 'stops.order.customer.user:id,name', 'stops.order.payment'])
+        $activeDeliveryRoutes = DeliveryRoute::query()
+            ->select(['id', 'route_number', 'driver_id', 'area', 'status', 'total_gallons', 'created_at'])
+            ->with(['driver:id,user_id,vehicle_plate', 'driver.user:id,name'])
+            ->withCount('stops')
+            ->withCount(['stops as delivered_stops_count' => fn ($q) => $q->where('status', 'delivered')])
             ->whereIn('status', ['ready', 'in_progress'])
             ->latest()
-            ->get();
+            ->paginate(10, ['*'], 'active_delivery_routes_page')
+            ->withQueryString();
         $historyBatches = collect(\Illuminate\Support\Facades\Cache::store('file')->remember('admin:deliveries:history-batches', now()->addSeconds(60), function () {
             return PickupBatch::with(['driver.user:id,name'])
                 ->whereIn('status', ['completed', 'cancelled'])

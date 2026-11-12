@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\ChatMessage;
+use App\Models\Driver;
 use App\Models\Notification;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\AdminSharedDataService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class AdminPerformanceOptimizationTest extends TestCase
@@ -117,5 +119,38 @@ class AdminPerformanceOptimizationTest extends TestCase
             $response->assertSee('id="sidebar"', false);
             $response->assertSee('id="notifButton"', false);
         }
+    }
+
+    public function test_deliveries_page_does_not_make_remote_avatar_signing_requests(): void
+    {
+        Http::fake();
+        $this->adminUser->forceFill(['avatar_path' => 'admin/avatar.png'])->save();
+
+        $driverUser = User::factory()->create([
+            'role' => 'driver',
+            'status' => 'active',
+            'name' => 'Dispatch Driver',
+            'avatar_path' => 'drivers/avatar.png',
+        ]);
+        Driver::create([
+            'user_id' => $driverUser->id,
+            'license_number' => 'TEST-123',
+            'vehicle_plate' => 'TEST-01',
+        ]);
+
+        $response = $this->actingAs($this->adminUser)->get('/admin/deliveries');
+
+        $response->assertOk();
+
+        $staffUser = User::factory()->create([
+            'role' => 'staff',
+            'status' => 'active',
+            'name' => 'Dispatch Staff',
+            'avatar_path' => 'staff/avatar.png',
+        ]);
+        $this->actingAs($staffUser)->get('/admin/deliveries')->assertOk();
+
+        $sentPaths = Http::recorded()->map(fn ($pair) => parse_url($pair[0]->url(), PHP_URL_PATH))->all();
+        $this->assertSame([], $sentPaths, 'The Deliveries page must not make remote HTTP requests while rendering.');
     }
 }

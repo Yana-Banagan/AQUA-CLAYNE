@@ -242,7 +242,7 @@
                 @if($delivery->driver)
                     <div class="show-driver-profile">
                         <span class="show-driver-avatar" aria-hidden="true">
-                            @include('admin.partials.avatar-content', ['user' => $delivery->driver->user, 'fallbackName' => 'Driver'])
+                            {{ strtoupper(mb_substr($delivery->driver->user?->name ?? 'D', 0, 1)) }}
                         </span>
                         <div>
                             <strong class="show-driver-name">{{ $delivery->driver->user?->name ?? 'Driver' }}</strong>

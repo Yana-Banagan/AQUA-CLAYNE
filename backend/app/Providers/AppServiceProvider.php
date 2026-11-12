@@ -82,7 +82,9 @@ class AppServiceProvider extends ServiceProvider
 
                 $existingCounts = $view->getData()['sidebarCounts'] ?? [];
                 $sidebarCounts = $sharedData->getSidebarCounts($user, $existingCounts);
-                $adminAvatarUrl = $sharedData->getAdminAvatarUrl($user);
+                $adminAvatarUrl = request()->routeIs('admin.deliveries.*')
+                    ? null
+                    : $sharedData->getAdminAvatarUrl($user);
 
                 $view->with('sidebarCounts', $sidebarCounts);
                 $view->with('headerNotifications', []);

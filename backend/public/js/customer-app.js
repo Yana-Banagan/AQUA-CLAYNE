@@ -58,6 +58,7 @@
             delivery_fee: 5.00
         }
     };
+    const inFlightGetRequests = new Map();
 
     // Ensure valid cart object structure
     if (!Array.isArray(AppState.cart.items)) {
@@ -68,6 +69,13 @@
     // 2. HTTP API HELPER (Communicates with /api/v1/...)
     // =========================================================================
     async function apiRequest(endpoint, method = 'GET', data = null, requireAuth = true) {
+        const requestKey = method === 'GET'
+            ? `${endpoint}|${requireAuth ? 'auth' : 'public'}|${AppState.token || ''}`
+            : null;
+        if (requestKey && inFlightGetRequests.has(requestKey)) {
+            return inFlightGetRequests.get(requestKey);
+        }
+
         const headers = {
             'Accept': 'application/json',
             'Content-Type': 'application/json'
@@ -89,6 +97,7 @@
             config.body = JSON.stringify(data);
         }
 
+        const request = (async () => {
         try {
             const response = await fetch(`/api/v1${endpoint}`, config);
             const resJson = await response.json().catch(() => null);
@@ -110,6 +119,17 @@
         } catch (error) {
             console.error(`[API Error] ${method} ${endpoint}:`, error);
             throw error;
+        }
+        })();
+
+        if (!requestKey) return request;
+        inFlightGetRequests.set(requestKey, request);
+        try {
+            return await request;
+        } finally {
+            if (inFlightGetRequests.get(requestKey) === request) {
+                inFlightGetRequests.delete(requestKey);
+            }
         }
     }
 
@@ -444,7 +464,8 @@ function navigateTo(viewId, param = null, pushHistory = true) {
         if (viewId === 'home') {
             loadDashboard();
         } else if (viewId === 'catalog') {
-            renderCatalog();
+            if (AppState.products.length === 0) loadCatalog();
+            else renderCatalog();
         } else if (viewId === 'cart') {
             renderCart();
         } else if (viewId === 'checkout') {
@@ -901,6 +922,22 @@ function navigateTo(viewId, param = null, pushHistory = true) {
         localStorage.setItem('aqua_customer_cart', JSON.stringify(AppState.cart));
     }
 
+    function getClientOrderRequestId() {
+        const fingerprint = JSON.stringify({
+            items: AppState.cart.items.map(item => [item.product.id, item.quantity]),
+            deliveryMethod: AppState.cart.deliveryMethod,
+            addressId: AppState.cart.selectedAddressId,
+            paymentMethod: AppState.cart.paymentMethod,
+            notes: AppState.cart.notes || '',
+        });
+        if (!AppState.pendingOrderRequestId || AppState.pendingOrderPayloadFingerprint !== fingerprint) {
+            AppState.pendingOrderRequestId = window.crypto?.randomUUID?.()
+                || `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+            AppState.pendingOrderPayloadFingerprint = fingerprint;
+        }
+        return AppState.pendingOrderRequestId;
+    }
+
     function updateCartBadge() {
         const totalCount = AppState.cart.items.reduce((sum, item) => sum + item.quantity, 0);
         document.querySelectorAll('.cart-badge-count, #navCartBadge, #mobileCartBadge').forEach(el => {
@@ -1308,6 +1345,8 @@ function navigateTo(viewId, param = null, pushHistory = true) {
     }
 
     async function handleCheckoutSubmit(form) {
+        if (AppState.orderSubmitting) return;
+        AppState.orderSubmitting = true;
         const btn = document.getElementById('btnSubmitOrder');
         if (btn) {
             btn.disabled = true;
@@ -1374,6 +1413,10 @@ function navigateTo(viewId, param = null, pushHistory = true) {
             });
 
             const notes = document.getElementById('checkoutNotes')?.value.trim() || AppState.cart.specialInstructions || '';
+            AppState.cart.paymentMethod = paymentMethod;
+            AppState.cart.deliveryMethod = fulfillmentMethod;
+            AppState.cart.selectedAddressId = addressId;
+            AppState.cart.notes = notes;
 
             const payload = {
                 delivery_method: fulfillmentMethod,
@@ -1386,12 +1429,14 @@ function navigateTo(viewId, param = null, pushHistory = true) {
                     product_id: item.product.id,
                     quantity: item.quantity
                 })),
-                client_request_id: 'web_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9)
+                client_request_id: getClientOrderRequestId()
             };
 
             const res = await apiRequest('/customer/orders', 'POST', payload, true);
             const orderData = res?.data || res?.order || res;
             const orderId = orderData?.id;
+            AppState.pendingOrderRequestId = null;
+            AppState.pendingOrderPayloadFingerprint = null;
 
             showToast('Order confirmed successfully!', 'success');
             clearCart();
@@ -1422,6 +1467,7 @@ function navigateTo(viewId, param = null, pushHistory = true) {
         } catch (err) {
             showToast(err.message || 'Failed to place order. Please check your details and try again.', 'error');
         } finally {
+            AppState.orderSubmitting = false;
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = `
@@ -1864,6 +1910,8 @@ function navigateTo(viewId, param = null, pushHistory = true) {
 
     // Submit Order API
     async function placeOrder() {
+        if (AppState.orderSubmitting) return;
+        AppState.orderSubmitting = true;
         const btn = document.getElementById('btnPlaceOrder');
         if (btn) {
             btn.disabled = true;
@@ -1871,7 +1919,7 @@ function navigateTo(viewId, param = null, pushHistory = true) {
         }
 
         const calcs = getCartCalculations();
-        const clientRequestId = `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+        const clientRequestId = getClientOrderRequestId();
 
         const payload = {
             delivery_method: AppState.cart.deliveryMethod,
@@ -1893,6 +1941,8 @@ function navigateTo(viewId, param = null, pushHistory = true) {
             if (!createdOrder) {
                 throw new Error('Order creation did not return details.');
             }
+            AppState.pendingOrderRequestId = null;
+            AppState.pendingOrderPayloadFingerprint = null;
 
             // Clear cart
             AppState.cart.items = [];
@@ -3320,6 +3370,7 @@ function navigateTo(viewId, param = null, pushHistory = true) {
         } catch (err) {
             showToast(err.message || 'Failed to update profile.', 'error');
         } finally {
+            AppState.orderSubmitting = false;
             if (btn) {
                 btn.disabled = false;
                 btn.textContent = '✓ Save Changes';
@@ -3732,8 +3783,9 @@ function navigateTo(viewId, param = null, pushHistory = true) {
 
         navigateTo(initialView, initialId, false);
 
-        // Preload catalog
-        loadCatalog();
+        // The page embeds the active catalog at render time. Defer the catalog
+        // request until the customer opens that view instead of competing with
+        // the initial dashboard requests.
 
         // Start realtime listener
         initRealtime();

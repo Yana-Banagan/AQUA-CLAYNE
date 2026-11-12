@@ -178,7 +178,7 @@
             </svg>
             <span>Delivery Routes</span>
             <span class="dispatch-tab-badge {{ count($suggestedDeliveryRoutes) > 0 ? 'badge-highlight' : '' }}">
-                {{ count($suggestedDeliveryRoutes) + $activeDeliveryRoutes->count() }}
+                {{ count($suggestedDeliveryRoutes) + $activeDeliveryRoutes->total() }}
             </span>
         </button>
 
@@ -321,7 +321,7 @@
 
         {{-- Active Delivery Routes in Transit --}}
         <div class="suggested-section-title" style="margin-top: 20px;">
-            <span>Active Delivery Routes in Transit ({{ $activeDeliveryRoutes->count() }})</span>
+            <span>Active Delivery Routes in Transit ({{ $activeDeliveryRoutes->total() }})</span>
         </div>
 
         @if($activeDeliveryRoutes->isNotEmpty())
@@ -341,8 +341,8 @@
                     <tbody>
                         @foreach($activeDeliveryRoutes as $dr)
                             @php
-                                $deliveredStops = $dr->stops->where('status', 'delivered')->count();
-                                $totalStops = $dr->stops->count();
+                                $deliveredStops = (int) $dr->delivered_stops_count;
+                                $totalStops = (int) $dr->stops_count;
                                 $pct = $totalStops > 0 ? round(($deliveredStops / $totalStops) * 100) : 0;
                             @endphp
                             <tr>
@@ -390,6 +390,7 @@
                 <p style="margin: 6px 0 0; font-size: 13px; color: #94A3B8;">Completed orders in the Refill Queue will automatically appear here grouped into delivery routes.</p>
             </div>
         @endif
+        {{ $activeDeliveryRoutes->links() }}
     </div>
 
     {{-- ======================================================================
@@ -417,7 +418,7 @@
                     <div class="driver-card-top">
                         <div class="driver-profile-info">
                             <div class="driver-large-avatar">
-                                @include('admin.partials.avatar-content', ['avatarUrl' => $drv['avatar_url'] ?? null, 'fallbackName' => $drv['name']])
+                                {{ strtoupper(mb_substr($drv['name'] ?? 'D', 0, 1)) }}
                             </div>
                             <div class="driver-meta-block">
                                 <h3>{{ $drv['name'] }}</h3>
@@ -646,7 +647,7 @@
                             <div class="fleet-driver-item">
                                 <div class="fleet-driver-left">
                                     <span class="cell-driver-avatar" aria-hidden="true">
-                                        @include('admin.partials.avatar-content', ['user' => $drv->user, 'fallbackName' => 'Driver'])
+                                        {{ strtoupper(mb_substr($drv->user?->name ?? 'D', 0, 1)) }}
                                     </span>
                                     <div>
                                         <strong class="fleet-driver-name">{{ $drv->user?->name ?? 'Driver' }}</strong>
@@ -788,7 +789,7 @@
                                         </td>
                                         <td>
                                             <div class="cell-user-wrap">
-                                                <span class="cell-customer-avatar" aria-hidden="true">@include('admin.partials.avatar-content', ['user' => $deliv->order?->customer?->user, 'fallbackName' => 'Customer'])</span>
+                                                <span class="cell-customer-avatar" aria-hidden="true">{{ strtoupper(mb_substr($deliv->order?->customer?->user?->name ?? 'C', 0, 1)) }}</span>
                                                 <span class="cell-user-meta">
                                                     <span class="cell-user-name">{{ $deliv->order?->customer?->user?->name ?? '—' }}</span>
                                                     <span class="cell-user-sub">{{ $deliv->order?->customer?->user?->phone ?? '' }}</span>
@@ -799,7 +800,7 @@
                                             @if($deliv->driver)
                                                 <div class="cell-driver-wrap">
                                                     <span class="cell-driver-avatar" aria-hidden="true">
-                                                        @include('admin.partials.avatar-content', ['user' => $deliv->driver->user, 'fallbackName' => 'Driver'])
+                                                        {{ strtoupper(mb_substr($deliv->driver->user?->name ?? 'D', 0, 1)) }}
                                                     </span>
                                                     <div>
                                                         <strong class="cell-driver-name">{{ $deliv->driver->user?->name ?? 'Driver' }}</strong>
@@ -1117,7 +1118,7 @@
                         @foreach($availableAssignDrivers as $drv)
                             <option value="{{ $drv->id }}"
                                     data-name="{{ $drv->user?->name ?? 'Driver' }}"
-                                    data-avatar="{{ $drv->user?->avatar_url ?? '' }}"
+                                    data-avatar=""
                                     data-plate="{{ $drv->vehicle_plate ?? 'N/A' }}"
                                     data-phone="{{ $drv->user?->phone ?? 'N/A' }}"
                                     data-deliveries="{{ $drv->deliveries?->count() ?? 0 }}">

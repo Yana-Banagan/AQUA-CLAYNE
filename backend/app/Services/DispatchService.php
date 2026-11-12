@@ -22,21 +22,24 @@ class DispatchService
     /**
      * Get operational status and workload summary for the station's two active drivers.
      */
-    public function getDriverStatuses(bool $forceFresh = false): array
+    public function getDriverStatuses(bool $forceFresh = false, bool $includeAvatars = true): array
     {
+        $cacheKey = $includeAvatars ? 'dispatch:driver-statuses' : 'dispatch:driver-statuses:no-avatars';
         if ($forceFresh) {
-            \Illuminate\Support\Facades\Cache::forget('dispatch:driver-statuses');
+            $this->clearDriverStatusCache();
         }
 
-        return \Illuminate\Support\Facades\Cache::remember('dispatch:driver-statuses', now()->addSeconds(15), function () {
+        return \Illuminate\Support\Facades\Cache::remember($cacheKey, now()->addSeconds(15), function () use ($includeAvatars) {
             $drivers = Driver::with([
                 'user:id,name,phone,status,avatar_path',
-                'pickupBatches' => function ($q) {
-                    $q->whereIn('status', ['ready', 'in_progress'])->with('items.order:id,order_number');
-                },
-                'deliveryRoutes' => function ($q) {
-                    $q->whereIn('status', ['ready', 'in_progress'])->with('stops.order:id,order_number');
-                }
+                'pickupBatches' => fn ($q) => $q->whereIn('status', ['ready', 'in_progress'])
+                    ->select(['id', 'driver_id', 'batch_number', 'area', 'status', 'total_expected_gallons'])
+                    ->withCount('items')
+                    ->withCount(['items as completed_items_count' => fn ($items) => $items->whereIn('status', ['picked_up', 'failed'])]),
+                'deliveryRoutes' => fn ($q) => $q->whereIn('status', ['ready', 'in_progress'])
+                    ->select(['id', 'driver_id', 'route_number', 'area', 'status', 'total_gallons'])
+                    ->withCount('stops')
+                    ->withCount(['stops as completed_stops_count' => fn ($stops) => $stops->whereIn('status', ['delivered', 'failed'])]),
             ])->get();
 
             $driverBoard = [];
@@ -60,23 +63,23 @@ class DispatchService
                     $currentTaskType = 'route';
                     $currentTaskCode = $activeRoute->route_number;
                     $currentArea = $activeRoute->area;
-                    $stopsCount = $activeRoute->stops->count();
-                    $completedStops = $activeRoute->stops->whereIn('status', ['delivered', 'failed'])->count();
+                    $stopsCount = (int) $activeRoute->stops_count;
+                    $completedStops = (int) $activeRoute->completed_stops_count;
                     $gallonsCount = $activeRoute->total_gallons;
                 } elseif ($activeBatch) {
                     $status = $activeBatch->status === 'in_progress' ? 'ON_PICKUP' : 'ASSIGNED';
                     $currentTaskType = 'pickup';
                     $currentTaskCode = $activeBatch->batch_number;
                     $currentArea = $activeBatch->area;
-                    $stopsCount = $activeBatch->items->count();
-                    $completedStops = $activeBatch->items->whereIn('status', ['picked_up', 'failed'])->count();
+                    $stopsCount = (int) $activeBatch->items_count;
+                    $completedStops = (int) $activeBatch->completed_items_count;
                     $gallonsCount = $activeBatch->total_expected_gallons;
                 }
 
                 $driverBoard[] = [
                     'id' => $driver->id,
                     'name' => $driver->user?->name ?? 'Driver',
-                    'avatar_url' => $driver->user?->avatar_url,
+                    'avatar_url' => $includeAvatars ? $driver->user?->avatar_url : null,
                     'phone' => $driver->user?->phone ?? 'N/A',
                     'vehicle_plate' => $driver->vehicle_plate ?? 'N/A',
                     'license_number' => $driver->license_number ?? 'N/A',
@@ -87,8 +90,6 @@ class DispatchService
                     'stops_count' => $stopsCount,
                     'completed_stops' => $completedStops,
                     'gallons_count' => $gallonsCount,
-                    'active_batch' => $activeBatch,
-                    'active_route' => $activeRoute,
                 ];
             }
 
@@ -103,15 +104,16 @@ class DispatchService
     public function suggestPickupBatches(?\Illuminate\Support\Collection $drivers = null): array
     {
         // Unassigned confirmed orders not in any active pickup batch
-        $assignedOrderIds = PickupBatchItem::whereHas('batch', function ($q) {
-            $q->whereIn('status', ['ready', 'in_progress']);
-        })->pluck('order_id')->all();
-
         $confirmedOrders = Order::query()
             ->where('status', 'confirmed')
             ->where('delivery_method', '!=', 'station_pickup')
-            ->whereNotIn('id', $assignedOrderIds)
-            ->with(['customer.user', 'address'])
+            ->whereDoesntHave('pickupBatchItem', fn ($q) => $q->whereHas('batch', fn ($batch) => $batch->whereIn('status', ['ready', 'in_progress'])))
+            ->select(['id', 'order_number', 'customer_id', 'address_id', 'expected_empty_gallons', 'created_at'])
+            ->with([
+                'customer:id,user_id',
+                'customer.user:id,name,phone',
+                'address:id,address_line,notes',
+            ])
             ->orderBy('created_at')
             ->get();
 
@@ -250,7 +252,7 @@ class DispatchService
                 'record_id' => $batch->id,
             ]);
 
-            \Illuminate\Support\Facades\Cache::forget('dispatch:driver-statuses');
+            $this->clearDriverStatusCache();
             app(RealtimeEventService::class)->emit('pickup_batch', $batch->id, 'created', 'ready');
 
             if ($driver?->user) {
@@ -272,15 +274,18 @@ class DispatchService
      */
     public function suggestDeliveryRoutes(?\Illuminate\Support\Collection $drivers = null): array
     {
-        $assignedOrderIds = DeliveryStop::whereHas('route', function ($q) {
-            $q->whereIn('status', ['ready', 'in_progress']);
-        })->pluck('order_id')->all();
-
         $readyOrders = Order::query()
             ->where('status', 'ready_for_delivery')
             ->where('delivery_method', '!=', 'station_pickup')
-            ->whereNotIn('id', $assignedOrderIds)
-            ->with(['customer.user', 'address', 'containerIntake', 'payment'])
+            ->whereDoesntHave('deliveryStop', fn ($q) => $q->whereHas('route', fn ($route) => $route->whereIn('status', ['ready', 'in_progress'])))
+            ->select(['id', 'order_number', 'customer_id', 'address_id', 'expected_empty_gallons', 'payment_method', 'created_at'])
+            ->with([
+                'customer:id,user_id',
+                'customer.user:id,name,phone',
+                'address:id,address_line,notes',
+                'containerIntake:id,order_id,accepted_count',
+                'payment:id,order_id,status',
+            ])
             ->orderBy('created_at')
             ->get();
 
@@ -416,7 +421,7 @@ class DispatchService
                 'record_id' => $route->id,
             ]);
 
-            \Illuminate\Support\Facades\Cache::forget('dispatch:driver-statuses');
+            $this->clearDriverStatusCache();
             app(RealtimeEventService::class)->emit('delivery_route', $route->id, 'created', 'ready');
 
             if ($driver?->user) {
@@ -443,6 +448,12 @@ class DispatchService
         if (str_contains($addressLower, 'sto tomas') || str_contains($addressLower, 'santo tomas')) return 'Santo Tomas';
 
         return 'Central Area';
+    }
+
+    private function clearDriverStatusCache(): void
+    {
+        \Illuminate\Support\Facades\Cache::forget('dispatch:driver-statuses');
+        \Illuminate\Support\Facades\Cache::forget('dispatch:driver-statuses:no-avatars');
     }
 
     private function formatSuggestedBatch(string $area, int $seq, array $orders, int $totalGallons, ?Driver $driver): array
