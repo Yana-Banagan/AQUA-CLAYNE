@@ -258,12 +258,11 @@ class DeliveryController extends Controller
         // DRIVERS — all for filter dropdown, active-only for assignment
         // Consolidated into a single query to eliminate duplicate roundtrips
         // ------------------------------------------------------------------
-        $allDrivers = Driver::with([
-            'user:id,name,phone,status,avatar_path',
-            'deliveries' => fn($dq) => $dq->whereIn('status', [
+        $allDrivers = Driver::with('user:id,name,phone,status,avatar_path')
+            ->withCount(['deliveries as active_deliveries_count' => fn($dq) => $dq->whereIn('status', [
                 'assigned', 'en_route_for_pickup', 'picked_up', 'out_for_delivery',
-            ])->select(['id', 'driver_id', 'status']),
-        ])->get(['id', 'user_id', 'vehicle_plate']);
+            ])])
+            ->get(['id', 'user_id', 'vehicle_plate']);
 
         $activeDrivers = $allDrivers->where('user.status', 'active')->values();
 

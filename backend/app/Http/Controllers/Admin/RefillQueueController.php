@@ -198,6 +198,7 @@ class RefillQueueController extends Controller
         ])
             ->where('status', 'picked_up')
             ->latest('created_at')
+            ->limit(50)
             ->get();
 
         $intakeDiscrepancies = Order::with([
@@ -212,6 +213,7 @@ class RefillQueueController extends Controller
                    ->orWhere('damaged_count', '>', 0);
             })
             ->latest('created_at')
+            ->limit(50)
             ->get();
 
         $sharedData = app(\App\Services\AdminSharedDataService::class);

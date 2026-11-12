@@ -55,13 +55,14 @@
         var backdrop = document.getElementById('admin-action-confirmation');
         var card = backdrop.querySelector('.action-confirm-card');
         var deleting = action === 'delete';
+        var loggingOut = action === 'logout';
         card.dataset.action = action;
-        backdrop.querySelector('#action-confirm-title').textContent = deleting ? 'Delete this item?' : 'Edit this item?';
+        backdrop.querySelector('#action-confirm-title').textContent = deleting ? 'Delete this item?' : (loggingOut ? 'Log out of admin?' : 'Edit this item?');
         backdrop.querySelector('#action-confirm-message').textContent = message || (deleting
             ? 'This action may be permanent. Do you want to continue?'
-            : 'Do you want to open this item for editing?');
+            : (loggingOut ? 'Are you sure you want to end your admin session?' : 'Do you want to open this item for editing?'));
         backdrop.querySelector('.action-confirm-icon').textContent = deleting ? '!' : '✎';
-        backdrop.querySelector('.action-confirm-accept').textContent = deleting ? 'Delete' : 'Continue to edit';
+        backdrop.querySelector('.action-confirm-accept').textContent = deleting ? 'Delete' : (loggingOut ? 'Log out' : 'Continue to edit');
         backdrop.hidden = false;
         document.body.style.overflow = 'hidden';
         backdrop.querySelector('.action-confirm-cancel').focus();
@@ -72,7 +73,7 @@
         closeDialog();
         if (!current) return;
 
-        if (current.action === 'delete') {
+        if (current.action === 'delete' || current.action === 'logout') {
             var form = current.trigger;
             if (form instanceof HTMLFormElement) {
                 confirmedForms.add(form);
@@ -124,6 +125,12 @@
         }
 
         var method = (form.querySelector('input[name="_method"]')?.value || form.method || 'GET').toUpperCase();
+        if (form.matches('.logout-form, .dropdown-logout-form') || form.action.includes('/admin/logout')) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            ask('logout', 'Are you sure you want to log out of the admin dashboard?', form);
+            return;
+        }
         var submitterLabel = (event.submitter?.textContent || event.submitter?.value || '').trim().toLowerCase();
         var isDelete = method === 'DELETE' || /\bdelete\b/.test(submitterLabel) || form.hasAttribute('data-confirm-delete');
         if (!isDelete) return;

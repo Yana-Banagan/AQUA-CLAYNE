@@ -164,15 +164,13 @@ class OrderController extends Controller
         $activeDrivers = Driver::whereHas('user', function ($q) {
             $q->where('status', 'active');
         })
-        ->with([
-            'user:id,name,phone,avatar_path',
-            'deliveries' => function ($dq) {
-                $dq->whereIn('status', ['assigned', 'en_route_for_pickup', 'picked_up', 'out_for_delivery']);
-            }
-        ])
+        ->with('user:id,name,phone,avatar_path')
+        ->withCount(['deliveries as active_deliveries_count' => function ($dq) {
+            $dq->whereIn('status', ['assigned', 'en_route_for_pickup', 'picked_up', 'out_for_delivery']);
+        }])
         ->get()
         ->map(function ($driver) {
-            $activeCount = $driver->deliveries->count();
+            $activeCount = (int) $driver->active_deliveries_count;
             return [
                 'id' => $driver->id,
                 'name' => $driver->user->name,

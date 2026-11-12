@@ -1027,7 +1027,7 @@
 ============================================================ --}}
 
 {{-- ── Assign Driver Modal ── --}}
-@php($availableAssignDrivers = $activeDrivers->filter(fn ($driver) => $driver->deliveries->count() < 4)->values())
+@php($availableAssignDrivers = $activeDrivers->filter(fn ($driver) => (int) $driver->active_deliveries_count < 4)->values())
 <div class="delivery-modal-backdrop assign-driver-backdrop modal-backdrop" id="assignDriverModal"
      role="dialog" aria-modal="true" aria-labelledby="assignDriverModalTitle">
     <div class="delivery-modal modal assign-driver-modal">

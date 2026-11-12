@@ -28,6 +28,9 @@ class RfidController extends Controller
     public function index(Request $request, RfidDeviceService $deviceService, AdminSharedDataService $sharedData)
     {
         $activeTab = $request->get('tab', 'tags');
+        if (!in_array($activeTab, ['tags', 'containers', 'devices', 'transactions'], true)) {
+            $activeTab = 'tags';
+        }
 
         // ------------------------------------------------------------------
         // 1. REALTIME KPI STATS
@@ -92,7 +95,7 @@ class RfidController extends Controller
                   });
             });
         }
-        $tags = $tagsQuery->paginate(10, ['*'], 'tags_page')->withQueryString();
+        $tags = $activeTab === 'tags' ? $tagsQuery->paginate(10, ['*'], 'tags_page')->withQueryString() : collect();
 
         // ------------------------------------------------------------------
         // 3. CONTAINERS QUERY
@@ -122,12 +125,12 @@ class RfidController extends Controller
                   });
             });
         }
-        $containers = $containersQuery->paginate(10, ['*'], 'containers_page')->withQueryString();
+        $containers = $activeTab === 'containers' ? $containersQuery->paginate(10, ['*'], 'containers_page')->withQueryString() : collect();
 
         // ------------------------------------------------------------------
         // 4. DEVICES QUERY
         // ------------------------------------------------------------------
-        $devices = RfidDevice::latest('created_at')->get();
+        $devices = $activeTab === 'devices' ? RfidDevice::latest('created_at')->get() : collect();
 
         // ------------------------------------------------------------------
         // 5. TRANSACTIONS QUERY
@@ -176,7 +179,7 @@ class RfidController extends Controller
                   });
             });
         }
-        $transactions = $transactionsQuery->paginate(15, ['*'], 'tx_page')->withQueryString();
+        $transactions = $activeTab === 'transactions' ? $transactionsQuery->paginate(15, ['*'], 'tx_page')->withQueryString() : collect();
 
         $sidebarCounts = $sharedData->getSidebarCounts($request->user());
 

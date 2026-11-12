@@ -558,7 +558,7 @@
 
     <!-- Shared admin scripts. Page-specific libraries load from their page view. -->
     <script src="{{ asset('js/admin-dashboard.js') }}?v=20261005-9" defer></script>
-    <script src="{{ asset('js/admin-action-confirmations.js') }}?v=20261005-1"></script>
+    <script src="{{ asset('js/admin-action-confirmations.js') }}?v=20261112-1"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script>
         // Centralized status counters, on-demand notifications, and realtime sync
