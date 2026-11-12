@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+
 import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -58,8 +58,7 @@ class RealtimeService with WidgetsBindingObserver {
     _connected[topic] = false;
 
     // Build unique channel name
-    final channelName =
-        'rt-$topic-${DateTime.now().millisecondsSinceEpoch}';
+    final channelName = 'rt-$topic-${DateTime.now().millisecondsSinceEpoch}';
 
     RealtimeChannel channel = client.channel(channelName);
 
@@ -91,8 +90,10 @@ class RealtimeService with WidgetsBindingObserver {
       } else {
         _startFallback();
       }
-      debugPrint('[Realtime] $topic status: $status'
-          '${error != null ? " error: $error" : ""}');
+      debugPrint(
+        '[Realtime] $topic status: $status'
+        '${error != null ? " error: $error" : ""}',
+      );
     });
 
     _channels[topic] = channel;
@@ -180,7 +181,9 @@ class RealtimeService with WidgetsBindingObserver {
       final topicsToDispatch = Set<String>.from(_pendingTopics);
       _pendingTopics.clear();
       for (final topic in topicsToDispatch) {
-        for (final listener in List<VoidCallback>.from(_listeners[topic] ?? {})) {
+        for (final listener in List<VoidCallback>.from(
+          _listeners[topic] ?? {},
+        )) {
           listener();
         }
       }
@@ -188,7 +191,8 @@ class RealtimeService with WidgetsBindingObserver {
   }
 
   void _stopFallbackIfConnected() {
-    if (_connected.isEmpty || _connected.values.every((connected) => connected)) {
+    if (_connected.isEmpty ||
+        _connected.values.every((connected) => connected)) {
       _fallbackTimer?.cancel();
       _fallbackTimer = null;
     }

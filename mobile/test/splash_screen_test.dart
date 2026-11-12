@@ -4,6 +4,7 @@ import 'package:mobile/core/screens/splash_screen.dart';
 
 void main() {
   testWidgets('splash logo scales in during its intro animation', (tester) async {
+    var animationCompleted = false;
     final splashScale = find
         .descendant(
           of: find.byType(SplashScreen),
@@ -12,8 +13,10 @@ void main() {
         .first;
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: SplashScreen(),
+      MaterialApp(
+        home: SplashScreen(
+          onAnimationComplete: () => animationCompleted = true,
+        ),
       ),
     );
 
@@ -29,6 +32,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 350));
     final finalScale = tester.widget<ScaleTransition>(splashScale).scale.value;
     expect(finalScale, closeTo(1.0, 0.001));
+
+    await tester.pump(const Duration(milliseconds: 1100));
+    expect(animationCompleted, isTrue);
   });
 
   testWidgets('SplashScreen renders clean branded design with Aqua Clayne logo and typography', (tester) async {

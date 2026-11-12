@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/config/env.dart';
 import 'package:mobile/core/api/api_client.dart';
@@ -32,15 +31,21 @@ void main() {
     test('ApiClient contains user-friendly connection and timeout errors', () {
       expect(
         ApiClient.userFriendlyConnectionError,
-        equals('Unable to connect to Aqua Clayne. Please check your internet connection and try again.'),
+        equals(
+          'Unable to connect to Aqua Clayne. Please check your internet connection and try again.',
+        ),
       );
       expect(
         ApiClient.userFriendlyTimeoutError,
-        equals('Connection timed out. Please check your internet connection and try again.'),
+        equals(
+          'Connection timed out. Please check your internet connection and try again.',
+        ),
       );
       expect(
         ApiClient.userFriendlyUploadTimeoutError,
-        equals('Upload timed out. Please check your internet connection and try again.'),
+        equals(
+          'Upload timed out. Please check your internet connection and try again.',
+        ),
       );
     });
 
@@ -50,4 +55,3 @@ void main() {
     });
   });
 }
-

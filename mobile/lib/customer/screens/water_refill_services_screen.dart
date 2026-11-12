@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../core/models/product_model.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/widgets/guest_order_prompt.dart';
@@ -13,7 +14,8 @@ class WaterRefillServicesScreen extends StatefulWidget {
   const WaterRefillServicesScreen({super.key});
 
   @override
-  State<WaterRefillServicesScreen> createState() => _WaterRefillServicesScreenState();
+  State<WaterRefillServicesScreen> createState() =>
+      _WaterRefillServicesScreenState();
 }
 
 class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
@@ -33,13 +35,12 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
 
   void _loadServices() {
     setState(() {
-      _servicesFuture = context
-          .read<ProductRepository>()
-          .list()
-          .then((raw) => raw
-              .map(ProductModel.fromMap)
-              .where((s) => !s.name.toLowerCase().contains('alkaline'))
-              .toList());
+      _servicesFuture = context.read<ProductRepository>().list().then(
+        (raw) => raw
+            .map(ProductModel.fromMap)
+            .where((s) => !s.name.toLowerCase().contains('alkaline'))
+            .toList(),
+      );
     });
   }
 
@@ -96,7 +97,9 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
     setState(() => _addedToCart = true);
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$_quantity × ${_selectedService!.name} added to cart')),
+      SnackBar(
+        content: Text('$_quantity × ${_selectedService!.name} added to cart'),
+      ),
     );
   }
 
@@ -156,7 +159,8 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
                           children: [
                             // Refill Services List
                             ...filteredServices.map((service) {
-                              final isSelected = _selectedService?.id == service.id;
+                              final isSelected =
+                                  _selectedService?.id == service.id;
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 14),
                                 child: _buildServiceCard(service, isSelected),
@@ -206,10 +210,14 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFD5E7F4), width: 1),
+                      border: Border.all(
+                        color: const Color(0xFFD5E7F4),
+                        width: 1,
+                      ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF0878C9).withValues(alpha: 0.08),
+                          color: const Color(0xFF0878C9)
+                              .withValues(alpha: 0.08),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -317,72 +325,80 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
               const SizedBox(width: 10),
               Consumer<NotificationProvider>(
                 builder: (context, notifProv, _) {
-              final unreadCount = context.watch<AuthProvider>().isAuthenticated
-                  ? notifProv.unreadCount
-                  : 0;
-              return Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const NotificationsScreen(),
-                          ),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(21),
-                      child: Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFFD5E7F4), width: 1),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF0878C9).withValues(alpha: 0.08),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.notifications_outlined,
-                          color: Color(0xFF0878C9),
-                          size: 22,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (unreadCount > 0)
-                    Positioned(
-                      top: -2,
-                      right: -2,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFE53935),
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                        child: Center(
-                          child: Text(
-                            unreadCount > 99 ? '99+' : '$unreadCount',
-                            style: const TextStyle(
+                  final unreadCount =
+                      context.watch<AuthProvider>().isAuthenticated
+                      ? notifProv.unreadCount
+                      : 0;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const NotificationsScreen(),
+                              ),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(21),
+                          child: Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
                               color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              height: 1,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: const Color(0xFFD5E7F4),
+                                width: 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF0878C9)
+                                      .withValues(alpha: 0.08),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.notifications_outlined,
+                              color: Color(0xFF0878C9),
+                              size: 22,
                             ),
                           ),
                         ),
                       ),
-                    ),
-                ],
-              );
+                      if (unreadCount > 0)
+                        Positioned(
+                          top: -2,
+                          right: -2,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFE53935),
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 18,
+                              minHeight: 18,
+                            ),
+                            child: Center(
+                              child: Text(
+                                unreadCount > 99 ? '99+' : '$unreadCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  height: 1,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
                 },
               ),
             ],
@@ -415,12 +431,17 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
               borderRadius: BorderRadius.circular(20),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected ? const Color(0xFF0878C9) : Colors.white,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: isSelected ? const Color(0xFF0878C9) : const Color(0xFFD5E7F4),
+                    color: isSelected
+                        ? const Color(0xFF0878C9)
+                        : const Color(0xFFD5E7F4),
                     width: 1.2,
                   ),
                   boxShadow: [
@@ -438,8 +459,12 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
                     cat,
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                      color: isSelected ? Colors.white : const Color(0xFF12344D),
+                      fontWeight: isSelected
+                          ? FontWeight.w700
+                          : FontWeight.w600,
+                      color: isSelected
+                          ? Colors.white
+                          : const Color(0xFF12344D),
                     ),
                   ),
                 ),
@@ -463,9 +488,7 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isSelected
-              ? const Color(0xFF0878C9)
-              : const Color(0xFFE5F1FA),
+          color: isSelected ? const Color(0xFF0878C9) : const Color(0xFFE5F1FA),
           width: isSelected ? 2.0 : 1.2,
         ),
         boxShadow: [
@@ -510,22 +533,22 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
                       child: Center(
                         child: hasImage
                             ? (service.imageUrl!.startsWith('http')
-                                ? Image.network(
-                                    service.imageUrl!,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (_, __, ___) => Image.asset(
-                                      'assets/images/aqua_clayne_gallon.png',
+                                  ? Image.network(
+                                      service.imageUrl!,
                                       fit: BoxFit.contain,
-                                    ),
-                                  )
-                                : Image.asset(
-                                    service.imageUrl!,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (_, __, ___) => Image.asset(
-                                      'assets/images/aqua_clayne_gallon.png',
+                                      errorBuilder: (_, _, _) => Image.asset(
+                                        'assets/images/aqua_clayne_gallon.png',
+                                        fit: BoxFit.contain,
+                                      ),
+                                    )
+                                  : Image.asset(
+                                      service.imageUrl!,
                                       fit: BoxFit.contain,
-                                    ),
-                                  ))
+                                      errorBuilder: (_, _, _) => Image.asset(
+                                        'assets/images/aqua_clayne_gallon.png',
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ))
                             : Image.asset(
                                 'assets/images/aqua_clayne_gallon.png',
                                 fit: BoxFit.contain,
@@ -548,7 +571,9 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 8.5, vertical: 3.5),
+                                  horizontal: 8.5,
+                                  vertical: 3.5,
+                                ),
                                 decoration: BoxDecoration(
                                   color: service.isAvailable
                                       ? const Color(0xFFE8F5E9)
@@ -590,7 +615,9 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
                               if (isSelected)
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 7, vertical: 2),
+                                    horizontal: 7,
+                                    vertical: 2,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFE0F2FE),
                                     borderRadius: BorderRadius.circular(8),
@@ -630,8 +657,8 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
                                     service.description!.isNotEmpty
                                 ? service.description!
                                 : (service.isNewGallon
-                                    ? 'Brand-new 5-gallon container filled with purified water'
-                                    : 'Customer provides container for refill'),
+                                      ? 'Brand-new 5-gallon container filled with purified water'
+                                      : 'Customer provides container for refill'),
                             style: const TextStyle(
                               fontSize: 12,
                               color: Color(0xFF6F8BA3),
@@ -660,7 +687,9 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          service.isNewGallon ? 'New Container' : 'Refill Service',
+                          service.isNewGallon
+                              ? 'New Container'
+                              : 'Refill Service',
                           style: const TextStyle(
                             fontSize: 10.5,
                             fontWeight: FontWeight.w600,
@@ -699,7 +728,10 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
                     if (service.isAvailable)
                       ElevatedButton.icon(
                         onPressed: () => _addServiceToCart(service),
-                        icon: const Icon(Icons.add_shopping_cart_rounded, size: 16),
+                        icon: const Icon(
+                          Icons.add_shopping_cart_rounded,
+                          size: 16,
+                        ),
                         label: const Text(
                           'Add to Cart',
                           style: TextStyle(
@@ -712,7 +744,9 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
                           foregroundColor: Colors.white,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -726,7 +760,9 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
                           disabledForegroundColor: const Color(0xFF94A3B8),
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -761,9 +797,9 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
         content: Text('${service.name} added to cart'),
         action: SnackBarAction(
           label: 'View Cart',
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const CartScreen()),
-          ),
+          onPressed: () =>
+              Navigator.of(context)
+                  .push(MaterialPageRoute(builder: (_) => const CartScreen())),
         ),
       ),
     );
@@ -800,7 +836,11 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
             children: [
               const Row(
                 children: [
-                  Icon(Icons.check_circle_rounded, color: Color(0xFF0878C9), size: 18),
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: Color(0xFF0878C9),
+                    size: 18,
+                  ),
                   SizedBox(width: 6),
                   Text(
                     'SELECTED REFILL SERVICE',
@@ -814,7 +854,11 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
                 ],
               ),
               IconButton(
-                icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF6F8BA3)),
+                icon: const Icon(
+                  Icons.close_rounded,
+                  size: 20,
+                  color: Color(0xFF6F8BA3),
+                ),
                 onPressed: () => setState(() {
                   _selectedService = null;
                   _addedToCart = false;
@@ -873,10 +917,7 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
                   SizedBox(height: 2),
                   Text(
                     'Customer-owned empty gallons',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: Color(0xFF6F8BA3),
-                    ),
+                    style: TextStyle(fontSize: 11.5, color: Color(0xFF6F8BA3)),
                   ),
                 ],
               ),
@@ -886,14 +927,19 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFF4F9FD),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFD5E7F4), width: 1.2),
+                  border: Border.all(
+                    color: const Color(0xFFD5E7F4),
+                    width: 1.2,
+                  ),
                 ),
                 child: Row(
                   children: [
                     IconButton(
                       icon: const Icon(Icons.remove_rounded),
                       iconSize: 18,
-                      color: _quantity > 1 ? const Color(0xFF0878C9) : const Color(0xFFB0C5D8),
+                      color: _quantity > 1
+                          ? const Color(0xFF0878C9)
+                          : const Color(0xFFB0C5D8),
                       onPressed: _quantity > 1 ? _decrementQuantity : null,
                       padding: const EdgeInsets.all(8),
                       constraints: const BoxConstraints(),
@@ -1051,10 +1097,7 @@ class _WaterRefillServicesScreenState extends State<WaterRefillServicesScreen> {
             const SizedBox(height: 6),
             const Text(
               'Please check your connection and try again.',
-              style: TextStyle(
-                fontSize: 13,
-                color: Color(0xFF6F8BA3),
-              ),
+              style: TextStyle(fontSize: 13, color: Color(0xFF6F8BA3)),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 18),

@@ -10,8 +10,9 @@ Hardware integration and firmware for the Aqua Clayne Water Refilling Station Ga
 |---|---|---|
 | **Microcontroller** | ESP32 DevKit V1 (30-pin or 38-pin) | 240MHz Dual-Core, 2.4GHz Wi-Fi, SPI, I2C |
 | **RFID Reader** | RC522 (13.56 MHz RFID Reader/Writer) | Reads Mifare Classic 1K / Ultralight / NTAG tags |
-| **Display** | 0.96" I2C OLED (SSD1306, 128x64) | Displays real-time device state & scanning feedback |
-| **Buzzer / LED** | Active 3.3V Buzzer or Onboard LED | Audio feedback on scan (GPIO 2) |
+| **Display** | 16x2 I2C LCD (0x27); optional SSD1306 OLED (0x3C) | Displays device state and scan feedback |
+| **Buzzers** | Two active 3.3V buzzers | Audio feedback on GPIO 25 and 26 |
+| **Status LEDs** | Green and red LEDs with current-limiting resistors | Status indicators on GPIO 32 and 33 |
 | **Power Supply** | 5V 1A Micro-USB / 3.3V Stable Regulator | Dedicated clean power for RC522 |
 | **RFID Tags** | 13.56MHz Mifare / Anti-metal RFID Tags | Waterproof tags affixed to customer gallons |
 
@@ -27,28 +28,34 @@ Hardware integration and firmware for the Aqua Clayne Water Refilling Station Ga
 | RC522 Pin | ESP32 GPIO Pin | Wire Color (Suggested) | Notes |
 |---|---|---|---|
 | **VCC** | **3.3V** | Red | Must be clean 3.3V |
-| **RST** | **GPIO 4** | Gray | Configurable in `config.h` |
+| **RST** | **GPIO 27** | Gray | Configurable in `config.h` |
 | **GND** | **GND** | Black | Ground |
 | **MISO** | **GPIO 19** | Blue | SPI Master In / Slave Out |
 | **MOSI** | **GPIO 23** | Green | SPI Master Out / Slave In |
 | **SCK** | **GPIO 18** | Yellow | SPI Clock |
 | **SDA / SS** | **GPIO 5** | White / Orange | SPI Chip Select |
 
-### B. SSD1306 0.96" I2C OLED Display to ESP32
+### B. 16x2 I2C LCD to ESP32
 
-| OLED Pin | ESP32 GPIO Pin | Description |
+| LCD Pin | ESP32 GPIO Pin | Description |
 |---|---|---|
-| **VCC** | **3.3V or 5V** | Power |
+| **VCC** | **5V** | Check the LCD backpack's rated voltage |
 | **GND** | **GND** | Ground |
-| **SCL** | **GPIO 22** | I2C Clock (ESP32 Hardware SCL) |
-| **SDA** | **GPIO 21** | I2C Data (ESP32 Hardware SDA) |
+| **SCL** | **GPIO 22** | I2C Clock |
+| **SDA** | **GPIO 21** | I2C Data |
+| I2C address | **0x27** | Configured in `config.h` |
 
-### C. Audio Buzzer / Indicator LED (Optional)
+Optional SSD1306 OLEDs share SDA 21 and SCL 22, and use address `0x3C`. The LCD and OLED can share the bus because their addresses differ.
+If the LCD backpack is powered from 5V, make sure its SDA/SCL pull-ups do not send 5V into ESP32 GPIOs; use a 3.3V-compatible I2C backpack or a bidirectional I2C level shifter.
 
-| Component | Pin | ESP32 GPIO Pin |
+### C. Buzzers and Status LEDs
+
+| Component | ESP32 GPIO Pin | Wiring |
 |---|---|---|
-| **Buzzer (+)** | Positive | **GPIO 2** |
-| **Buzzer (-)** | Negative | **GND** |
+| Buzzer 1 (+) | **GPIO 25** | Buzzer 1 (-) to GND |
+| Buzzer 2 (+) | **GPIO 26** | Buzzer 2 (-) to GND |
+| Green LED | **GPIO 32** | GPIO → resistor → LED anode; cathode to GND |
+| Red LED | **GPIO 33** | GPIO → resistor → LED anode; cathode to GND |
 
 ---
 

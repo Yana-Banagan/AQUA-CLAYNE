@@ -32,21 +32,35 @@
 // HARDWARE PIN DEFINITIONS (ESP32 DEVKIT V1)
 // =============================================================================
 // RC522 RFID Reader (SPI Interface)
-#define RC522_SS_PIN 5    // SDA / SS on RC522
-#define RC522_RST_PIN 4   // RST on RC522
-#define RC522_SCK_PIN 18  // SCK on RC522
-#define RC522_MISO_PIN 19 // MISO on RC522
-#define RC522_MOSI_PIN 23 // MOSI on RC522
+#define RFID_SS 5    // RC522 SDA / SS
+#define RFID_RST 27
+#define RFID_SCK 18
+#define RFID_MISO 19
+#define RFID_MOSI 23
 
-// SSD1306 0.96" OLED Display (I2C Interface)
-#define OLED_SDA_PIN 21    // I2C Data
-#define OLED_SCL_PIN 22    // I2C Clock
-#define OLED_I2C_ADDR 0x3C // Standard I2C address for 128x64 OLED
+// Keep the names used by the firmware's RFIDManager.
+#define RC522_SS_PIN RFID_SS
+#define RC522_RST_PIN RFID_RST
+#define RC522_SCK_PIN RFID_SCK
+#define RC522_MISO_PIN RFID_MISO
+#define RC522_MOSI_PIN RFID_MOSI
+
+// SSD1306 I2C OLED. Power the module from ESP32 3V3; share GND.
+#define OLED_SDA_PIN 21
+#define OLED_SCL_PIN 22
+#define OLED_I2C_ADDR 0x3C
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET_PIN -1 // Reset pin (-1 if sharing Arduino reset pin)
 
-// Optional Status Buzzer or Indicator LED
-#define BUZZER_PIN 2 // Optional buzzer/onboard LED (active high)
+// Status outputs (active-high LEDs and buzzers).
+#define BUZZER_1 25
+#define BUZZER_2 26
+#define GREEN_LED 32
+#define RED_LED 33
+#define BUZZER_1_PIN BUZZER_1
+#define BUZZER_2_PIN BUZZER_2
+#define GREEN_LED_PIN GREEN_LED
+#define RED_LED_PIN RED_LED
 
 #endif // CONFIG_H
