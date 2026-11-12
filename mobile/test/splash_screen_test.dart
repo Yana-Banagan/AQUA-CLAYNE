@@ -3,6 +3,34 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/screens/splash_screen.dart';
 
 void main() {
+  testWidgets('splash logo scales in during its intro animation', (tester) async {
+    final splashScale = find
+        .descendant(
+          of: find.byType(SplashScreen),
+          matching: find.byType(ScaleTransition),
+        )
+        .first;
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: SplashScreen(),
+      ),
+    );
+
+    final initialScale = tester.widget<ScaleTransition>(splashScale).scale.value;
+    expect(initialScale, closeTo(0.94, 0.001));
+
+    await tester.pump(const Duration(milliseconds: 350));
+    final midAnimationScale =
+        tester.widget<ScaleTransition>(splashScale).scale.value;
+    expect(midAnimationScale, greaterThan(initialScale));
+    expect(midAnimationScale, lessThan(1.0));
+
+    await tester.pump(const Duration(milliseconds: 350));
+    final finalScale = tester.widget<ScaleTransition>(splashScale).scale.value;
+    expect(finalScale, closeTo(1.0, 0.001));
+  });
+
   testWidgets('SplashScreen renders clean branded design with Aqua Clayne logo and typography', (tester) async {
     bool completed = false;
 

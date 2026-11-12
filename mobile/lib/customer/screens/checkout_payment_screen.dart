@@ -35,7 +35,7 @@ class _CheckoutPaymentScreenState extends State<CheckoutPaymentScreen> {
       if (!mounted) return;
       setState(() {
         _firstOrder = rules['first_order'] == true;
-        if (_firstOrder && !_method.startsWith('ONLINE')) _method = 'ONLINE_QRPH';
+        if (_firstOrder && _method == 'DEBT') _method = 'ONLINE_QRPH';
         _loading = false;
       });
     } catch (_) {
@@ -80,18 +80,16 @@ class _CheckoutPaymentScreenState extends State<CheckoutPaymentScreen> {
                 if (_loading)
                   const Center(child: Padding(padding: EdgeInsets.all(36), child: CircularProgressIndicator()))
                 else ...[
-                  if (_firstOrder) _firstOrderNotice(),
-                  if (_firstOrder) const SizedBox(height: 14),
-                  if (!_firstOrder) ...[
-                    _methodTile(
+                  _methodTile(
                       cart.isStationPickup ? 'Cash on Pickup' : 'Cash on Delivery',
                       cart.isStationPickup
                           ? 'Pay at the station counter upon collecting your order.'
                           : 'Pay the driver when your order arrives.',
                       Icons.payments_rounded,
                       'CASH',
-                    ),
-                    const SizedBox(height: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  if (!_firstOrder) ...[
                     _methodTile('Debt', 'Record this order as payable to Aqua Clayne.', Icons.receipt_long_rounded, 'DEBT'),
                     const SizedBox(height: 12),
                   ],
@@ -131,15 +129,6 @@ class _CheckoutPaymentScreenState extends State<CheckoutPaymentScreen> {
       ),
     );
   }
-
-  Widget _firstOrderNotice() => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(color: const Color(0xFFEAF7FF), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFBCE3FD))),
-    child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Icon(Icons.lock_outline_rounded, color: Color(0xFF0878C9)), SizedBox(width: 10),
-      Expanded(child: Text('Your first order requires secure online payment. Cash on Delivery and Debt become available after your first successful payment.', style: TextStyle(fontSize: 12, height: 1.4, color: Color(0xFF335C7D)))),
-    ]),
-  );
 
   Widget _methodTile(String title, String subtitle, IconData icon, String value) => Material(
     color: Colors.transparent,

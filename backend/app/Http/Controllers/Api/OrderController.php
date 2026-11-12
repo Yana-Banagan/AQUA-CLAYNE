@@ -230,7 +230,7 @@ class OrderController extends Controller
             'first_order' => !$hasCompletedPayment,
             'methods' => $hasCompletedPayment
                 ? ['online', 'cash', 'debt']
-                : ['online'],
+                : ['online', 'cash'],
             'online_providers' => ['gcash', 'qrph', 'card'],
         ]);
     }
