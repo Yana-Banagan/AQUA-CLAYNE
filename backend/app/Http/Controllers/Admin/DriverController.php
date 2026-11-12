@@ -7,13 +7,13 @@ use App\Http\Requests\StoreDriverRequest;
 use App\Models\Driver;
 use App\Services\DriverService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class DriverController extends Controller
 {
     public function __construct(
         private DriverService $driverService
-    ) {
-    }
+    ) {}
 
     public function index()
     {
@@ -41,6 +41,8 @@ class DriverController extends Controller
 
     public function edit(Driver $driver)
     {
+        $driver->load('user');
+
         return view(
             'admin.drivers.edit',
             compact('driver')
@@ -52,17 +54,23 @@ class DriverController extends Controller
         Driver $driver
     ) {
         $data = $request->validate([
-            'license_number' =>
-                'nullable|string|max:50',
-
-            'vehicle_plate' =>
-                'nullable|string|max:20',
+            'name' => 'required|string|max:150',
+            'email' => [
+                'required',
+                'email',
+                'max:150',
+                Rule::unique('users', 'email')->ignore($driver->user_id),
+            ],
+            'phone' => 'nullable|string|max:30',
+            'status' => 'required|in:active,inactive',
+            'license_number' => 'nullable|string|max:50',
+            'vehicle_plate' => 'nullable|string|max:20',
         ]);
 
-        $driver->update($data);
+        $this->driverService->update($driver, $data, $request->user());
 
         return redirect()
-            ->route('admin.drivers.index')
+            ->route('admin.drivers.index', $request->query())
             ->with('success', 'Driver updated.');
     }
 

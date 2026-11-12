@@ -100,9 +100,14 @@
                             <small style="color: var(--text-secondary);">{{ $cust->created_at?->format('M d, Y') }}</small>
                         </td>
                         <td>
-                            <a href="{{ route('admin.customers.show', $cust) }}" class="table-action">
-                                View Profile →
-                            </a>
+                            <div class="row-actions">
+                                <a href="{{ route('admin.customers.show', array_merge(['customer' => $cust], request()->query())) }}" class="table-action">
+                                    View Profile
+                                </a>
+                                <a href="{{ route('admin.customers.edit', array_merge(['customer' => $cust], request()->query())) }}" class="table-action">
+                                    Edit
+                                </a>
+                            </div>
                         </td>
                     </tr>
                 @empty

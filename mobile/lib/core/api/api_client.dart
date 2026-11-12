@@ -39,7 +39,11 @@ class OfflineSyncResult {
   final int synced;
   final int pending;
   final String? error;
-  const OfflineSyncResult({required this.synced, required this.pending, this.error});
+  const OfflineSyncResult({
+    required this.synced,
+    required this.pending,
+    this.error,
+  });
 }
 
 class ApiClient {
@@ -163,15 +167,18 @@ class ApiClient {
       return _handle(response, path: path, auth: auth);
     } on TimeoutException catch (e) {
       debugPrint('[ApiClient] POST TimeoutException on $path ($baseUrl): $e');
-      if (await _queueIfSafe('POST', path, body, authenticated: auth)) return OfflineQueuedResult(path);
+      if (await _queueIfSafe('POST', path, body, authenticated: auth))
+        return OfflineQueuedResult(path);
       throw ApiException(userFriendlyTimeoutError);
     } on SocketException catch (e) {
       debugPrint('[ApiClient] POST SocketException on $path ($baseUrl): $e');
-      if (await _queueIfSafe('POST', path, body, authenticated: auth)) return OfflineQueuedResult(path);
+      if (await _queueIfSafe('POST', path, body, authenticated: auth))
+        return OfflineQueuedResult(path);
       throw ApiException(userFriendlyConnectionError);
     } on http.ClientException catch (e) {
       debugPrint('[ApiClient] POST ClientException on $path ($baseUrl): $e');
-      if (await _queueIfSafe('POST', path, body, authenticated: auth)) return OfflineQueuedResult(path);
+      if (await _queueIfSafe('POST', path, body, authenticated: auth))
+        return OfflineQueuedResult(path);
       throw ApiException(userFriendlyConnectionError);
     }
   }
@@ -217,7 +224,8 @@ class ApiClient {
         _legacyOfflineKey(path, headers),
         allowExpired: true,
       );
-      if (cachedOffline != null) return _applyPendingWrites(path, cachedOffline);
+      if (cachedOffline != null)
+        return _applyPendingWrites(path, cachedOffline);
       rethrow;
     } finally {
       _pendingGets.remove(cacheKey);
@@ -229,9 +237,16 @@ class ApiClient {
   bool _isCacheable(String path) {
     final normalized = _pathOnly(path);
     if (const {
-      '/products', '/faqs', '/customer/addresses', '/customer/orders',
-      '/customer/notifications', '/driver/notifications', '/notifications',
-      '/driver/deliveries', '/driver/deliveries/history', '/driver/routes',
+      '/products',
+      '/faqs',
+      '/customer/addresses',
+      '/customer/orders',
+      '/customer/notifications',
+      '/driver/notifications',
+      '/notifications',
+      '/driver/deliveries',
+      '/driver/deliveries/history',
+      '/driver/routes',
       '/driver/pickups',
     }.contains(normalized)) {
       return true;
@@ -242,9 +257,8 @@ class ApiClient {
         RegExp(r'^/driver/pickups/[^/]+$').hasMatch(normalized);
   }
 
-  Duration _offlineCacheLifetime(String path) => const {
-    '/products', '/faqs',
-  }.contains(_pathOnly(path))
+  Duration _offlineCacheLifetime(String path) =>
+      const {'/products', '/faqs'}.contains(_pathOnly(path))
       ? const Duration(hours: 24)
       : const Duration(hours: 4);
 
@@ -266,10 +280,13 @@ class ApiClient {
   Future<bool> _queueIfSafe(
     String method,
     String path,
-    Map<String, dynamic> payload,
-    {required bool authenticated}
-  ) async {
-    if (!authenticated || _offlineOwnerId == null || !_isSafeToQueue(method, path)) return false;
+    Map<String, dynamic> payload, {
+    required bool authenticated,
+  }) async {
+    if (!authenticated ||
+        _offlineOwnerId == null ||
+        !_isSafeToQueue(method, path))
+      return false;
     final coalesceKey = _coalesceKey(method, path);
     await _offlineCache.enqueueMutation(
       ownerId: _offlineOwnerId!,
@@ -284,13 +301,26 @@ class ApiClient {
   }
 
   bool _isSafeToQueue(String method, String path) {
-    if (method == 'PATCH' && RegExp(r'^/customer/addresses/[A-Za-z0-9-]+$').hasMatch(path)) return true;
-    if (method == 'POST' && RegExp(r'^/customer/addresses/[A-Za-z0-9-]+/set-default$').hasMatch(path)) return true;
-    if (method == 'PATCH' && RegExp(r'^/customer/notifications/[A-Za-z0-9-]+/read$').hasMatch(path)) return true;
-    if (method == 'POST' && path == '/customer/notifications/read-all') return true;
-    if (method == 'POST' && path == '/driver/notifications/read-all') return true;
-    if (method == 'PATCH' && RegExp(r'^/driver/notifications/[A-Za-z0-9-]+/read$').hasMatch(path)) return true;
-    if (method == 'POST' && RegExp(r'^/driver/deliveries/[A-Za-z0-9-]+/location$').hasMatch(path)) return true;
+    if (method == 'PATCH' &&
+        RegExp(r'^/customer/addresses/[A-Za-z0-9-]+$').hasMatch(path))
+      return true;
+    if (method == 'POST' &&
+        RegExp(r'^/customer/addresses/[A-Za-z0-9-]+/set-default$')
+            .hasMatch(path))
+      return true;
+    if (method == 'PATCH' &&
+        RegExp(r'^/customer/notifications/[A-Za-z0-9-]+/read$').hasMatch(path))
+      return true;
+    if (method == 'POST' && path == '/customer/notifications/read-all')
+      return true;
+    if (method == 'POST' && path == '/driver/notifications/read-all')
+      return true;
+    if (method == 'PATCH' &&
+        RegExp(r'^/driver/notifications/[A-Za-z0-9-]+/read$').hasMatch(path))
+      return true;
+    if (method == 'POST' &&
+        RegExp(r'^/driver/deliveries/[A-Za-z0-9-]+/location$').hasMatch(path))
+      return true;
     return false;
   }
 
@@ -306,33 +336,67 @@ class ApiClient {
     final rows = (await _offlineCache.pendingMutations(owner)).where((row) {
       final queuedPath = row['path'] as String;
       return path == '/customer/addresses' &&
-              (queuedPath.startsWith('/customer/addresses/') || queuedPath.endsWith('/set-default')) ||
-          path == '/customer/notifications' && queuedPath.startsWith('/customer/notifications/') ||
-          (path == '/notifications' || path == '/driver/notifications') && queuedPath.startsWith('/driver/notifications/');
+              (queuedPath.startsWith('/customer/addresses/') ||
+                  queuedPath.endsWith('/set-default')) ||
+          path == '/customer/notifications' &&
+              queuedPath.startsWith('/customer/notifications/') ||
+          (path == '/notifications' || path == '/driver/notifications') &&
+              queuedPath.startsWith('/driver/notifications/');
     });
-    var result = value.map((item) => item is Map ? Map<String, dynamic>.from(item) : item).toList();
+    var result = value
+        .map((item) => item is Map ? Map<String, dynamic>.from(item) : item)
+        .toList();
     for (final row in rows) {
       final queuedPath = row['path'] as String;
       final payload = row['payload'] as Map<String, dynamic>;
       if (queuedPath.endsWith('/set-default')) {
         final selectedId = queuedPath.split('/')[3];
-        result = result.map((item) => item is Map<String, dynamic>
-            ? {...item, 'is_default': item['id']?.toString() == selectedId}
-            : item).toList();
+        result = result
+            .map(
+              (item) => item is Map<String, dynamic>
+                  ? {
+                      ...item,
+                      'is_default': item['id']?.toString() == selectedId,
+                    }
+                  : item,
+            )
+            .toList();
       } else if (queuedPath.endsWith('/read-all')) {
-        result = result.map((item) => item is Map<String, dynamic>
-            ? {...item, 'is_read': true, 'read_at': DateTime.now().toIso8601String()}
-            : item).toList();
+        result = result
+            .map(
+              (item) => item is Map<String, dynamic>
+                  ? {
+                      ...item,
+                      'is_read': true,
+                      'read_at': DateTime.now().toIso8601String(),
+                    }
+                  : item,
+            )
+            .toList();
       } else if (queuedPath.endsWith('/read')) {
         final id = queuedPath.split('/')[3];
-        result = result.map((item) => item is Map<String, dynamic> && item['id']?.toString() == id
-            ? {...item, 'is_read': true, 'read_at': DateTime.now().toIso8601String()}
-            : item).toList();
+        result = result
+            .map(
+              (item) =>
+                  item is Map<String, dynamic> && item['id']?.toString() == id
+                  ? {
+                      ...item,
+                      'is_read': true,
+                      'read_at': DateTime.now().toIso8601String(),
+                    }
+                  : item,
+            )
+            .toList();
       } else if (queuedPath.startsWith('/customer/addresses/')) {
         final id = queuedPath.split('/')[3];
-        result = result.map((item) => item is Map<String, dynamic> && item['id']?.toString() == id
-            ? {...item, ...payload}
-            : item).toList();
+        result = result
+            .map(
+              (item) =>
+                  item is Map<String, dynamic> && item['id']?.toString() == id
+                  ? {...item, ...payload}
+                  : item,
+            )
+            .toList();
       }
     }
     return result;
@@ -345,7 +409,11 @@ class ApiClient {
 
   Future<OfflineSyncResult> syncPendingMutations() async {
     final owner = _offlineOwnerId;
-    if (owner == null || _syncInProgress) return OfflineSyncResult(synced: 0, pending: await pendingMutationCount());
+    if (owner == null || _syncInProgress)
+      return OfflineSyncResult(
+        synced: 0,
+        pending: await pendingMutationCount(),
+      );
     _syncInProgress = true;
     var synced = 0;
     String? error;
@@ -362,10 +430,14 @@ class ApiClient {
           late final http.Response response;
           switch (method) {
             case 'POST':
-              response = await http.post(uri, headers: headers, body: jsonEncode(payload)).timeout(_requestTimeout);
+              response = await http
+                  .post(uri, headers: headers, body: jsonEncode(payload))
+                  .timeout(_requestTimeout);
               break;
             case 'PATCH':
-              response = await http.patch(uri, headers: headers, body: jsonEncode(payload)).timeout(_requestTimeout);
+              response = await http
+                  .patch(uri, headers: headers, body: jsonEncode(payload))
+                  .timeout(_requestTimeout);
               break;
             default:
               throw ApiException('Unsupported queued request: $method');
@@ -473,15 +545,18 @@ class ApiClient {
       return _handle(response, path: path, auth: auth);
     } on TimeoutException catch (e) {
       debugPrint('[ApiClient] PATCH TimeoutException on $path ($baseUrl): $e');
-      if (await _queueIfSafe('PATCH', path, body, authenticated: auth)) return OfflineQueuedResult(path);
+      if (await _queueIfSafe('PATCH', path, body, authenticated: auth))
+        return OfflineQueuedResult(path);
       throw ApiException(userFriendlyTimeoutError);
     } on SocketException catch (e) {
       debugPrint('[ApiClient] PATCH SocketException on $path ($baseUrl): $e');
-      if (await _queueIfSafe('PATCH', path, body, authenticated: auth)) return OfflineQueuedResult(path);
+      if (await _queueIfSafe('PATCH', path, body, authenticated: auth))
+        return OfflineQueuedResult(path);
       throw ApiException(userFriendlyConnectionError);
     } on http.ClientException catch (e) {
       debugPrint('[ApiClient] PATCH ClientException on $path ($baseUrl): $e');
-      if (await _queueIfSafe('PATCH', path, body, authenticated: auth)) return OfflineQueuedResult(path);
+      if (await _queueIfSafe('PATCH', path, body, authenticated: auth))
+        return OfflineQueuedResult(path);
       throw ApiException(userFriendlyConnectionError);
     }
   }
@@ -541,9 +616,12 @@ class ApiClient {
       return body;
     }
 
-    // Handle 401 session expiration on authenticated calls
-    if (response.statusCode == 401 && auth && !path.contains('/auth/login')) {
-      tokenStorage.deleteToken();
+    // Logout handles its own rejected token so it cannot race session expiry.
+    final normalizedPath = _pathOnly(path);
+    if (response.statusCode == 401 &&
+        auth &&
+        normalizedPath != '/auth/login' &&
+        normalizedPath != '/auth/logout') {
       onSessionExpired?.call();
       throw ApiException(
         'Your session has expired. Please log in again.',
@@ -570,7 +648,11 @@ class ApiClient {
     throw ApiException(
       message,
       statusCode: response.statusCode,
-      errors: errors ?? (body is Map<String, dynamic> && body['data'] is Map<String, dynamic> ? body['data'] as Map<String, dynamic> : null),
+      errors:
+          errors ??
+          (body is Map<String, dynamic> && body['data'] is Map<String, dynamic>
+              ? body['data'] as Map<String, dynamic>
+              : null),
     );
   }
 }

@@ -102,7 +102,7 @@
 <!-- Modal 1: Add FAQ Modal -->
 <div class="modal-backdrop" id="add-faq-modal">
     <div class="modal-card">
-        <form method="POST" action="{{ route('admin.faq.store') }}">
+        <form method="POST" action="{{ route('admin.faq.store') }}" data-disable-on-submit>
             @csrf
             <div class="modal-head">
                 <h3>Add New FAQ Entry</h3>
@@ -117,14 +117,17 @@
                         <option value="{{ $cat->id }}" @selected(old('category_id') === $cat->id)>{{ $cat->name }}</option>
                         @endforeach
                     </select>
+                    @error('category_id') <small class="field-error" role="alert">{{ $message }}</small> @enderror
                 </div>
                 <div class="field">
                     <label>Question *</label>
                     <input type="text" name="question" value="{{ old('question') }}" required placeholder="e.g. Can I provide my own 5-gallon slim container?" style="width: 100%;">
+                    @error('question') <small class="field-error" role="alert">{{ $message }}</small> @enderror
                 </div>
                 <div class="field">
                     <label>Answer *</label>
                     <textarea name="answer" rows="4" required placeholder="Provide a helpful and accurate answer..." style="width: 100%;">{{ old('answer') }}</textarea>
+                    @error('answer') <small class="field-error" role="alert">{{ $message }}</small> @enderror
                 </div>
             </div>
             <div class="modal-footer">
@@ -138,9 +141,10 @@
 <!-- Modal 2: Edit FAQ Modal -->
 <div class="modal-backdrop" id="edit-faq-modal">
     <div class="modal-card">
-        <form method="POST" id="edit-faq-form" action="#">
+        <form method="POST" id="edit-faq-form" action="#" data-disable-on-submit>
             @csrf
             @method('PUT')
+            <input type="hidden" name="faq_id" id="edit-faq-id">
             <div class="modal-head">
                 <h3>Edit FAQ Entry</h3>
                 <button type="button" class="modal-close" onclick="closeFaqModal('edit-faq-modal')" data-modal-close>&times;</button>
@@ -153,14 +157,17 @@
                             <option value="{{ $cat->id }}">{{ $cat->name }}</option>
                         @endforeach
                     </select>
+                    @error('category_id') <small class="field-error" role="alert">{{ $message }}</small> @enderror
                 </div>
                 <div class="field">
                     <label>Question *</label>
                     <input type="text" name="question" id="edit-faq-question" required style="width: 100%;">
+                    @error('question') <small class="field-error" role="alert">{{ $message }}</small> @enderror
                 </div>
                 <div class="field">
                     <label>Answer *</label>
                     <textarea name="answer" id="edit-faq-answer" rows="4" required style="width: 100%;"></textarea>
+                    @error('answer') <small class="field-error" role="alert">{{ $message }}</small> @enderror
                 </div>
             </div>
             <div class="modal-footer">
@@ -196,6 +203,7 @@
         window.openFaqModal = openFaqModal;
         window.closeFaqModal = closeFaqModal;
         window.openEditFaqModal = function (id, categoryId, question, answer) {
+            document.getElementById('edit-faq-id').value = id || '';
             document.getElementById('edit-faq-category').value = categoryId || '';
             document.getElementById('edit-faq-question').value = question || '';
             document.getElementById('edit-faq-answer').value = answer || '';
@@ -217,7 +225,16 @@
         });
 
         @if($errors->any())
-            openFaqModal('add-faq-modal');
+            @if(old('faq_id'))
+                window.openEditFaqModal(
+                    @json(old('faq_id')),
+                    @json(old('category_id')),
+                    @json(old('question')),
+                    @json(old('answer'))
+                );
+            @else
+                openFaqModal('add-faq-modal');
+            @endif
         @endif
     }());
 </script>

@@ -507,6 +507,16 @@ Route::middleware(['auth', 'role:admin,staff'])
             'index'
         ])->name('customers.index');
 
+        Route::get('/customers/{customer}/edit', [
+            CustomerController::class,
+            'edit'
+        ])->name('customers.edit');
+
+        Route::put('/customers/{customer}', [
+            CustomerController::class,
+            'update'
+        ])->name('customers.update');
+
 
         Route::get('/customers/{customer}', [
             CustomerController::class,
@@ -688,22 +698,32 @@ Route::middleware(['auth', 'role:admin,staff'])
         |--------------------------------------------------------------------------
         */
 
-        Route::get('/users', [
-            UserController::class,
-            'index'
-        ])->name('users.index');
+        Route::middleware('role:admin')->group(function () {
+            Route::get('/users', [
+                UserController::class,
+                'index'
+            ])->name('users.index');
 
+            Route::post('/users', [
+                UserController::class,
+                'store'
+            ])->name('users.store');
 
-        Route::post('/users', [
-            UserController::class,
-            'store'
-        ])->name('users.store');
+            Route::get('/users/{user}/edit', [
+                UserController::class,
+                'edit'
+            ])->name('users.edit');
 
+            Route::put('/users/{user}', [
+                UserController::class,
+                'update'
+            ])->name('users.update');
 
-        Route::post('/users/{user}/toggle-status', [
-            UserController::class,
-            'toggleStatus'
-        ])->name('users.toggle-status');
+            Route::post('/users/{user}/toggle-status', [
+                UserController::class,
+                'toggleStatus'
+            ])->name('users.toggle-status');
+        });
 
 
         /*

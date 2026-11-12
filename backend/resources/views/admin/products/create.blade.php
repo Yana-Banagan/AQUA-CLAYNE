@@ -15,7 +15,7 @@
 </div>
 
 <div class="panel" style="max-width: 800px;">
-    <form method="POST" action="{{ route('admin.products.store') }}">
+    <form method="POST" action="{{ route('admin.products.store') }}" data-disable-on-submit>
         @csrf
         
         <div class="form-grid">
@@ -24,13 +24,21 @@
             </div>
             <div class="field" style="grid-column: 1 / -1;">
                 <label for="name">Service / Offering Name *</label>
-                <input id="name" type="text" name="name" value="{{ old('name') }}" placeholder="e.g. 5-Gallon Purified Water Refill" required>
+                <input id="name" type="text" name="name" value="{{ old('name') }}" maxlength="100" placeholder="e.g. 5-Gallon Purified Water Refill" required>
+                @error('name') <small class="field-error" role="alert">{{ $message }}</small> @enderror
             </div>
             
             <div class="field">
                 <label for="price">Refill Price (₱) *</label>
                 <input id="price" type="number" step="0.01" min="0" name="price" value="{{ old('price', '50.00') }}" required>
                 <small>Charge per customer-owned container refilled.</small>
+                @error('price') <small class="field-error" role="alert">{{ $message }}</small> @enderror
+            </div>
+
+            <div class="field">
+                <label for="image_url">Product Image URL</label>
+                <input id="image_url" type="text" name="image_url" value="{{ old('image_url') }}" maxlength="2048">
+                @error('image_url') <small class="field-error" role="alert">{{ $message }}</small> @enderror
             </div>
             
             <div class="field">
@@ -39,17 +47,19 @@
                     <input type="checkbox" name="is_active" value="1" checked>
                     <span>Active &amp; Available for Ordering</span>
                 </label>
+                @error('is_active') <small class="field-error" role="alert">{{ $message }}</small> @enderror
             </div>
 
             <div class="field" style="grid-column: 1 / -1;">
                 <label for="description">Service Description</label>
                 <textarea id="description" name="description" rows="3" placeholder="e.g. Pure 16-stage reverse osmosis purified drinking water for customer 5-gallon containers.">{{ old('description') }}</textarea>
+                @error('description') <small class="field-error" role="alert">{{ $message }}</small> @enderror
             </div>
         </div>
 
         <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; border-top: 1px solid var(--border-light); padding-top: 18px;">
             <a class="secondary-button" href="{{ route('admin.products.index') }}">Cancel</a>
-            <button class="primary-button" type="submit">Create Refill Offering</button>
+            <button class="primary-button" type="submit" data-loading-text="Creating...">Create Refill Offering</button>
         </div>
     </form>
 </div>

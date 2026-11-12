@@ -35,8 +35,6 @@ dependencies:
   shared_preferences: ^2.5.5
   sqflite: ^2.4.2
   path: ^1.9.1
-  video_player: ^2.10.1
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -56,4 +54,3 @@ flutter:
     - assets/images/banner_gallon_splash.png
     - assets/images/driver_dashboard_bg.png
     - assets/images/driver_dashboard_background.png
-    - assets/videos/aqua_clayne_tutorial.mp4

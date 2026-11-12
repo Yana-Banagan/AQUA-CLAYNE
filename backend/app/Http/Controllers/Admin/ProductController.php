@@ -13,6 +13,7 @@ class ProductController extends Controller
     public function index()
     {
         $products = Product::with('inventory:id,product_id,quantity_on_hand,reorder_level')->latest()->paginate(15);
+
         return view('admin.products.index', compact('products'));
     }
 
@@ -24,9 +25,10 @@ class ProductController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:100',
             'description' => 'nullable|string|max:1000',
             'price' => 'required|numeric|min:0',
+            'image_url' => 'nullable|string|max:2048',
             'is_active' => 'nullable|boolean',
         ]);
 
@@ -54,9 +56,10 @@ class ProductController extends Controller
     public function update(Request $request, Product $product)
     {
         $data = $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:100',
             'description' => 'nullable|string|max:1000',
             'price' => 'required|numeric|min:0',
+            'image_url' => 'nullable|string|max:2048',
             'is_active' => 'nullable|boolean',
         ]);
 
@@ -64,6 +67,8 @@ class ProductController extends Controller
 
         $product->update($data);
 
-        return redirect()->route('admin.products.index')->with('success', 'Refill service offering updated.');
+        return redirect()
+            ->route('admin.products.index', $request->query())
+            ->with('success', 'Refill service offering updated.');
     }
 }

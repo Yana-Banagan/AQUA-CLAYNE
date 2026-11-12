@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/providers/auth_provider.dart';
+import '../../core/navigation/auth_navigation.dart';
 import '../../core/screens/login_screen.dart';
 import '../../core/screens/register_screen.dart';
-import 'customer_shell.dart';
 import '../../customer/providers/address_provider.dart';
 import '../../customer/providers/credit_provider.dart';
 import '../../customer/providers/notification_provider.dart';
@@ -117,23 +117,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _loggingOut = true);
 
     try {
-      try { context.read<NotificationProvider>().clearSessionData(); } catch (_) {}
-      try { context.read<OrderProvider>().clearSessionData(); } catch (_) {}
-      try { context.read<PaymentProvider>().clearSessionData(); } catch (_) {}
-      try { context.read<AddressProvider>().clearSessionData(); } catch (_) {}
-      try { context.read<CreditProvider>().clearSessionData(); } catch (_) {}
-      try { context.read<QueueProvider>().clearSessionData(); } catch (_) {}
-      try { context.read<ComplaintProvider>().clearSessionData(); } catch (_) {}
-      try { context.read<CartProvider>().clearCart(); } catch (_) {}
+      try {
+        context.read<NotificationProvider>().clearSessionData();
+      } catch (_) {}
+      try {
+        context.read<OrderProvider>().clearSessionData();
+      } catch (_) {}
+      try {
+        context.read<PaymentProvider>().clearSessionData();
+      } catch (_) {}
+      try {
+        context.read<AddressProvider>().clearSessionData();
+      } catch (_) {}
+      try {
+        context.read<CreditProvider>().clearSessionData();
+      } catch (_) {}
+      try {
+        context.read<QueueProvider>().clearSessionData();
+      } catch (_) {}
+      try {
+        context.read<ComplaintProvider>().clearSessionData();
+      } catch (_) {}
+      try {
+        context.read<CartProvider>().clearCart();
+      } catch (_) {}
 
-      await context.read<AuthProvider>().logout();
+      final logoutResult = await context.read<AuthProvider>().logout();
       if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const CustomerShell()),
-        (_) => false,
-      );
-    } catch (_) {
-      if (mounted) setState(() => _loggingOut = false);
+      replaceWithLogin(context, noticeMessage: logoutResult.noticeMessage);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _loggingOut = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not complete sign out: $error')),
+        );
+      }
     }
   }
 
@@ -263,25 +281,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const Text(
                     'Create an account to place orders, save delivery addresses, and track your water deliveries.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 15, height: 1.45, color: Color(0xFF52718B)),
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.45,
+                      color: Color(0xFF52718B),
+                    ),
                   ),
                   const SizedBox(height: 28),
                   SizedBox(
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton(
-                      onPressed: () => Navigator.of(context, rootNavigator: true).push(
-                        MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                      ),
+                      onPressed: () =>
+                          Navigator.of(context, rootNavigator: true).push(
+                            MaterialPageRoute(
+                              builder: (_) => const RegisterScreen(),
+                            ),
+                          ),
                       child: const Text('Create an Account'),
                     ),
                   ),
                   const SizedBox(height: 12),
                   Center(
                     child: OutlinedButton(
-                      onPressed: () => Navigator.of(context, rootNavigator: true).push(
-                        MaterialPageRoute(builder: (_) => const LoginScreen()),
-                      ),
+                      onPressed: () =>
+                          Navigator.of(context, rootNavigator: true).push(
+                            MaterialPageRoute(
+                              builder: (_) => const LoginScreen(),
+                            ),
+                          ),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size(150, 46),
                         side: const BorderSide(

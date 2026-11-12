@@ -17,6 +17,10 @@
     </div>
 </div>
 
+@if(session('success'))
+    <div class="flash-message success" role="status">{{ session('success') }}</div>
+@endif
+
 <!-- Refill Service Concept Banner (Section 26) -->
 <article class="panel" style="margin-bottom: 24px; background: var(--surface-soft); border-left: 4px solid var(--primary); padding: 16px 20px;">
     <div style="display: flex; gap: 12px; align-items: center;">
@@ -66,7 +70,7 @@
                             </span>
                         </td>
                         <td>
-                            <a href="{{ route('admin.products.edit', $product) }}" class="table-action">
+                            <a href="{{ route('admin.products.edit', array_merge(['product' => $product], request()->query())) }}" class="table-action">
                                 Edit Service
                             </a>
                         </td>

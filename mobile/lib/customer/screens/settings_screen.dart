@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../core/providers/auth_provider.dart';
+import '../../core/navigation/auth_navigation.dart';
 import '../../customer/providers/address_provider.dart';
 import '../../customer/providers/credit_provider.dart';
 import '../../customer/providers/notification_provider.dart';
@@ -9,7 +11,6 @@ import '../../customer/providers/cart_provider.dart';
 import '../../customer/providers/payment_provider.dart';
 import '../../customer/providers/queue_provider.dart';
 import '../../customer/providers/complaint_provider.dart';
-import 'customer_shell.dart';
 import 'addresses_screen.dart';
 import 'change_password_screen.dart';
 import 'complaints_screen.dart';
@@ -52,7 +53,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'Are you sure you want to log out of your AQUA CLAYNE account?',
           style: TextStyle(fontSize: 14, color: Color(0xFF6F8BA3), height: 1.4),
         ),
-        actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        actionsPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -71,7 +75,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: const Text(
               'Log Out',
@@ -87,23 +92,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _loggingOut = true);
 
     try {
-      try { context.read<NotificationProvider>().clearSessionData(); } catch (_) {}
-      try { context.read<OrderProvider>().clearSessionData(); } catch (_) {}
-      try { context.read<PaymentProvider>().clearSessionData(); } catch (_) {}
-      try { context.read<AddressProvider>().clearSessionData(); } catch (_) {}
-      try { context.read<CreditProvider>().clearSessionData(); } catch (_) {}
-      try { context.read<QueueProvider>().clearSessionData(); } catch (_) {}
-      try { context.read<ComplaintProvider>().clearSessionData(); } catch (_) {}
-      try { context.read<CartProvider>().clearCart(); } catch (_) {}
+      try {
+        context.read<NotificationProvider>().clearSessionData();
+      } catch (_) {}
+      try {
+        context.read<OrderProvider>().clearSessionData();
+      } catch (_) {}
+      try {
+        context.read<PaymentProvider>().clearSessionData();
+      } catch (_) {}
+      try {
+        context.read<AddressProvider>().clearSessionData();
+      } catch (_) {}
+      try {
+        context.read<CreditProvider>().clearSessionData();
+      } catch (_) {}
+      try {
+        context.read<QueueProvider>().clearSessionData();
+      } catch (_) {}
+      try {
+        context.read<ComplaintProvider>().clearSessionData();
+      } catch (_) {}
+      try {
+        context.read<CartProvider>().clearCart();
+      } catch (_) {}
 
-      await context.read<AuthProvider>().logout();
+      final logoutResult = await context.read<AuthProvider>().logout();
       if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const CustomerShell()),
-        (_) => false,
-      );
-    } catch (_) {
-      if (mounted) setState(() => _loggingOut = false);
+      replaceWithLogin(context, noticeMessage: logoutResult.noticeMessage);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _loggingOut = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not complete sign out: $error')),
+        );
+      }
     }
   }
 
@@ -138,17 +161,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _buildMenuTile(
                             icon: Icons.person_outline_rounded,
                             title: 'Edit Profile',
-                            subtitle: 'Update your name, email, and contact info',
+                            subtitle:
+                                'Update your name, email, and contact info',
                             onTap: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                    builder: (_) => const EditProfileScreen()),
+                                  builder: (_) => const EditProfileScreen(),
+                                ),
                               );
                             },
                           ),
                           const Divider(
-                              color: Color(0xFFF0F5FA), height: 1, indent: 56),
+                            color: Color(0xFFF0F5FA),
+                            height: 1,
+                            indent: 56,
+                          ),
                           _buildMenuTile(
                             icon: Icons.lock_outline_rounded,
                             title: 'Change Password',
@@ -157,13 +185,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                    builder: (_) =>
-                                        const ChangePasswordScreen()),
+                                  builder: (_) => const ChangePasswordScreen(),
+                                ),
                               );
                             },
                           ),
                           const Divider(
-                              color: Color(0xFFF0F5FA), height: 1, indent: 56),
+                            color: Color(0xFFF0F5FA),
+                            height: 1,
+                            indent: 56,
+                          ),
                           _buildMenuTile(
                             icon: Icons.location_on_outlined,
                             title: 'My Addresses',
@@ -172,7 +203,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                    builder: (_) => const AddressesScreen()),
+                                  builder: (_) => const AddressesScreen(),
+                                ),
                               );
                             },
                           ),
@@ -185,41 +217,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _buildMenuTile(
                             icon: Icons.help_outline_rounded,
                             title: 'Frequently Asked Questions',
-                            subtitle: 'Guides, ordering rules, and account info',
+                            subtitle:
+                                'Guides, ordering rules, and account info',
                             onTap: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                    builder: (_) => const FaqScreen()),
+                                  builder: (_) => const FaqScreen(),
+                                ),
                               );
                             },
                           ),
                           const Divider(
-                              color: Color(0xFFF0F5FA), height: 1, indent: 56),
+                            color: Color(0xFFF0F5FA),
+                            height: 1,
+                            indent: 56,
+                          ),
                           _buildMenuTile(
                             icon: Icons.feedback_outlined,
                             title: 'My Complaints',
-                            subtitle: 'View submitted concerns and track status',
+                            subtitle:
+                                'View submitted concerns and track status',
                             onTap: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                    builder: (_) => const ComplaintsScreen()),
+                                  builder: (_) => const ComplaintsScreen(),
+                                ),
                               );
                             },
                           ),
                           const Divider(
-                              color: Color(0xFFF0F5FA), height: 1, indent: 56),
+                            color: Color(0xFFF0F5FA),
+                            height: 1,
+                            indent: 56,
+                          ),
                           _buildMenuTile(
                             icon: Icons.add_comment_outlined,
                             title: 'Submit Complaint',
-                            subtitle: 'Report a delivery, billing, or water issue',
+                            subtitle:
+                                'Report a delivery, billing, or water issue',
                             onTap: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                    builder: (_) =>
-                                        const SubmitComplaintScreen()),
+                                  builder: (_) => const SubmitComplaintScreen(),
+                                ),
                               );
                             },
                           ),
@@ -239,7 +282,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           ),
                           const Divider(
-                              color: Color(0xFFF0F5FA), height: 1, indent: 56),
+                            color: Color(0xFFF0F5FA),
+                            height: 1,
+                            indent: 56,
+                          ),
                           _buildMenuTile(
                             icon: Icons.privacy_tip_outlined,
                             title: 'Privacy Policy',
@@ -250,7 +296,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           ),
                           const Divider(
-                              color: Color(0xFFF0F5FA), height: 1, indent: 56),
+                            color: Color(0xFFF0F5FA),
+                            height: 1,
+                            indent: 56,
+                          ),
                           _buildInfoTile(
                             icon: Icons.info_outline_rounded,
                             title: 'App Version',
@@ -485,7 +534,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         style: OutlinedButton.styleFrom(
           side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.2),
           backgroundColor: const Color(0xFFFEF2F2),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
         child: _loggingOut
             ? const SizedBox(
@@ -499,7 +550,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             : const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.logout_rounded, color: Color(0xFFDC2626), size: 20),
+                  Icon(
+                    Icons.logout_rounded,
+                    color: Color(0xFFDC2626),
+                    size: 20,
+                  ),
                   SizedBox(width: 8),
                   Text(
                     'Log Out',
@@ -545,7 +600,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               backgroundColor: const Color(0xFF0878C9),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: const Text(
               'Close',

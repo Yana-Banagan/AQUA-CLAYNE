@@ -3,10 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+
 import '../../core/models/user_model.dart';
+import '../../core/navigation/auth_navigation.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/repositories/auth_repository.dart';
-import '../../core/screens/login_screen.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/driver_colors.dart';
 import '../../shared_widgets/confirmation_dialog.dart';
@@ -23,17 +24,34 @@ class DriverProfileScreen extends StatefulWidget {
 class _DriverProfileScreenState extends State<DriverProfileScreen> {
   static const _maxPhotoBytes = 5 * 1024 * 1024;
   bool _uploadingPhoto = false;
+  bool _loggingOut = false;
 
   Future<void> _choosePhotoSource() async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
-      builder: (context) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        ListTile(leading: const Icon(Icons.photo_camera_outlined), title: const Text('Take a photo'), onTap: () => Navigator.pop(context, ImageSource.camera)),
-        ListTile(leading: const Icon(Icons.photo_library_outlined), title: const Text('Choose from gallery'), onTap: () => Navigator.pop(context, ImageSource.gallery)),
-      ])),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
     );
     if (source == null || !mounted) return;
-    final picked = await ImagePicker().pickImage(source: source, imageQuality: 90);
+    final picked = await ImagePicker().pickImage(
+      source: source,
+      imageQuality: 90,
+    );
     if (picked == null || !mounted) return;
     final photo = File(picked.path);
     final extension = picked.name.split('.').last.toLowerCase();
@@ -42,7 +60,8 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       return;
     }
     if (await photo.length() > _maxPhotoBytes) {
-      if (mounted) _showMessage('Profile picture must be 5 MB or smaller.', error: true);
+      if (mounted)
+        _showMessage('Profile picture must be 5 MB or smaller.', error: true);
       return;
     }
     if (!mounted) return;
@@ -52,44 +71,63 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
   Future<void> _uploadPhoto(File photo) async {
     setState(() => _uploadingPhoto = true);
     try {
-      final data = await context.read<AuthRepository>().uploadProfilePhoto(photo);
+      final data = await context.read<AuthRepository>().uploadProfilePhoto(
+        photo,
+      );
       if (!mounted) return;
-      context.read<AuthProvider>().updateUser(UserModel.fromMap(data['user'] ?? data));
+      context.read<AuthProvider>().updateUser(
+        UserModel.fromMap(data['user'] ?? data),
+      );
       _showMessage('Profile picture updated successfully.');
     } catch (_) {
-      if (mounted) _showMessage('Could not upload the profile picture. Please try again.', error: true);
+      if (mounted)
+        _showMessage(
+          'Could not upload the profile picture. Please try again.',
+          error: true,
+        );
     } finally {
       if (mounted) setState(() => _uploadingPhoto = false);
     }
   }
 
   void _showMessage(String message, {bool error = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), behavior: SnackBarBehavior.floating, backgroundColor: error ? DriverColors.error : DriverColors.success));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: error ? DriverColors.error : DriverColors.success,
+      ),
+    );
   }
 
   Future<void> _logout(BuildContext context) async {
     final confirmed = await showConfirmationDialog(
       context,
       title: 'Log Out',
-      message: 'Are you sure you want to log out of your driver account?',
+      message: 'Are you sure you want to log out of your AQUA CLAYNE account?',
       confirmLabel: 'Log Out',
       isDanger: true,
     );
 
-    if (confirmed != true || !context.mounted) return;
+    if (confirmed != true || !context.mounted || _loggingOut) return;
+    setState(() => _loggingOut = true);
 
     final auth = context.read<AuthProvider>();
-    showDialog<void>(context: context, barrierDismissible: false, builder: (_) => const PopScope(canPop: false, child: Center(child: CircularProgressIndicator())));
-    await auth.logout();
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: Center(child: CircularProgressIndicator()),
+      ),
+    );
+    final logoutResult = await auth.logout();
 
     if (!context.mounted) return;
 
     context.read<DriverDeliveryProvider>().clearSessionData();
 
-    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
+    replaceWithLogin(context, noticeMessage: logoutResult.noticeMessage);
   }
 
   @override
@@ -132,10 +170,58 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
             ),
             child: Row(
               children: [
-                Stack(children: [
-                  CircleAvatar(radius: 32, backgroundColor: DriverColors.mintSoft, backgroundImage: user?.avatarUrl != null ? NetworkImage(user!.avatarUrl!) : null, child: user?.avatarUrl == null ? Text(driverName.isNotEmpty ? driverName[0].toUpperCase() : 'D', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: DriverColors.primaryDark)) : null),
-                  Positioned(right: -2, bottom: -2, child: Material(color: DriverColors.primary, shape: const CircleBorder(), child: InkWell(onTap: _uploadingPhoto ? null : _choosePhotoSource, customBorder: const CircleBorder(), child: Padding(padding: const EdgeInsets.all(7), child: _uploadingPhoto ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.camera_alt_outlined, size: 16, color: Colors.white))))),
-                ]),
+                Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 32,
+                      backgroundColor: DriverColors.mintSoft,
+                      backgroundImage: user?.avatarUrl != null
+                          ? NetworkImage(user!.avatarUrl!)
+                          : null,
+                      child: user?.avatarUrl == null
+                          ? Text(
+                              driverName.isNotEmpty
+                                  ? driverName[0].toUpperCase()
+                                  : 'D',
+                              style: const TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                                color: DriverColors.primaryDark,
+                              ),
+                            )
+                          : null,
+                    ),
+                    Positioned(
+                      right: -2,
+                      bottom: -2,
+                      child: Material(
+                        color: DriverColors.primary,
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          onTap: _uploadingPhoto ? null : _choosePhotoSource,
+                          customBorder: const CircleBorder(),
+                          child: Padding(
+                            padding: const EdgeInsets.all(7),
+                            child: _uploadingPhoto
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.camera_alt_outlined,
+                                    size: 16,
+                                    color: Colors.white,
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(width: AppSpacing.standard),
                 Expanded(
                   child: Column(
@@ -150,7 +236,9 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Row(
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -171,7 +259,6 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
@@ -252,13 +339,15 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                       color: DriverColors.primary,
                     ),
                     SizedBox(width: 6),
-                    Text(
-                      'DRIVER AUTHORIZATION',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: DriverColors.primaryDark,
-                        letterSpacing: 0.5,
+                    Expanded(
+                      child: Text(
+                        'DRIVER AUTHORIZATION',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: DriverColors.primaryDark,
+                          letterSpacing: 0.5,
+                        ),
                       ),
                     ),
                   ],
@@ -315,13 +404,15 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                       color: DriverColors.primary,
                     ),
                     SizedBox(width: 6),
-                    Text(
-                      'SYSTEM INFORMATION',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: DriverColors.primaryDark,
-                        letterSpacing: 0.5,
+                    Expanded(
+                      child: Text(
+                        'SYSTEM INFORMATION',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: DriverColors.primaryDark,
+                          letterSpacing: 0.5,
+                        ),
                       ),
                     ),
                   ],
@@ -349,9 +440,18 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () => _logout(context),
-              icon: const Icon(Icons.logout, size: 18),
-              label: const Text('Log Out'),
+              onPressed: _loggingOut ? null : () => _logout(context),
+              icon: _loggingOut
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.logout, size: 18),
+              label: Text(_loggingOut ? 'Signing Out...' : 'Log Out'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: DriverColors.error,
                 foregroundColor: Colors.white,
@@ -385,29 +485,64 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: color),
-        const SizedBox(width: 10),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            color: DriverColors.textSecondary,
-          ),
-        ),
-        const Spacer(),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: color == DriverColors.textSecondary
-                ? DriverColors.textPrimary
-                : color,
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final valueStyle = TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: color == DriverColors.textSecondary
+              ? DriverColors.textPrimary
+              : color,
+        );
+
+        if (constraints.maxWidth < 360) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: DriverColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(value, style: valueStyle),
+                  ],
+                ),
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 2,
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: DriverColors.textSecondary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 3,
+              child: Text(value, style: valueStyle, textAlign: TextAlign.end),
+            ),
+          ],
+        );
+      },
     );
   }
 }

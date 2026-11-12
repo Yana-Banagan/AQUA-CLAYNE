@@ -18,6 +18,13 @@
     </div>
 </div>
 
+@if(session('success'))
+    <div class="flash-message success" role="status">{{ session('success') }}</div>
+@endif
+@if(session('error'))
+    <div class="flash-message error" role="alert">{{ session('error') }}</div>
+@endif
+
 <article class="panel">
     <div class="panel-head">
         <h2>Authorized System Users</h2>
@@ -55,16 +62,19 @@
                         </td>
                         <td><small style="color: var(--text-secondary);">{{ $usr->created_at?->format('M d, Y') }}</small></td>
                         <td>
-                            @if($usr->id !== auth()->id())
-                                <form method="POST" action="{{ route('admin.users.toggle-status', $usr) }}" data-confirm="{{ $usr->status === 'active' ? 'Deactivate '.$usr->name.'?' : 'Reactivate '.$usr->name.'?' }}">
-                                    @csrf
-                                    <button type="submit" class="table-action {{ $usr->status === 'active' ? 'danger' : 'success' }}">
-                                        {{ $usr->status === 'active' ? 'Deactivate' : 'Reactivate' }}
-                                    </button>
-                                </form>
-                            @else
-                                <span style="font-size: 11px; color: var(--text-muted);">Current User</span>
-                            @endif
+                            <div class="row-actions">
+                                <a class="table-action" href="{{ route('admin.users.edit', array_merge(['user' => $usr], request()->query())) }}">Edit</a>
+                                @if($usr->id !== auth()->id())
+                                    <form method="POST" action="{{ route('admin.users.toggle-status', $usr) }}" data-disable-on-submit data-confirm="{{ $usr->status === 'active' ? 'Deactivate '.$usr->name.'?' : 'Reactivate '.$usr->name.'?' }}">
+                                        @csrf
+                                        <button type="submit" class="table-action {{ $usr->status === 'active' ? 'danger' : 'success' }}">
+                                            {{ $usr->status === 'active' ? 'Deactivate' : 'Reactivate' }}
+                                        </button>
+                                    </form>
+                                @else
+                                    <span style="font-size: 11px; color: var(--text-muted);">Current User</span>
+                                @endif
+                            </div>
                         </td>
                     </tr>
                 @empty
@@ -85,7 +95,7 @@
 <!-- Modal: Create Staff -->
 <div class="modal-backdrop" id="add-user-modal">
     <div class="modal-card">
-        <form method="POST" action="{{ route('admin.users.store') }}">
+        <form method="POST" action="{{ route('admin.users.store') }}" data-disable-on-submit>
             @csrf
             <div class="modal-head">
                 <h3>Create Staff Account</h3>
@@ -96,10 +106,12 @@
                     <div class="field">
                         <label>Full Name *</label>
                         <input type="text" name="name" value="{{ old('name') }}" required placeholder="e.g. Maria Santos">
+                        @error('name') <small class="field-error" role="alert">{{ $message }}</small> @enderror
                     </div>
                     <div class="field">
                         <label>Email Address *</label>
                         <input type="email" name="email" value="{{ old('email') }}" required placeholder="staff@aquaclayne.ph">
+                        @error('email') <small class="field-error" role="alert">{{ $message }}</small> @enderror
                     </div>
                     <div class="field">
                         <label>Role Privilege *</label>
@@ -109,12 +121,14 @@
                     <div class="field">
                         <label>Phone Contact</label>
                         <input type="text" name="phone" value="{{ old('phone') }}" placeholder="09171234567">
+                        @error('phone') <small class="field-error" role="alert">{{ $message }}</small> @enderror
                     </div>
                 </div>
 
                 <div class="field" style="margin-top: 14px;">
                     <label>Initial Password *</label>
                     <input type="password" name="password" minlength="8" required placeholder="Minimum 8 characters">
+                    @error('password') <small class="field-error" role="alert">{{ $message }}</small> @enderror
                 </div>
             </div>
             <div class="modal-footer">

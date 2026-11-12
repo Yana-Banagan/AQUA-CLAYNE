@@ -5,6 +5,7 @@
 !.env.*.example
 # Local ESP32 Wi-Fi and device credentials
 AquaClayne_RFID/include/secrets.h
+AquaClayne_RFID/include/firmware_secrets.h
 AquaClayne_RFID/.vscode/
 .vscode/c_cpp_properties.json
 *.key

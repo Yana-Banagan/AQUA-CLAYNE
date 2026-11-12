@@ -54,30 +54,14 @@ If the LCD backpack is powered from 5V, make sure its SDA/SCL pull-ups do not se
 |---|---|---|
 | Buzzer 1 (+) | **GPIO 25** | Buzzer 1 (-) to GND |
 | Buzzer 2 (+) | **GPIO 26** | Buzzer 2 (-) to GND |
-| Green LED | **GPIO 32** | GPIO → resistor → LED anode; cathode to GND |
-| Red LED | **GPIO 33** | GPIO → resistor → LED anode; cathode to GND |
+| Green LED | **GPIO 32** | GPIO â†’ resistor â†’ LED anode; cathode to GND |
+| Red LED | **GPIO 33** | GPIO â†’ resistor â†’ LED anode; cathode to GND |
 
 ---
 
 ## 3. Firmware Configuration
 
-Hardware and server settings are in `AquaClayne_RFID/include/config.h`. Local Wi-Fi and device credentials belong in the ignored `include/secrets.h` file. Copy `include/secrets.example.h` to `include/secrets.h` on a fresh checkout.
-
-```cpp
-// 1. Wi-Fi Settings
-#define DEFAULT_WIFI_SSID       "Your_Station_WiFi_SSID"
-#define DEFAULT_WIFI_PASS       "Your_Station_WiFi_Password"
-
-// 2. Aqua Clayne Backend Base URL
-// Local dev: "http://192.168.1.108:8000"
-// Production: "https://aqua-clayne-production.up.railway.app"
-#define API_BASE_URL            "https://aqua-clayne-production.up.railway.app"
-
-// 3. Security Device Credential
-// Must match device_token_hash in the database (or the default pre-seeded token)
-#define DEVICE_AUTH_TOKEN       "ac_dev_rfid_station_bay1_secret2026"
-#define DEVICE_CODE             "ESP32-STA-01"
-```
+Hardware and server settings are in `AquaClayne_RFID/include/config.h`. Copy `include/secrets.example.h` to the ignored `include/firmware_secrets.h` file and fill in the station Wi-Fi credentials and device token from the Admin RFID device settings. Do not commit the local secrets file. The firmware connects to the configured Laravel backend URL.
 
 ---
 

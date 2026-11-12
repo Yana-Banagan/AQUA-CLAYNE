@@ -24,17 +24,32 @@ class SocialAuthResult {
   });
 }
 
+class LogoutResult {
+  final bool serverLogoutConfirmed;
+  final bool localCleanupComplete;
+
+  const LogoutResult({
+    required this.serverLogoutConfirmed,
+    required this.localCleanupComplete,
+  });
+
+  String? get noticeMessage {
+    if (!localCleanupComplete) {
+      return 'You are signed out, but some local session data could not be cleared. Please restart the app.';
+    }
+    if (!serverLogoutConfirmed) {
+      return 'You are signed out on this device, but the server could not confirm logout. Sign in again when you have a connection.';
+    }
+    return null;
+  }
+}
+
 /// Manages authentication state for both Customer and Driver roles.
 ///
-/// On login/session-restore → starts Realtime subscriptions.
 /// On logout               → stops all Realtime subscriptions.
 class AuthProvider extends ChangeNotifier {
   final AuthRepository _repo;
   final RealtimeService _realtime;
-
-  // Callbacks registered by providers that need realtime lifecycle management
-  final List<VoidCallback> _onAuthCallbacks = [];
-  final List<VoidCallback> _onLogoutCallbacks = [];
 
   AuthProvider(this._repo, this._realtime);
 
@@ -42,6 +57,7 @@ class AuthProvider extends ChangeNotifier {
   UserModel? _user;
   String? _error;
   String? _socialLoadingProvider;
+  Future<LogoutResult>? _logoutInProgress;
 
   AuthStatus get status => _status;
   UserModel? get user => _user;
@@ -51,33 +67,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _status == AuthStatus.authenticated;
   bool get isLoading => _status == AuthStatus.loading || isSocialLoading;
 
-  // ================================================================
-  // REGISTER LIFECYCLE CALLBACKS
-  //
-  // Providers (OrderProvider, DriverDeliveryProvider, etc.) register
-  // their startRealtime / stopRealtime here so AuthProvider can
-  // coordinate them without circular dependencies.
-  // ================================================================
-  void addAuthCallbacks({
-    required VoidCallback onAuth,
-    required VoidCallback onLogout,
-  }) {
-    _onAuthCallbacks.add(onAuth);
-    _onLogoutCallbacks.add(onLogout);
-  }
-
-  void _onAuthenticated() {
-    for (final cb in _onAuthCallbacks) {
-      cb();
-    }
-  }
-
-  void _onLoggedOut() {
-    _realtime.unsubscribeAll();
-    for (final cb in _onLogoutCallbacks) {
-      cb();
-    }
-  }
+  void _onLoggedOut() => _realtime.unsubscribeAll();
 
   // ================================================================
   // RESTORE SESSION
@@ -100,7 +90,6 @@ class AuthProvider extends ChangeNotifier {
         await _repo.tokenStorage.saveOfflineUser(_user!.toMap());
       } catch (_) {}
       _status = AuthStatus.authenticated;
-      _onAuthenticated();
     } catch (error) {
       final isNetworkFailure =
           error is ApiException &&
@@ -112,7 +101,6 @@ class AuthProvider extends ChangeNotifier {
         _user = UserModel.fromMap(offlineUser);
         _repo.api.setOfflineOwner(_user!.id);
         _status = AuthStatus.authenticated;
-        _onAuthenticated();
         notifyListeners();
         return;
       }
@@ -149,7 +137,6 @@ class AuthProvider extends ChangeNotifier {
       try {
         await _repo.registerFcmToken();
       } catch (_) {}
-      _onAuthenticated();
       return true;
     } catch (e) {
       _error = _formatError(e);
@@ -316,7 +303,6 @@ class AuthProvider extends ChangeNotifier {
         await _repo.registerFcmToken();
       } catch (_) {}
 
-      _onAuthenticated();
       return SocialAuthResult(status: SocialAuthStatus.success, user: _user);
     } catch (e) {
       _socialLoadingProvider = null;
@@ -379,7 +365,6 @@ class AuthProvider extends ChangeNotifier {
       try {
         await _repo.registerFcmToken();
       } catch (_) {}
-      _onAuthenticated();
 
       return SocialAuthResult(status: SocialAuthStatus.success, user: user);
     } catch (e) {
@@ -415,7 +400,6 @@ class AuthProvider extends ChangeNotifier {
         await _repo.registerFcmToken();
       } catch (_) {}
 
-      _onAuthenticated();
       return true;
     } catch (e) {
       _error = _formatError(e);
@@ -428,30 +412,76 @@ class AuthProvider extends ChangeNotifier {
   // ================================================================
   // LOGOUT
   // ================================================================
-  Future<void> logout() async {
-    try {
-      await _repo.logout();
-    } catch (_) {}
-    await _repo.api.clearCachedData();
-    _repo.api.setOfflineOwner(null);
-    await _repo.tokenStorage.clearOfflineUser();
-    _onLoggedOut();
-    _user = null;
-    _status = AuthStatus.unauthenticated;
-    notifyListeners();
+  Future<LogoutResult> logout() {
+    final inProgress = _logoutInProgress;
+    if (inProgress != null) return inProgress;
+
+    final logout = _performLogout();
+    _logoutInProgress = logout;
+    return logout.whenComplete(() {
+      if (identical(_logoutInProgress, logout)) _logoutInProgress = null;
+    });
   }
 
-  /// Clears local state after the API has already rejected the token.
-  Future<void> expireSession() async {
-    await _repo.api.clearCachedData();
-    _repo.api.setOfflineOwner(null);
-    await _repo.tokenStorage.clearOfflineUser();
-    _onLoggedOut();
+  Future<LogoutResult> _performLogout() async {
+    var serverLogoutConfirmed = false;
+    try {
+      await _repo.logout();
+      serverLogoutConfirmed = true;
+    } catch (error) {
+      debugPrint('[AuthProvider] Server logout could not be confirmed: $error');
+    }
+
+    final localCleanupComplete = await _clearLocalSession();
+    return LogoutResult(
+      serverLogoutConfirmed: serverLogoutConfirmed,
+      localCleanupComplete: localCleanupComplete,
+    );
+  }
+
+  /// Clears local state after logout or when the API rejects the token.
+  Future<bool> _clearLocalSession() async {
+    var complete = true;
+    try {
+      await _repo.api.clearCachedData();
+    } catch (error) {
+      complete = false;
+      debugPrint('[AuthProvider] Could not clear cached API data: $error');
+    }
     _user = null;
+    _repo.api.setOfflineOwner(null);
+    try {
+      await _repo.clearStoredSession();
+    } catch (error) {
+      complete = false;
+      debugPrint(
+        '[AuthProvider] Could not clear the stored auth token: $error',
+      );
+    }
+    try {
+      await _repo.tokenStorage.clearOfflineUser();
+    } catch (error) {
+      complete = false;
+      debugPrint(
+        '[AuthProvider] Could not clear the offline user snapshot: $error',
+      );
+    }
+    try {
+      _onLoggedOut();
+    } catch (error) {
+      complete = false;
+      debugPrint(
+        '[AuthProvider] Could not stop realtime subscriptions: $error',
+      );
+    }
     _status = AuthStatus.unauthenticated;
     _error = null;
     notifyListeners();
+    return complete;
   }
+
+  /// Clears local state after the API has already rejected the token.
+  Future<bool> expireSession() => _clearLocalSession();
 
   // ================================================================
   // UPDATE USER

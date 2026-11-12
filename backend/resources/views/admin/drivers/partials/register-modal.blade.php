@@ -17,14 +17,14 @@
         </button>
     </header>
 
-    <form method="POST" action="{{ route('admin.drivers.store') }}" class="driver-register-form">
+    <form method="POST" action="{{ route('admin.drivers.store') }}" class="driver-register-form" data-disable-on-submit>
         @csrf
         <div class="driver-register-grid">
             <div class="field">
                 <label for="driver_name">Full Name <span>*</span></label>
                 <div class="driver-register-input-wrap">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20v-1.5a7 7 0 0 1 14 0V20"/></svg>
-                    <input id="driver_name" type="text" name="name" value="{{ old('name') }}" placeholder="Enter full name" autocomplete="name" required>
+                    <input id="driver_name" type="text" name="name" value="{{ old('name') }}" maxlength="150" placeholder="Enter full name" autocomplete="name" required>
                 </div>
                 @error('name') <small class="field-error">{{ $message }}</small> @enderror
             </div>
@@ -32,7 +32,7 @@
                 <label for="driver_email">Email Address <span>*</span></label>
                 <div class="driver-register-input-wrap">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4.5 7 7.5 6 7.5-6"/></svg>
-                    <input id="driver_email" type="email" name="email" value="{{ old('email') }}" placeholder="e.g. driver@aquaclayne.ph" autocomplete="email" required>
+                    <input id="driver_email" type="email" name="email" value="{{ old('email') }}" maxlength="150" placeholder="e.g. driver@aquaclayne.ph" autocomplete="email" required>
                 </div>
                 @error('email') <small class="field-error">{{ $message }}</small> @enderror
             </div>
@@ -40,7 +40,7 @@
                 <label for="driver_phone">Contact Number <span>*</span></label>
                 <div class="driver-register-input-wrap">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h3l1.3 4-2 1.5a15 15 0 0 0 5.7 5.7l1.5-2 4 1.3v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 5 5.7 2 2 0 0 1 7 3.5Z"/></svg>
-                    <input id="driver_phone" type="tel" name="phone" value="{{ old('phone') }}" placeholder="e.g. 0912 345 6789" autocomplete="tel" required>
+                    <input id="driver_phone" type="tel" name="phone" value="{{ old('phone') }}" maxlength="30" placeholder="e.g. 0912 345 6789" autocomplete="tel" required>
                 </div>
                 @error('phone') <small class="field-error">{{ $message }}</small> @enderror
             </div>
@@ -48,7 +48,7 @@
                 <label for="driver_license">Driver License Number</label>
                 <div class="driver-register-input-wrap">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="8.5" cy="11" r="2"/><path d="M5.8 16a3 3 0 0 1 5.4 0M13 10h4M13 14h4"/></svg>
-                    <input id="driver_license" type="text" name="license_number" value="{{ old('license_number') }}" placeholder="e.g. L00-1234567" autocomplete="off">
+                    <input id="driver_license" type="text" name="license_number" value="{{ old('license_number') }}" maxlength="50" placeholder="e.g. L00-1234567" autocomplete="off">
                 </div>
                 @error('license_number') <small class="field-error">{{ $message }}</small> @enderror
             </div>
