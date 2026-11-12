@@ -386,39 +386,18 @@ class OrderController extends Controller
             }
         }
 
-        $firstDriver = Driver::query()
-            ->with('user')
+        try {
+            $result['automatically_assigned'] = $deliveryService->assignAutomaticBatches($request->user());
+        } catch (\Throwable $e) {
+            $result['assignment_failed'][] = ['order_id' => null, 'reason' => $e->getMessage() ?: 'Automatic driver assignment failed.'];
+        }
+
+        if ($result['automatically_assigned'] === 0 && !empty(config('dispatch.primary_driver_email')) && !Driver::query()
             ->whereHas('user', fn ($query) => $query
-                ->whereRaw('LOWER(email) = ?', ['tesdriver123@example.com'])
+                ->whereRaw('LOWER(email) = ?', [strtolower((string) config('dispatch.primary_driver_email', 'testdriver123@example.com'))])
                 ->where('status', 'active'))
-            ->orderBy('created_at')
-            ->orderBy('id')
-            ->first();
-
-        $assignableOrders = Order::query()
-            ->where('status', 'confirmed')
-            ->where('delivery_method', 'home_delivery')
-            ->whereHas('payment', fn ($query) => $query
-                ->where('method', '!=', 'online')
-                ->orWhere(fn ($online) => $online->where('method', 'online')->where('status', 'paid')))
-            ->whereDoesntHave('delivery', fn ($query) => $query->whereNotNull('driver_id'))
-            ->orderBy('created_at')
-            ->orderBy('id')
-            ->get();
-
-        foreach ($assignableOrders as $order) {
-            if (!$firstDriver) {
-                $result['assignment_failed'][] = ['order_id' => $order->id, 'reason' => 'Active driver tesdriver123@example.com was not found.'];
-                continue;
-            }
-
-            try {
-                $delivery = $deliveryService->assign($order, $firstDriver, $request->user());
-                $delivery->update(['assignment_source' => 'automatic', 'assigned_at' => now()]);
-                $result['automatically_assigned']++;
-            } catch (\Throwable $e) {
-                $result['assignment_failed'][] = ['order_id' => $order->id, 'reason' => $e->getMessage() ?: 'Driver assignment failed.'];
-            }
+            ->exists()) {
+            $result['assignment_failed'][] = ['order_id' => null, 'reason' => 'Active driver ' . strtolower((string) config('dispatch.primary_driver_email', 'testdriver123@example.com')) . ' was not found.'];
         }
 
         return response()->json($result);

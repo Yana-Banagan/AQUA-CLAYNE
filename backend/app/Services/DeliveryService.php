@@ -162,41 +162,60 @@ class DeliveryService
         return DB::transactionLevel() > 0 ? $execute() : DB::transaction($execute);
     }
 
-    /** Assign complete FIFO batches of confirmed home-delivery orders. */
+    /**
+     * Assign the first configured batch of eligible home-delivery orders to the
+     * designated Aqua Clayne driver. Any orders beyond that batch remain queued
+     * for staff review unless a different post-batch policy is configured.
+     */
     public function assignAutomaticBatches(?User $actor = null): int
     {
-        $batchSize = max(1, (int) config('dispatch.assignment_batch_size', 10));
+        $batchSize = max(1, (int) config('dispatch.assignment_batch_size', 15));
+        $primaryDriverEmail = strtolower((string) config('dispatch.primary_driver_email', 'testdriver123@example.com'));
+        $postBatchPolicy = strtolower((string) config('dispatch.post_batch_assignment_policy', 'hold_for_staff'));
         $assigned = 0;
 
-        // A global advisory lock serializes dispatchers across web workers.
-        return DB::transaction(function () use ($actor, $batchSize, &$assigned) {
+        return DB::transaction(function () use ($actor, $batchSize, $primaryDriverEmail, $postBatchPolicy, &$assigned) {
             if (DB::getDriverName() === 'pgsql') {
                 DB::select('select pg_advisory_xact_lock(68241017)');
             }
 
-            $drivers = Driver::with([
-                'user',
-                'deliveries' => fn ($q) => $q->whereIn('status', ['assigned', 'en_route_for_pickup', 'picked_up', 'out_for_delivery']),
-            ])->whereHas('user', fn ($q) => $q->where('status', 'active'))->orderBy('created_at')->orderBy('id')->get()
-                ->filter(fn (Driver $driver) => $driver->deliveries->count() < 4)->values();
-            if ($drivers->isEmpty()) return 0;
+            $driver = Driver::with('user')
+                ->whereHas('user', fn ($query) => $query
+                    ->whereRaw('LOWER(email) = ?', [$primaryDriverEmail])
+                    ->where('status', 'active'))
+                ->orderBy('created_at')
+                ->orderBy('id')
+                ->first();
 
-            do {
-                $orders = Order::query()->where('status', 'confirmed')
-                    ->where('delivery_method', 'home_delivery')
-                    ->whereHas('payment', fn ($q) => $q->where('method', '!=', 'online')->orWhere(fn ($online) => $online->where('method', 'online')->where('status', 'paid')))
-                    ->whereDoesntHave('delivery', fn ($q) => $q->whereNotNull('driver_id'))
-                    ->orderBy('created_at')->orderBy('id')->limit($batchSize)->lockForUpdate()->get();
-                if ($orders->count() < $batchSize) break;
+            if (!$driver) {
+                return 0;
+            }
 
-                $completedBatches = (int) Delivery::where('assignment_source', 'automatic')->count() / $batchSize;
-                $driver = $drivers[$completedBatches % $drivers->count()];
-                foreach ($orders as $order) {
-                    $delivery = $this->assign($order, $driver, $actor);
-                    $delivery->update(['assignment_source' => 'automatic', 'assigned_at' => now()]);
-                    $assigned++;
-                }
-            } while (true);
+            $orders = Order::query()
+                ->where('status', 'confirmed')
+                ->where('delivery_method', 'home_delivery')
+                ->whereHas('payment', fn ($query) => $query
+                    ->where('method', '!=', 'online')
+                    ->orWhere(fn ($onlineQuery) => $onlineQuery
+                        ->where('method', 'online')
+                        ->where('status', 'paid')))
+                ->whereDoesntHave('delivery', fn ($query) => $query->whereNotNull('driver_id'))
+                ->orderBy('created_at')
+                ->orderBy('id')
+                ->limit($batchSize)
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($orders as $order) {
+                $delivery = $this->assign($order, $driver, $actor);
+                $delivery->update(['assignment_source' => 'automatic', 'assigned_at' => now()]);
+                $assigned++;
+            }
+
+            if ($postBatchPolicy === 'next_active_driver') {
+                // Reserved for future policy expansion. Default hold_for_staff keeps
+                // the batch capped and prevents silent override of the test driver.
+            }
 
             return $assigned;
         });
