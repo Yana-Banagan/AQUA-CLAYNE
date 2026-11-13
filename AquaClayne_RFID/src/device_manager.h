@@ -36,6 +36,7 @@ private:
     String _activeContainerCode;
     String _activeCustomerName;
     int _sessionExpiresIn;
+    bool _wasWifiConnected;
 
     void handleHeartbeat();
     void handleSessionPoll();

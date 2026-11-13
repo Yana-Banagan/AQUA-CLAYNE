@@ -1,5 +1,11 @@
 #include "rfid_manager.h"
+#if __has_include("config.h")
 #include "config.h"
+#elif __has_include("../include/config.h")
+#include "../include/config.h"
+#else
+#error "config.h not found. Check the project include path."
+#endif
 
 RFIDManager::RFIDManager(uint8_t ssPin, uint8_t rstPin)
     : _mfrc522(ssPin, rstPin) {}

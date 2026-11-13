@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <meta name="description" content="Aqua Clayne Purified Drinking Water - Station Operations & Digital Refill Management System in Santa Cruz, Laguna. Clean Water, Healthier Lives.">
 
     <title>Aqua Clayne | Purified Drinking Water & Refill Station</title>

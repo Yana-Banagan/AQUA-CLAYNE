@@ -1,5 +1,11 @@
 #include "device_manager.h"
+#if __has_include("config.h")
 #include "config.h"
+#elif __has_include("../include/config.h")
+#include "../include/config.h"
+#else
+#error "config.h not found. Check the project include path."
+#endif
 
 DeviceManager::DeviceManager(
     WiFiManager& wifi,
@@ -10,7 +16,8 @@ DeviceManager::DeviceManager(
     _lastHeartbeat(0), _lastSessionPoll(0), _lastScanTime(0),
     _lastScannedUID(""), _hasActiveSession(false),
     _activeSessionId(""), _activeContainerCode(""),
-    _activeCustomerName(""), _sessionExpiresIn(0) {}
+    _activeCustomerName(""), _sessionExpiresIn(0),
+    _wasWifiConnected(false) {}
 
 void DeviceManager::begin() {
     pinMode(BUZZER_1_PIN, OUTPUT);
@@ -28,10 +35,11 @@ void DeviceManager::begin() {
         _wifi.loop();
     }
 
+    _rfid.begin();
+    _wasWifiConnected = _wifi.isConnected();
     if (_wifi.isConnected()) {
         _oled.setState(STATE_WIFI_CONNECTED, _wifi.getIP());
         delay(1200);
-        _rfid.begin();
         _oled.setState(STATE_DEVICE_ONLINE);
         beep(100);
     } else {
@@ -51,8 +59,18 @@ void DeviceManager::loop() {
     _wifi.loop();
 
     if (!_wifi.isConnected()) {
-        _oled.setState(STATE_WIFI_DISCONNECTED);
+        if (_wasWifiConnected) {
+            Serial.println("[WiFi] Connection lost.");
+            _wasWifiConnected = false;
+            _oled.setState(STATE_WIFI_DISCONNECTED);
+        }
         return;
+    }
+
+    if (!_wasWifiConnected) {
+        _wasWifiConnected = true;
+        Serial.printf("[WiFi] Reconnected. IP: %s\n", _wifi.getIP().c_str());
+        _oled.setState(STATE_DEVICE_ONLINE);
     }
 
     handleHeartbeat();

@@ -3,7 +3,13 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
+#if __has_include("config.h")
 #include "config.h"
+#elif __has_include("../include/config.h")
+#include "../include/config.h"
+#else
+#error "config.h not found. Check the project include path."
+#endif
 
 APIClient::APIClient(const char* baseUrl, const char* deviceToken)
     : _baseUrl(baseUrl), _deviceToken(deviceToken) {}

@@ -1,5 +1,11 @@
 #include <Arduino.h>
+#if __has_include("config.h")
 #include "config.h"
+#elif __has_include("../include/config.h")
+#include "../include/config.h"
+#else
+#error "config.h not found. Check the project include path."
+#endif
 #include "wifi_manager.h"
 #include "rfid_manager.h"
 #include "oled_manager.h"

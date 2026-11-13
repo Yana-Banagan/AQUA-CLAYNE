@@ -1,5 +1,11 @@
 #include "oled_manager.h"
+#if __has_include("config.h")
 #include "config.h"
+#elif __has_include("../include/config.h")
+#include "../include/config.h"
+#else
+#error "config.h not found. Check the project include path."
+#endif
 
 OLEDManager::OLEDManager(uint8_t width, uint8_t height, int8_t resetPin)
     : _display(width, height, &Wire, resetPin),

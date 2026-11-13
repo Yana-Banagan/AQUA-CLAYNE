@@ -61,7 +61,7 @@ If the LCD backpack is powered from 5V, make sure its SDA/SCL pull-ups do not se
 
 ## 3. Firmware Configuration
 
-Hardware and server settings are in `AquaClayne_RFID/include/config.h`. Copy `include/secrets.example.h` to the ignored `include/firmware_secrets.h` file and fill in the station Wi-Fi credentials and device token from the Admin RFID device settings. Do not commit the local secrets file. The firmware connects to the configured Laravel backend URL.
+Hardware and server settings are in `AquaClayne_RFID/include/config.h`. Copy `include/secrets.example.h` to either `include/firmware_secrets.h` or `include/secrets.h`, then fill in the station Wi‑Fi credentials and device token from the Admin RFID device settings. Do not commit the local secrets file. The firmware connects to the configured Laravel backend URL.
 
 ---
 

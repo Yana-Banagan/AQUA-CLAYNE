@@ -286,7 +286,7 @@ class LandingPageTest extends TestCase
         ])->get('/');
 
         $response->assertStatus(200);
-        $response->assertSee('<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">', false);
+        $response->assertDontSee('<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">', false);
         $response->assertSee('https://', false);
         $this->assertEquals('upgrade-insecure-requests', $response->headers->get('Content-Security-Policy'));
     }

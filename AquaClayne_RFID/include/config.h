@@ -2,7 +2,14 @@
 #define CONFIG_H
 
 #include <Arduino.h>
+
+#if __has_include("firmware_secrets.h")
 #include "firmware_secrets.h"
+#elif __has_include("secrets.h")
+#include "secrets.h"
+#else
+#error "Missing secret configuration file. Copy include/secrets.example.h to include/firmware_secrets.h or include/secrets.h."
+#endif
 
 // =============================================================================
 // NETWORK & SERVER CONFIGURATION
