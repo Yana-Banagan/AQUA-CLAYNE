@@ -15,7 +15,7 @@ DeviceManager::DeviceManager(
 ) : _wifi(wifi), _rfid(rfid), _oled(oled), _api(api),
     _lastHeartbeat(0), _lastSessionPoll(0), _lastScanTime(0),
     _lastScannedUID(""), _hasActiveSession(false),
-    _activeSessionId(""), _activeContainerCode(""),
+    _activeDeviceId(""), _activeSessionId(""), _activeContainerCode(""),
     _activeCustomerName(""), _sessionExpiresIn(0),
     _wasWifiConnected(false) {}
 
@@ -98,14 +98,15 @@ void DeviceManager::handleSessionPoll() {
     if (now - _lastSessionPoll >= SESSION_POLL_MS) {
         _lastSessionPoll = now;
 
-        String sessionId, containerCode, customerName, err;
+        String deviceId, sessionId, containerCode, customerName, err;
         int expiresIn = 0;
-        bool found = _api.checkActiveSession(sessionId, containerCode, customerName, expiresIn, err);
+        bool found = _api.checkActiveSession(deviceId, sessionId, containerCode, customerName, expiresIn, err);
 
-        if (found && sessionId.length() > 0) {
+        if (found && sessionId.length() > 0 && deviceId.length() > 0) {
             if (!_hasActiveSession || _activeSessionId != sessionId) {
                 // New registration session started on admin dashboard!
                 _hasActiveSession = true;
+                _activeDeviceId = deviceId;
                 _activeSessionId = sessionId;
                 _activeContainerCode = containerCode;
                 _activeCustomerName = customerName;
@@ -119,12 +120,18 @@ void DeviceManager::handleSessionPoll() {
                 delay(60);
                 beep(80);
             }
-        } else {
+        } else if (err.length() == 0) {
             if (_hasActiveSession) {
                 // Session expired or completed
                 _hasActiveSession = false;
+                _activeDeviceId = "";
                 _activeSessionId = "";
                 _oled.setState(STATE_DEVICE_ONLINE);
+            }
+        } else {
+            Serial.printf("[Registration Poll] Failed: %s\n", err.c_str());
+            if (err == "UNAUTHORIZED") {
+                _oled.setState(STATE_UNAUTHORIZED);
             }
         }
     }
@@ -156,7 +163,7 @@ void DeviceManager::handleRFIDScan() {
         // Submit registration scan
         _oled.setState(STATE_REGISTERING_TAG);
         String msg, err;
-        bool success = _api.submitRegistrationScan(_activeSessionId, uid, msg, err);
+        bool success = _api.submitRegistrationScan(_activeDeviceId, _activeSessionId, uid, msg, err);
 
         if (success) {
             Serial.printf("[Registration] Tag %s registered successfully!\n", uid.c_str());
@@ -165,6 +172,7 @@ void DeviceManager::handleRFIDScan() {
             delay(100);
             beep(150);
             _hasActiveSession = false;
+            _activeDeviceId = "";
             _activeSessionId = "";
             delay(3500);
             _oled.setState(STATE_DEVICE_ONLINE);
@@ -183,13 +191,21 @@ void DeviceManager::handleRFIDScan() {
         }
     } else {
         // Operational scan (Station Intake / Verification)
-        String msg, err;
-        bool success = _api.submitOperationalScan(uid, "VERIFICATION", "", msg, err);
+        String msg, customerName, err;
+        int gallonCount = 0;
+        bool success = _api.submitOperationalScan(uid, "VERIFICATION", "", msg, customerName, gallonCount, err);
         if (success) {
-            _oled.showCustom("RFID VERIFIED", uid, "Active Container");
+            const String gallonLabel = gallonCount == 1 ? " Gallon" : " Gallons";
+            _oled.showCustom("Customer Name:", customerName, "Number of Gallons: " + String(gallonCount) + gallonLabel);
             beep(100);
+        } else if (err == "TAG_NOT_FOUND") {
+            _oled.showCustom("RFID Tag Not", "Registered.");
+            beep(300);
+        } else if (err == "CUSTOMER_DETAILS_NOT_FOUND") {
+            _oled.showCustom("Customer or gallon", "details unavailable.");
+            beep(300);
         } else {
-            _oled.showCustom("SCAN REJECTED", uid, err.substring(0, 20));
+            _oled.showCustom("SCAN REJECTED", err.substring(0, 20));
             beep(300);
         }
         delay(2500);

@@ -17,13 +17,13 @@ APIClient::APIClient(const char* baseUrl, const char* deviceToken)
 String APIClient::executeGet(const String& endpoint, int& outStatusCode, String& outError) {
     String fullUrl = String(_baseUrl) + endpoint;
     HTTPClient http;
+    WiFiClientSecure secureClient;
+    WiFiClient client;
 
     if (fullUrl.startsWith("https://")) {
-        WiFiClientSecure secureClient;
         secureClient.setInsecure(); // For production with strict CA, replace with root cert
         http.begin(secureClient, fullUrl);
     } else {
-        WiFiClient client;
         http.begin(client, fullUrl);
     }
 
@@ -48,13 +48,13 @@ String APIClient::executeGet(const String& endpoint, int& outStatusCode, String&
 String APIClient::executePost(const String& endpoint, const String& jsonBody, int& outStatusCode, String& outError) {
     String fullUrl = String(_baseUrl) + endpoint;
     HTTPClient http;
+    WiFiClientSecure secureClient;
+    WiFiClient client;
 
     if (fullUrl.startsWith("https://")) {
-        WiFiClientSecure secureClient;
         secureClient.setInsecure();
         http.begin(secureClient, fullUrl);
     } else {
-        WiFiClient client;
         http.begin(client, fullUrl);
     }
 
@@ -91,11 +91,14 @@ bool APIClient::sendHeartbeat(const String& firmwareVersion, String& outError) {
     }
     if (statusCode == 401 || statusCode == 403) {
         outError = "UNAUTHORIZED";
+    } else {
+        outError = "HTTP_" + String(statusCode);
     }
     return false;
 }
 
 bool APIClient::checkActiveSession(
+    String& outDeviceId,
     String& outSessionId,
     String& outContainerCode,
     String& outCustomerName,
@@ -106,6 +109,9 @@ bool APIClient::checkActiveSession(
     String response = executeGet("/api/iot/rfid/registration-session/active", statusCode, outError);
 
     if (statusCode != 200 || response.length() == 0) {
+        if (outError.length() == 0) {
+            outError = "HTTP_" + String(statusCode);
+        }
         return false;
     }
 
@@ -118,26 +124,34 @@ bool APIClient::checkActiveSession(
 
     bool hasSession = doc["has_session"] | false;
     if (!hasSession) {
+        outDeviceId = "";
         outSessionId = "";
         return false;
     }
 
     JsonObject session = doc["session"];
+    outDeviceId = session["device_id"].as<String>();
     outSessionId = session["session_id"].as<String>();
     outContainerCode = session["container_code"].as<String>();
     outCustomerName = session["customer_name"].as<String>();
     outExpiresIn = session["expires_in_seconds"] | 0;
+    if (outDeviceId.length() == 0 || outSessionId.length() == 0) {
+        outError = "SESSION_RESPONSE_INCOMPLETE";
+        return false;
+    }
 
     return true;
 }
 
 bool APIClient::submitRegistrationScan(
+    const String& deviceId,
     const String& sessionId,
     const String& uid,
     String& outMessage,
     String& outError
 ) {
     StaticJsonDocument<256> doc;
+    doc["device_id"] = deviceId;
     doc["session_id"] = sessionId;
     doc["uid"] = uid;
     String payload;
@@ -165,6 +179,8 @@ bool APIClient::submitOperationalScan(
     const String& scanType,
     const String& orderId,
     String& outMessage,
+    String& outCustomerName,
+    int& outGallonCount,
     String& outError
 ) {
     StaticJsonDocument<256> doc;
@@ -184,6 +200,8 @@ bool APIClient::submitOperationalScan(
 
     outMessage = resDoc["message"] | "";
     if (statusCode == 200 && resDoc["success"] == true) {
+        outCustomerName = resDoc["customer_name"] | "";
+        outGallonCount = resDoc["gallon_count"] | 0;
         return true;
     }
 

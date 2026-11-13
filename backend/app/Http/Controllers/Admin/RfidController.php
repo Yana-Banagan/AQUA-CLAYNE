@@ -17,6 +17,7 @@ use App\Services\RfidRegistrationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class RfidController extends Controller
@@ -133,7 +134,7 @@ class RfidController extends Controller
         // ------------------------------------------------------------------
         // 4. DEVICES QUERY
         // ------------------------------------------------------------------
-        $devices = $activeTab === 'devices' ? RfidDevice::latest('created_at')->get() : collect();
+        $devices = RfidDevice::latest('created_at')->get();
 
         // ------------------------------------------------------------------
         // 5. TRANSACTIONS QUERY
@@ -215,14 +216,16 @@ class RfidController extends Controller
     public function createSession(Request $request, RfidRegistrationService $service): JsonResponse
     {
         $data = $request->validate([
-            'customer_container_id' => ['required', 'uuid'],
-            'station_device_id' => ['nullable', 'uuid'],
+            'customer_id' => ['required', 'uuid', 'exists:customers,id'],
+            'customer_container_id' => ['required', 'uuid', 'exists:customer_containers,id'],
+            'station_device_id' => ['required', 'uuid', 'exists:rfid_devices,id'],
         ]);
 
         $session = $service->createSession(
             $data['customer_container_id'],
-            $request->user(),
-            $data['station_device_id'] ?? null
+            $data['customer_id'],
+            $data['station_device_id'],
+            $request->user()
         );
 
         $session->load(['container.customer.user', 'device']);
@@ -236,6 +239,7 @@ class RfidController extends Controller
                 'container_code' => $session->container?->container_code,
                 'customer_name' => $session->container?->customer?->user?->name,
                 'device_name' => $session->device?->device_name ?? 'Any Online Scanner',
+                'device_id' => $session->station_device_id,
                 'expires_at' => $session->expires_at->toIso8601String(),
                 'expires_in_seconds' => max(0, (int) now()->diffInSeconds($session->expires_at, false)),
             ],
@@ -247,23 +251,57 @@ class RfidController extends Controller
      */
     public function checkSessionStatus(RfidRegistrationSession $session): JsonResponse
     {
-        $session->load(['container.customer.user', 'container.activeTag']);
+        $session = DB::transaction(function () use ($session) {
+            $lockedSession = RfidRegistrationSession::whereKey($session->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            if ($lockedSession->status === 'pending' && $lockedSession->expires_at->isPast()) {
+                $lockedSession->status = 'expired';
+                $lockedSession->save();
+            }
+            return $lockedSession;
+        });
+        $session->load(['container.customer.user', 'container.activeTag', 'device']);
 
-        $isExpired = $session->expires_at->isPast();
-        if ($session->status === 'pending' && $isExpired) {
-            $session->status = 'expired';
-            $session->save();
+        $progress = $session->status;
+        if ($session->status === 'pending') {
+            if (!$session->command_sent_at) {
+                $progress = 'waiting_for_device';
+            } elseif (!$session->device?->isOnline()) {
+                $progress = 'device_disconnected';
+            } else {
+                $progress = 'waiting_for_tag';
+            }
         }
 
         return response()->json([
             'status' => $session->status,
+            'progress' => $progress,
+            'progress_message' => match ($progress) {
+                'waiting_for_device' => 'Waiting for the selected ESP32 scanner to connect.',
+                'device_disconnected' => 'ESP32 connection lost. Waiting for the scanner to reconnect.',
+                'waiting_for_tag' => 'ESP32 connected. Registration command sent. Please tap the physical RFID tag on the ESP32 RFID reader.',
+                'failed' => $session->failure_message ?? 'RFID registration failed.',
+                'expired' => 'Registration session expired.',
+                'cancelled' => 'Registration session was cancelled.',
+                'completed' => 'RFID tag successfully registered.',
+                default => 'Validating RFID UID.',
+            },
             'is_pending' => $session->isPending(),
             'scanned_uid' => $session->scanned_uid,
             'completed_at' => $session->completed_at?->toIso8601String(),
+            'scan_received_at' => $session->scan_received_at?->toIso8601String(),
+            'failure_code' => $session->failure_code,
+            'failure_message' => $session->failure_message,
             'container' => [
+                'id' => $session->container?->id,
                 'code' => $session->container?->container_code,
                 'customer_name' => $session->container?->customer?->user?->name,
                 'active_tag_uid' => $session->container?->activeTag?->uid,
+            ],
+            'device' => [
+                'id' => $session->device?->id,
+                'name' => $session->device?->device_name,
             ],
         ]);
     }
@@ -410,49 +448,69 @@ class RfidController extends Controller
     }
 
     /**
-     * Autocomplete endpoint to search active customers.
+     * List eligible customers and optionally filter by name, phone, or email.
      */
     public function searchCustomers(Request $request): JsonResponse
     {
         $query = trim((string) $request->get('q'));
-        if (strlen($query) < 2) {
-            return response()->json(['customers' => []]);
-        }
 
         $customers = Customer::with('user')
-            ->whereHas('user', function ($uq) use ($query) {
-                $uq->where('name', 'ilike', "%{$query}%")
-                   ->orWhere('phone', 'ilike', "%{$query}%")
-                   ->orWhere('email', 'ilike', "%{$query}%");
+            ->whereHas('user', function ($uq) {
+                $uq->where('role', 'customer')
+                    ->where('status', 'active');
             })
-            ->take(10)
+            ->when(!$request->boolean('include_all'), function ($customers) {
+                    $customers->whereHas('containers', function ($cq) {
+                        $cq->where('status', 'active')
+                            ->whereDoesntHave('activeTag')
+                            ->whereDoesntHave('registrationSessions', function ($sq) {
+                                $sq->where('status', 'pending')
+                                    ->where('expires_at', '>', now());
+                            });
+                    });
+            })
+            ->when($query !== '', function ($customers) use ($query) {
+                $customers->whereHas('user', function ($uq) use ($query) {
+                    $like = '%' . mb_strtolower($query) . '%';
+                    $uq->whereRaw('LOWER(name) LIKE ?', [$like])
+                        ->orWhereRaw('LOWER(phone) LIKE ?', [$like])
+                        ->orWhereRaw('LOWER(email) LIKE ?', [$like]);
+                });
+            })
+            ->orderBy('created_at')
+            ->when($request->boolean('include_all'), fn($customers) => $customers->take(10))
             ->get()
             ->map(fn($c) => [
                 'id' => $c->id,
                 'name' => $c->user->name ?? 'Unknown',
                 'phone' => $c->user->phone ?? 'No phone',
                 'email' => $c->user->email ?? '',
-            ]);
+            ])->values();
 
         return response()->json(['customers' => $customers]);
     }
 
     /**
-     * Get containers belonging to a customer (with their active RFID tag info).
+     * Get only active, untagged containers that can be used for registration.
      */
     public function customerContainers(Customer $customer): JsonResponse
     {
-        $containers = CustomerContainer::with('activeTag')
+        $containers = CustomerContainer::query()
             ->where('customer_id', $customer->id)
             ->where('status', 'active')
+            ->whereDoesntHave('activeTag')
+            ->whereDoesntHave('registrationSessions', function ($q) {
+                $q->where('status', 'pending')
+                    ->where('expires_at', '>', now());
+            })
+            ->orderBy('created_at')
             ->get()
             ->map(fn($c) => [
                 'id' => $c->id,
                 'container_code' => $c->container_code,
                 'container_type' => $c->container_type,
                 'capacity' => $c->capacity,
-                'has_active_tag' => (bool) $c->activeTag,
-                'active_tag_uid' => $c->activeTag?->uid,
+                'status' => 'Ready for RFID registration',
             ]);
 
         return response()->json(['containers' => $containers]);

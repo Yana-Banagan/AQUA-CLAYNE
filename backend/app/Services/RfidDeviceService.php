@@ -30,9 +30,8 @@ class RfidDeviceService
             'device_name' => $data['device_name'],
             'location' => $data['location'],
             'device_token_hash' => $tokenHash,
-            'status' => $data['status'] ?? 'online',
+            'status' => 'offline',
             'firmware_version' => $data['firmware_version'] ?? '1.0.0',
-            'last_heartbeat_at' => now(),
         ]);
 
         AuditLog::create([

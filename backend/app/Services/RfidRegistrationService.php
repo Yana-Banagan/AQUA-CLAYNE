@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AuditLog;
+use App\Models\Customer;
 use App\Models\CustomerContainer;
 use App\Models\CustomerContainerRfidTag;
 use App\Models\RfidDevice;
@@ -18,45 +19,80 @@ class RfidRegistrationService
     /**
      * Start a temporary RFID registration session.
      */
-    public function createSession(string $containerId, User $admin, ?string $deviceId = null): RfidRegistrationSession
+    public function createSession(
+        string $containerId,
+        string $customerId,
+        string $deviceId,
+        User $admin
+    ): RfidRegistrationSession
     {
-        $container = CustomerContainer::findOrFail($containerId);
+        return DB::transaction(function () use ($containerId, $customerId, $deviceId, $admin) {
+            $customerIsEligible = Customer::whereKey($customerId)
+                ->whereHas('user', function ($query) {
+                    $query->where('role', 'customer')
+                        ->where('status', 'active');
+                })
+                ->exists();
 
-        if ($container->status !== 'active') {
-            throw ValidationException::withMessages([
-                'customer_container_id' => ["Container is currently {$container->status} and cannot be assigned an RFID tag."],
-            ]);
-        }
+            if (!$customerIsEligible) {
+                throw ValidationException::withMessages([
+                    'customer_id' => ['The selected customer is not active or eligible for RFID registration.'],
+                ]);
+            }
 
-        // Check if container already has an active tag
-        $activeTag = $container->activeTag;
-        if ($activeTag) {
-            throw ValidationException::withMessages([
-                'customer_container_id' => ["This container is already linked to active tag UID: {$activeTag->uid}. Use Replace Tag instead."],
-            ]);
-        }
+            $container = CustomerContainer::whereKey($containerId)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        // Determine target station device
-        $device = null;
-        if ($deviceId) {
-            $device = RfidDevice::find($deviceId);
-        }
-        if (!$device) {
-            $device = RfidDevice::where('status', 'online')->orderByDesc('last_heartbeat_at')->first();
-        }
-        if (!$device) {
-            $device = RfidDevice::first();
-        }
+            if ($container->customer_id !== $customerId) {
+                throw ValidationException::withMessages([
+                    'customer_container_id' => ['The selected container does not belong to the selected customer.'],
+                ]);
+            }
 
-        return DB::transaction(function () use ($container, $admin, $device) {
-            // Cancel any stale pending sessions for this container
-            RfidRegistrationSession::where('customer_container_id', $container->id)
+            if ($container->status !== 'active') {
+                throw ValidationException::withMessages([
+                    'customer_container_id' => ["Container is currently {$container->status} and cannot be assigned an RFID tag."],
+                ]);
+            }
+
+            if ($container->activeTag()->exists()) {
+                throw ValidationException::withMessages([
+                    'customer_container_id' => ['This container already has an active RFID tag. Use Replace Tag instead.'],
+                ]);
+            }
+
+            $device = RfidDevice::whereKey($deviceId)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$device || !$device->isOnline()) {
+                throw ValidationException::withMessages([
+                    'station_device_id' => ['The selected RFID scanner is offline or has not sent a recent authenticated heartbeat.'],
+                ]);
+            }
+
+            if (RfidRegistrationSession::where('customer_container_id', $container->id)
                 ->where('status', 'pending')
-                ->update(['status' => 'cancelled']);
+                ->where('expires_at', '>', now())
+                ->exists()) {
+                throw ValidationException::withMessages([
+                    'customer_container_id' => ['This container already has an active RFID registration session.'],
+                ]);
+            }
+
+            if (RfidRegistrationSession::where('station_device_id', $device->id)
+                ->where('status', 'pending')
+                ->where('expires_at', '>', now())
+                ->exists()) {
+                throw ValidationException::withMessages([
+                    'station_device_id' => ['This RFID scanner is already handling another registration session.'],
+                ]);
+            }
 
             return RfidRegistrationSession::create([
                 'customer_container_id' => $container->id,
-                'station_device_id' => $device?->id,
+                'station_device_id' => $device->id,
                 'created_by' => $admin->id,
                 'status' => 'pending',
                 'expires_at' => now()->addMinutes(3),
@@ -69,19 +105,29 @@ class RfidRegistrationService
      */
     public function cancelSession(RfidRegistrationSession $session, User $admin): RfidRegistrationSession
     {
-        if ($session->status === 'pending') {
-            $session->status = 'cancelled';
-            $session->save();
+        return DB::transaction(function () use ($session, $admin) {
+            $lockedSession = RfidRegistrationSession::whereKey($session->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-            AuditLog::create([
-                'actor_id' => $admin->id,
-                'action' => 'rfid.session_cancelled',
-                'table_name' => 'rfid_registration_sessions',
-                'record_id' => $session->id,
-            ]);
-        }
+            if ($lockedSession->status === 'pending') {
+                $lockedSession->status = $lockedSession->expires_at->isPast()
+                    ? 'expired'
+                    : 'cancelled';
+                $lockedSession->save();
 
-        return $session;
+                if ($lockedSession->status === 'cancelled') {
+                    AuditLog::create([
+                        'actor_id' => $admin->id,
+                        'action' => 'rfid.session_cancelled',
+                        'table_name' => 'rfid_registration_sessions',
+                        'record_id' => $lockedSession->id,
+                    ]);
+                }
+            }
+
+            return $lockedSession;
+        });
     }
 
     /**
@@ -90,14 +136,6 @@ class RfidRegistrationService
     public function completeRegistration(RfidDevice $device, string $sessionId, string $rawUid): array
     {
         $uid = strtoupper(trim(preg_replace('/[\s:]+/', '', $rawUid)));
-
-        if (empty($uid)) {
-            return [
-                'success' => false,
-                'error' => 'INVALID_UID',
-                'message' => 'Scanned RFID UID is empty or invalid.',
-            ];
-        }
 
         return DB::transaction(function () use ($device, $sessionId, $uid) {
             /** @var RfidRegistrationSession|null $session */
@@ -113,7 +151,7 @@ class RfidRegistrationService
                 ];
             }
 
-            if ($session->station_device_id && $session->station_device_id !== $device->id) {
+            if (!$session->station_device_id || $session->station_device_id !== $device->id) {
                 return [
                     'success' => false,
                     'error' => 'DEVICE_MISMATCH',
@@ -140,40 +178,60 @@ class RfidRegistrationService
                 ];
             }
 
+            if (!$session->command_sent_at) {
+                return [
+                    'success' => false,
+                    'error' => 'SESSION_NOT_DELIVERED',
+                    'message' => 'The ESP32 has not received this registration command yet.',
+                ];
+            }
+
+            $session->scan_received_at = now();
+            $session->save();
+
+            if (!preg_match('/\A(?:[A-F0-9]{8}|[A-F0-9]{10}|[A-F0-9]{12}|[A-F0-9]{14}|[A-F0-9]{16}|[A-F0-9]{18}|[A-F0-9]{20})\z/', $uid)) {
+                return $this->rejectRegistration(
+                    $session,
+                    $device,
+                    $uid,
+                    'INVALID_UID',
+                    'The scanned RFID UID must contain 4 to 10 bytes of hexadecimal data.'
+                );
+            }
+
             /** @var CustomerContainer $container */
             $container = CustomerContainer::where('id', $session->customer_container_id)
                 ->lockForUpdate()
                 ->first();
 
             if (!$container || $container->status !== 'active') {
-                return [
-                    'success' => false,
-                    'error' => 'CONTAINER_INACTIVE',
-                    'message' => 'Customer container is no longer active.',
-                ];
+                return $this->rejectRegistration($session, $device, $uid, 'CONTAINER_INACTIVE', 'Customer container is no longer active.');
             }
 
-            // Check if UID is already active in customer tags
+            // A UID remains reserved after deactivation or replacement.
             $existingCustomerTag = CustomerContainerRfidTag::where('uid', $uid)
-                ->where('status', 'active')
                 ->first();
 
             if ($existingCustomerTag) {
-                return [
-                    'success' => false,
-                    'error' => 'DUPLICATE_RFID_TAG',
-                    'message' => "RFID UID {$uid} is already assigned to container {$existingCustomerTag->container?->container_code}.",
-                ];
+                return $this->rejectRegistration(
+                    $session,
+                    $device,
+                    $uid,
+                    'DUPLICATE_RFID_TAG',
+                    "This RFID tag is already registered to container {$existingCustomerTag->container?->container_code}."
+                );
             }
 
             // Check if UID is in station asset tags
             $existingStationTag = RfidTag::where('tag_uid', $uid)->first();
             if ($existingStationTag) {
-                return [
-                    'success' => false,
-                    'error' => 'DUPLICATE_RFID_TAG',
-                    'message' => "RFID UID {$uid} is already registered to station asset #{$existingStationTag->gallon_id}.",
-                ];
+                return $this->rejectRegistration(
+                    $session,
+                    $device,
+                    $uid,
+                    'DUPLICATE_RFID_TAG',
+                    'This RFID tag is already assigned to a station gallon.'
+                );
             }
 
             // Check if container already has an active tag
@@ -182,11 +240,13 @@ class RfidRegistrationService
                 ->exists();
 
             if ($hasActiveTag) {
-                return [
-                    'success' => false,
-                    'error' => 'CONTAINER_ALREADY_TAGGED',
-                    'message' => 'This container already has an active RFID tag assigned.',
-                ];
+                return $this->rejectRegistration(
+                    $session,
+                    $device,
+                    $uid,
+                    'CONTAINER_ALREADY_TAGGED',
+                    'This container already has an active RFID tag assigned.'
+                );
             }
 
             // Create the new active RFID tag association
@@ -250,9 +310,51 @@ class RfidRegistrationService
                     'id' => $container->customer?->id,
                     'name' => $container->customer?->user?->name,
                 ],
+                'device' => [
+                    'id' => $device->id,
+                    'name' => $device->device_name,
+                ],
                 'transaction_id' => $transaction->id,
             ];
         });
+    }
+
+    private function rejectRegistration(
+            RfidRegistrationSession $session,
+            RfidDevice $device,
+            string $uid,
+            string $error,
+            string $message
+    ): array {
+            $session->status = 'failed';
+            $session->failure_code = $error;
+            $session->failure_message = $message;
+            $session->save();
+
+            RfidTransaction::create([
+                'customer_container_id' => $session->customer_container_id,
+                'device_id' => $device->id,
+                'action' => 'registration',
+                'transaction_type' => 'REGISTRATION',
+                'scan_result' => 'rejected',
+                'message' => $message,
+                'metadata' => ['uid' => $uid, 'error' => $error],
+                'scanned_by' => $session->created_by,
+                'scanned_at' => now(),
+            ]);
+
+            AuditLog::create([
+                'actor_id' => $session->created_by,
+                'action' => 'rfid.registration_scan_rejected',
+                'table_name' => 'rfid_registration_sessions',
+                'record_id' => $session->id,
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $error,
+                'message' => $message,
+            ];
     }
 
     /**
@@ -278,9 +380,8 @@ class RfidRegistrationService
                 ]);
             }
 
-            // Check if new UID already active
+            // A UID remains reserved after deactivation or replacement.
             $duplicateCustomer = CustomerContainerRfidTag::where('uid', $newUid)
-                ->where('status', 'active')
                 ->exists();
             $duplicateStation = RfidTag::where('tag_uid', $newUid)->exists();
 

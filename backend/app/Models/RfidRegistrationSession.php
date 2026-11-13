@@ -18,6 +18,10 @@ class RfidRegistrationSession extends Model
         'expires_at',
         'completed_at',
         'scanned_uid',
+        'command_sent_at',
+        'scan_received_at',
+        'failure_code',
+        'failure_message',
     ];
 
     protected function casts(): array
@@ -25,6 +29,8 @@ class RfidRegistrationSession extends Model
         return [
             'expires_at' => 'datetime',
             'completed_at' => 'datetime',
+            'command_sent_at' => 'datetime',
+            'scan_received_at' => 'datetime',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];

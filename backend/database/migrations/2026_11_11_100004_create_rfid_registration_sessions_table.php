@@ -26,7 +26,7 @@ return new class extends Migration {
             $table->foreignUuid('created_by')
                 ->constrained('users');
 
-            $table->string('status', 20)->default('pending'); // pending, completed, expired, cancelled
+            $table->string('status', 20)->default('pending'); // pending, completed, failed, expired, cancelled
             $table->timestampTz('expires_at');
             $table->timestampTz('completed_at')->nullable();
             $table->string('scanned_uid', 64)->nullable();

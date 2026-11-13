@@ -32,6 +32,7 @@ private:
 
     // Active session state
     bool _hasActiveSession;
+    String _activeDeviceId;
     String _activeSessionId;
     String _activeContainerCode;
     String _activeCustomerName;

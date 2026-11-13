@@ -86,29 +86,53 @@ Hardware and server settings are in `AquaClayne_RFID/include/config.h`. Copy `in
 - The Admin Web Dashboard reflects the scanner status as **ONLINE**.
 
 ### Step 2: RFID Registration
-1. In the Admin Dashboard (`/admin/rfid`), click **"Register New RFID Tag"**.
-2. Search and select the customer.
-3. Select an untagged customer container (or click `+ New Container`).
-4. Click **"Start RFID Registration"**.
-5. Laravel creates a temporary 3-minute registration session.
-6. ESP32 detects the pending session and displays:
-   ```
-   >> RFID REGISTRATION <<
-          TAP TAG
-      AC-JUA-001
-   ```
-7. Admin or station staff taps the physical RFID tag onto the RC522 antenna.
-8. ESP32 transmits UID to `POST /api/iot/rfid/registration-scan`.
-9. Laravel validates uniqueness, assigns the tag in Supabase PostgreSQL, creates audit logs, and emits a Realtime event.
-10. ESP32 beeps twice and displays:
-    ```
-    TAG REGISTERED
-     SUCCESSFULLY
-    ```
-11. Admin dashboard automatically refreshes and displays the new RFID tag.
+1. In the Admin Dashboard (`/admin/rfid`), click **"Register New RFID Tag"**. Eligible customers (those with active, untagged containers) load immediately; search by name, phone, or email to filter.
+2. Select a customer and one of their eligible containers (or click `+ New Container`), then select a scanner marked **ONLINE**.
+3. Click **"Start RFID Registration"**. Laravel checks the selected customer/container, a recent authenticated device heartbeat, and that neither the container nor scanner has another active registration. It creates a device-bound 3-minute session.
+4. The ESP32 polls the authenticated active-session endpoint every 1.5 seconds. Once the scanner receives the command, tap a physical RFID tag on the RC522 reader.
+5. The ESP32 sends the actual UID, device ID, and session ID to `POST /api/iot/rfid/registration-scan`. Laravel validates the scanner, session, UID format, and duplicate assignment in a transaction.
+6. Only after Laravel confirms success does the modal show the actual UID, customer, container, scanner, and registration time. It refreshes the registry and eligible-container data without reloading the page. Failed scans are recorded in the existing RFID transaction/audit history.
 
-### Step 3: Station Intake Verification
+### Step 3: Registered Tag Identification
+- Outside a registration session, a customer tag is sent to authenticated `POST /api/iot/rfid/scan` with `scan_type: VERIFICATION`.
+- Laravel looks up the current customer and counts their active customer-container records.
+- The OLED displays only the customer name and current gallon count. An unregistered UID displays `RFID Tag Not Registered.` A registered tag without retrievable customer/gallon data displays an error.
+
+### Step 4: Station Intake Verification
 - When empty gallons arrive at the station, staff scans the gallon tag.
 - The system checks that the UID belongs to an active customer container matching the order.
 - Prevents duplicate intake scans and detects unlinked or foreign containers.
+
+### Device API Contract
+All ESP32 requests use `X-Device-Token` from the local, ignored `include/secrets.h` or `include/firmware_secrets.h`. Never commit the token. New hardware records remain **OFFLINE** until a real authenticated heartbeat is received.
+
+The modal loads eligible customers from `GET /admin/rfid/search-customers` and containers from `GET /admin/rfid/customers/{customer}/containers`. It starts a session with `POST /admin/rfid/registration-sessions` and polls `GET /admin/rfid/registration-sessions/{session}/status`:
+
+```json
+{
+  "customer_id": "<customer UUID>",
+  "customer_container_id": "<container UUID>",
+  "station_device_id": "<online ESP32 UUID>"
+}
+```
+
+`GET /api/iot/rfid/registration-session/active` returns the assigned `device_id`, `session_id`, container display information, and server-computed expiry. After a physical tap, the scanner submits:
+
+```json
+{
+  "device_id": "<authenticated device UUID>",
+  "session_id": "<active registration session UUID>",
+  "uid": "<actual RC522 hexadecimal UID>"
+}
+```
+
+to `POST /api/iot/rfid/registration-scan`. The backend compares the submitted device ID with the device authenticated by the token; the browser never supplies a UID.
+
+### Build, Flash, and Physical Test
+- Register the ESP32 in Admin → RFID & Gallon and copy its one-time device token to the ignored firmware secrets file.
+- From the repository root, build with `python -m platformio run --project-dir AquaClayne_RFID`; flash with `python -m platformio run --project-dir AquaClayne_RFID --target upload`. Select the correct serial port if needed.
+- Open the serial monitor at 115200 baud. Confirm heartbeat and registration-session polling.
+- Open the registration modal, select an online scanner and an untagged container, start registration, and tap a physical tag. Verify the UID and success details in the modal and registry.
+- Tap the registered tag again in normal mode. Confirm the OLED displays only the customer name and current active gallon count. Test an unregistered tag and confirm `RFID Tag Not Registered.`
+- Apply pending Laravel migrations before deploying the updated backend. Do not manually mark a scanner online as a substitute for its heartbeat.
 

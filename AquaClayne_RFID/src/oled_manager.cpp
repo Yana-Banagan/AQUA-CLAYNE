@@ -92,10 +92,8 @@ void OLEDManager::setState(DisplayState state, const String& extraText) {
 
         case STATE_RFID_DETECTED:
             _display.setTextSize(1);
-            _display.println("RFID DETECTED");
-            _display.setTextSize(1);
-            _display.print("UID: ");
-            _display.println(extraText);
+            _display.println("RFID TAG DETECTED");
+            _display.println("Validating tag...");
             break;
 
         case STATE_REGISTERING_TAG:

@@ -8,9 +8,9 @@ public:
     APIClient(const char* baseUrl, const char* deviceToken);
 
     bool sendHeartbeat(const String& firmwareVersion, String& outError);
-    bool checkActiveSession(String& outSessionId, String& outContainerCode, String& outCustomerName, int& outExpiresIn, String& outError);
-    bool submitRegistrationScan(const String& sessionId, const String& uid, String& outMessage, String& outError);
-    bool submitOperationalScan(const String& uid, const String& scanType, const String& orderId, String& outMessage, String& outError);
+    bool checkActiveSession(String& outDeviceId, String& outSessionId, String& outContainerCode, String& outCustomerName, int& outExpiresIn, String& outError);
+    bool submitRegistrationScan(const String& deviceId, const String& sessionId, const String& uid, String& outMessage, String& outError);
+    bool submitOperationalScan(const String& uid, const String& scanType, const String& orderId, String& outMessage, String& outCustomerName, int& outGallonCount, String& outError);
 
 private:
     const char* _baseUrl;

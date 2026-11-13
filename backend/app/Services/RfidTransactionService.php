@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AuditLog;
+use App\Models\CustomerContainer;
 use App\Models\CustomerContainerRfidTag;
 use App\Models\Order;
 use App\Models\RfidDevice;
@@ -142,6 +143,39 @@ class RfidTransactionService
             }
         }
 
+        $customerName = null;
+        $gallonCount = null;
+        if (strtoupper($scanType) === 'VERIFICATION') {
+            $customerName = $container?->customer?->user?->name;
+            $gallonCount = $container
+                ? CustomerContainer::where('customer_id', $container->customer_id)
+                    ->where('status', 'active')
+                    ->count()
+                : 0;
+
+            if (!$customerName || $gallonCount < 1) {
+                RfidTransaction::create([
+                    'rfid_tag_id' => $stationTag?->id,
+                    'customer_container_id' => $container?->id,
+                    'customer_container_rfid_tag_id' => $customerTag?->id,
+                    'device_id' => $device->id,
+                    'order_id' => $order?->id,
+                    'action' => strtolower($scanType),
+                    'transaction_type' => strtoupper($scanType),
+                    'scan_result' => 'rejected',
+                    'message' => 'RFID tag is registered but customer or active gallon details are unavailable.',
+                    'scanned_by' => $actor?->id,
+                    'scanned_at' => now(),
+                ]);
+
+                return [
+                    'success' => false,
+                    'error' => 'CUSTOMER_DETAILS_NOT_FOUND',
+                    'message' => 'RFID tag is registered, but customer or gallon details could not be retrieved.',
+                ];
+            }
+        }
+
         // Record successful transaction
         $transaction = RfidTransaction::create([
             'rfid_tag_id' => $stationTag?->id,
@@ -164,6 +198,8 @@ class RfidTransactionService
             'message' => 'RFID tag verified successfully.',
             'transaction_id' => $transaction->id,
             'uid' => $uid,
+            'customer_name' => $customerName,
+            'gallon_count' => $gallonCount,
             'container' => $container ? [
                 'id' => $container->id,
                 'code' => $container->container_code,

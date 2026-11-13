@@ -9,6 +9,7 @@ use App\Services\RfidRegistrationService;
 use App\Services\RfidTransactionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class RfidDeviceController extends Controller
 {
@@ -20,15 +21,21 @@ class RfidDeviceController extends Controller
         /** @var RfidDevice $device */
         $device = $request->attributes->get('rfid_device');
 
-        $session = RfidRegistrationSession::with(['container.customer.user'])
-            ->where('status', 'pending')
-            ->where('expires_at', '>', now())
-            ->where(function ($q) use ($device) {
-                $q->where('station_device_id', $device->id)
-                  ->orWhereNull('station_device_id');
-            })
-            ->latest('created_at')
-            ->first();
+        $session = DB::transaction(function () use ($device) {
+            $session = RfidRegistrationSession::where('status', 'pending')
+                ->where('expires_at', '>', now())
+                ->where('station_device_id', $device->id)
+                ->latest('created_at')
+                ->lockForUpdate()
+                ->first();
+
+            if ($session && !$session->command_sent_at) {
+                $session->command_sent_at = now();
+                $session->save();
+            }
+
+            return $session;
+        });
 
         if (!$session) {
             return response()->json([
@@ -38,6 +45,8 @@ class RfidDeviceController extends Controller
             ]);
         }
 
+        $session->load(['container.customer.user']);
+
         $container = $session->container;
         $customerUser = $container?->customer?->user;
 
@@ -46,11 +55,11 @@ class RfidDeviceController extends Controller
             'has_session' => true,
             'session' => [
                 'session_id' => $session->id,
+                'device_id' => $device->id,
                 'container_id' => $container?->id,
                 'container_code' => $container?->container_code,
                 'container_type' => $container?->container_type,
                 'customer_name' => $customerUser?->name ?? 'Customer',
-                'customer_phone' => $customerUser?->phone ?? '',
                 'expires_at' => $session->expires_at->toIso8601String(),
                 'expires_in_seconds' => max(0, (int) now()->diffInSeconds($session->expires_at, false)),
             ],
@@ -66,9 +75,18 @@ class RfidDeviceController extends Controller
         $device = $request->attributes->get('rfid_device');
 
         $data = $request->validate([
+            'device_id' => ['required', 'uuid'],
             'session_id' => ['required', 'uuid'],
             'uid' => ['required', 'string', 'max:64'],
         ]);
+
+        if ($data['device_id'] !== $device->id) {
+            return response()->json([
+                'success' => false,
+                'error' => 'DEVICE_MISMATCH',
+                'message' => 'The submitted device ID does not match the authenticated RFID scanner.',
+            ], 403);
+        }
 
         $result = $registrationService->completeRegistration(
             $device,
@@ -95,6 +113,7 @@ class RfidDeviceController extends Controller
         return response()->json([
             'success' => true,
             'device' => [
+                'id' => $device->id,
                 'code' => $device->device_code,
                 'name' => $device->device_name,
                 'status' => $device->status,
