@@ -22,9 +22,9 @@
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line></svg>
             Add Scanner
         </button>
-        <button type="button" class="btn-rfid-primary" onclick="openRegisterRfidModal()">
+        <button type="button" id="registerRfidTagButton" class="btn-rfid-primary" onclick="openRegisterRfidModal()" aria-label="Register RFID tags for customer gallons">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
-            + Register Tag
+            + Register Tags
         </button>
     </div>
 </div>

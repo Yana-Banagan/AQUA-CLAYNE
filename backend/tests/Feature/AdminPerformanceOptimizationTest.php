@@ -118,6 +118,17 @@ class AdminPerformanceOptimizationTest extends TestCase
         }
     }
 
+    public function test_rfid_page_shows_register_tags_action_and_existing_modal(): void
+    {
+        $this->actingAs($this->adminUser)
+            ->get('/admin/rfid')
+            ->assertOk()
+            ->assertSee('id="registerRfidTagButton"', false)
+            ->assertSee('+ Register Tags')
+            ->assertSee('id="registerRfidModal"', false)
+            ->assertSee('onclick="openRegisterRfidModal()"', false);
+    }
+
     public function test_chat_conversations_are_paginated(): void
     {
         foreach (range(1, 31) as $index) {

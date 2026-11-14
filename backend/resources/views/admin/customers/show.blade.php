@@ -22,7 +22,7 @@
         <p>Customer since {{ $customer->created_at?->format('F d, Y') }}</p>
     </div>
     <div class="header-actions">
-        <a class="primary-button" href="{{ route('admin.customers.edit', array_merge(['customer' => $customer], request()->query())) }}">Edit Customer</a>
+        <a class="primary-button" href="{{ route('admin.customers.index', array_merge(request()->query(), ['edit' => $customer->id])) }}">Continue to Edit</a>
         <span class="status-badge {{ $customer->user?->status === 'active' ? 'status-success' : 'status-danger' }}" style="font-size: 13px; padding: 6px 14px;">
             {{ strtoupper($customer->user?->status ?? 'ACTIVE') }}
         </span>

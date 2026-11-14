@@ -133,7 +133,7 @@
     @endif
 </article>
 
-<div class="modal-backdrop" id="customerEditModal" aria-hidden="true">
+<div class="modal-backdrop" id="customerEditModal" aria-hidden="true" style="display: none;">
     <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="customerEditTitle" style="padding: 24px;">
         <div class="panel-head">
             <div>
@@ -178,19 +178,16 @@
 
     function closeModal() {
         modal.classList.remove('is-active');
+        modal.style.display = 'none';
         modal.setAttribute('aria-hidden', 'true');
         document.body.style.overflow = '';
     }
 
-    function showError(message) {
-        error.textContent = message;
-        error.hidden = false;
-    }
-
-    document.querySelectorAll('[data-customer-edit]').forEach(button => button.addEventListener('click', async () => {
+    async function openCustomerEditModal(button) {
         error.hidden = true;
         form.reset();
         form.action = button.dataset.customerEdit;
+        modal.style.display = 'grid';
         modal.classList.add('is-active');
         modal.setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden';
@@ -206,7 +203,23 @@
         } catch (requestError) {
             showError(requestError.message || 'Could not load this customer.');
         }
-    }));
+    }
+
+    function showError(message) {
+        error.textContent = message;
+        error.hidden = false;
+    }
+
+    document.addEventListener('click', event => {
+        const button = event.target.closest('[data-customer-edit]');
+        if (button) openCustomerEditModal(button);
+    });
+
+    const requestedCustomerId = new URLSearchParams(window.location.search).get('edit');
+    if (requestedCustomerId) {
+        const button = document.querySelector(`[data-customer-row="${CSS.escape(requestedCustomerId)}"] [data-customer-edit]`);
+        if (button) openCustomerEditModal(button);
+    }
 
     modal.addEventListener('click', event => {
         if (event.target === modal || event.target.closest('[data-customer-modal-close]')) closeModal();

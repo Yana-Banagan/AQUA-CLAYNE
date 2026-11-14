@@ -219,6 +219,28 @@ class AdminRecordEditTest extends TestCase
         ]);
     }
 
+    public function test_customer_continue_to_edit_opens_the_edit_modal_from_the_customer_list(): void
+    {
+        $customerUser = User::factory()->create([
+            'role' => 'customer',
+            'name' => 'Modal Customer',
+            'email' => 'modal-customer@example.test',
+        ]);
+        $customer = Customer::create(['user_id' => $customerUser->id]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.customers.show', $customer))
+            ->assertOk()
+            ->assertSee(route('admin.customers.index', ['edit' => $customer->id]), false)
+            ->assertSee('Continue to Edit');
+
+        $this->get(route('admin.customers.index', ['edit' => $customer->id]))
+            ->assertOk()
+            ->assertSee('id="customerEditModal"', false)
+            ->assertSee('data-customer-edit="' . route('admin.customers.edit', $customer) . '"', false)
+            ->assertSee('new URLSearchParams(window.location.search).get(\'edit\')', false);
+    }
+
     public function test_customer_json_edit_rejects_an_address_owned_by_another_customer(): void
     {
         $firstUser = User::factory()->create(['role' => 'customer', 'name' => 'First']);
