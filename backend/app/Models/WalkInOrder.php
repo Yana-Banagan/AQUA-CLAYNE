@@ -11,6 +11,7 @@ class WalkInOrder extends Model
     use HasUuids;
 
     protected $fillable = [
+        'request_key',
         'full_name',
         'phone',
         'gallons',

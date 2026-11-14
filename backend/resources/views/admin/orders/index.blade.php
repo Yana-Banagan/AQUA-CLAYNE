@@ -554,6 +554,7 @@
 
             <form method="POST" action="{{ route('admin.orders.walk-in.store') }}" id="walkInOrderForm" novalidate>
                 @csrf
+                <input type="hidden" name="request_key" value="{{ old('request_key', (string) \Illuminate\Support\Str::uuid()) }}">
                 <div class="walk-in-modal-content">
                     <div class="walk-in-form-column" aria-label="Walk-in customer and order details">
                         <div class="walk-in-field {{ $errors->has('full_name') ? 'is-invalid' : '' }}" data-field="full_name">
@@ -563,15 +564,6 @@
                                 <input id="walkInFullName" name="full_name" type="text" value="{{ old('full_name') }}" maxlength="150" placeholder="Enter full name" autocomplete="name" required>
                             </div>
                             <small class="walk-in-inline-error" id="walkInFullNameError">@error('full_name'){{ $message }}@enderror</small>
-                        </div>
-
-                        <div class="walk-in-field {{ $errors->has('phone') ? 'is-invalid' : '' }}" data-field="phone">
-                            <label for="walkInPhone">Contact Number <span>*</span></label>
-                            <div class="walk-in-input-wrap">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 11.19 18a19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.09 3.18 2 2 0 0 1 4.08 1h3a2 2 0 0 1 2 1.72l.45 3a2 2 0 0 1-.57 1.7L7.1 9.28a16 16 0 0 0 6 6l1.86-1.86a2 2 0 0 1 1.7-.57l3 .45a2 2 0 0 1 1.72 1.62z"/></svg>
-                                <input id="walkInPhone" name="phone" type="tel" value="{{ old('phone') }}" inputmode="tel" maxlength="18" placeholder="e.g. 0917 123 4567" autocomplete="tel" required>
-                            </div>
-                            <small class="walk-in-inline-error" id="walkInPhoneError">@error('phone'){{ $message }}@enderror</small>
                         </div>
 
                         <div class="walk-in-field {{ $errors->has('gallons') ? 'is-invalid' : '' }}" data-field="gallons">
@@ -587,9 +579,9 @@
                             <label for="walkInAmount">Amount <span>*</span></label>
                             <div class="walk-in-input-wrap walk-in-amount-wrap">
                                 <span class="walk-in-currency" aria-hidden="true">₱</span>
-                                <input id="walkInAmount" name="amount" type="text" value="₱0.00" readonly aria-readonly="true">
+                                <input id="walkInAmount" type="text" value="₱0.00" readonly aria-readonly="true">
                             </div>
-                            <small class="walk-in-rate-note">Rate: ₱35.00 per gallon · calculated automatically</small>
+                            <small class="walk-in-rate-note">Rate: ₱{{ number_format($walkInPricePerGallon, 2) }} per gallon · calculated automatically</small>
                         </div>
 
                         <div class="walk-in-field walk-in-payment-field {{ $errors->has('payment_method') ? 'is-invalid' : '' }}" data-field="payment_method">
@@ -614,7 +606,7 @@
                         </div>
                         <div class="walk-in-summary-rows">
                             <div><span>Gallons</span><strong class="walk-in-summary-value" id="walkInSummaryGallons">0</strong></div>
-                            <div><span>Rate per gallon</span><strong class="walk-in-summary-value">₱35.00</strong></div>
+                            <div><span>Rate per gallon</span><strong class="walk-in-summary-value">₱{{ number_format($walkInPricePerGallon, 2) }}</strong></div>
                         </div>
                         <div class="walk-in-summary-total"><span>Total Amount</span><strong id="walkInSummaryTotal">₱0.00</strong></div>
                         <div class="walk-in-summary-example" id="walkInSummaryExample">Enter the gallon quantity to calculate the total.</div>
@@ -649,10 +641,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const gallonsInput = document.getElementById('walkInGallons');
     const amountInput = document.getElementById('walkInAmount');
     const nameInput = document.getElementById('walkInFullName');
-    const phoneInput = document.getElementById('walkInPhone');
     const methodInput = document.getElementById('walkInPaymentMethod');
     const completeButton = document.getElementById('walkInCompleteButton');
-    const refillRate = 35;
+    const refillRate = @json($walkInPricePerGallon);
     const money = (amount) => `₱${Number(amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const updateWalkInAmount = () => {
         const gallons = Number(gallonsInput?.value || 0);
@@ -678,12 +669,6 @@ document.addEventListener('DOMContentLoaded', function () {
     };
     const validateField = (key) => {
         if (key === 'full_name') return nameInput.value.trim() ? '' : 'Full name is required.';
-        if (key === 'phone') {
-            if (!phoneInput.value.trim()) return 'Contact number is required.';
-            const normalized = phoneInput.value.trim().replace(/[\s()\-]/g, '');
-            return /^(?:09\d{9}|\+639\d{9}|639\d{9})$/.test(normalized)
-                ? '' : 'Enter a valid Philippine mobile number, such as 0917 123 4567.';
-        }
         if (key === 'gallons') {
             const gallons = Number(gallonsInput.value);
             return Number.isInteger(gallons) && gallons >= 1 ? '' : 'Please enter at least 1 gallon.';
@@ -691,7 +676,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (key === 'payment_method') return methodInput.value ? '' : 'Select a payment method.';
         return '';
     };
-    const fieldKeys = ['full_name', 'phone', 'gallons', 'payment_method'];
+    const fieldKeys = ['full_name', 'gallons', 'payment_method'];
     fieldKeys.forEach((key) => {
         const field = form.querySelector(`[data-field="${key}"] input, [data-field="${key}"] select`);
         field?.addEventListener('input', () => setFieldError(key, validateField(key)));
@@ -726,7 +711,7 @@ document.addEventListener('DOMContentLoaded', function () {
     closeButtons.forEach((button) => button.addEventListener('click', closeModal));
     modal.addEventListener('click', (event) => { if (event.target === modal) closeModal(); });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeModal(); });
-    @if($errors->has('full_name') || $errors->has('phone') || $errors->has('gallons') || $errors->has('payment_method'))
+    @if($errors->has('request_key') || $errors->has('full_name') || $errors->has('gallons') || $errors->has('payment_method'))
         open.click();
     @endif
     @if(session('success'))

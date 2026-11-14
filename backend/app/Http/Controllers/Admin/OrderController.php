@@ -10,10 +10,11 @@ use App\Models\WalkInOrder;
 use App\Services\OrderWorkflowService;
 use App\Services\DeliveryService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class OrderController extends Controller
 {
-    private const WALK_IN_PRICE_PER_GALLON = 35.00;
+    private const WALK_IN_PRICE_PER_GALLON = 30.00;
 
     /**
      * Return the live count used by the Orders notification badge.
@@ -111,6 +112,7 @@ class OrderController extends Controller
             ->take(20)
             ->get();
         $walkInOrders = WalkInOrder::latest('created_at')->take(10)->get();
+        $walkInPricePerGallon = self::WALK_IN_PRICE_PER_GALLON;
         $todayStart = today()->startOfDay();
         $tomorrow = $todayStart->copy()->addDay();
         $isPgsql = \Illuminate\Support\Facades\DB::getDriverName() === 'pgsql';
@@ -194,6 +196,7 @@ class OrderController extends Controller
             'assignableOrders',
             'walkInOrders',
             'walkInSummary',
+            'walkInPricePerGallon',
             'stats',
             'activeDrivers',
             'assignableDrivers',
@@ -210,28 +213,37 @@ class OrderController extends Controller
     public function storeWalkIn(Request $request)
     {
         $data = $request->validate([
+            'request_key' => ['required', 'uuid'],
             'full_name' => ['required', 'string', 'max:150'],
-            'phone' => ['required', 'string', 'min:7', 'max:30', 'regex:/^[0-9+\-\s()]+$/'],
             'gallons' => ['required', 'integer', 'min:1', 'max:1000'],
             'payment_method' => ['required', 'in:cash,gcash,paymongo,debt'],
         ]);
 
-        $normalizedPhone = preg_replace('/[\s()\-]/', '', $data['phone']);
-        if (!preg_match('/^(?:09\d{9}|\+639\d{9}|639\d{9})$/', $normalizedPhone)) {
-            return back()->withInput()->withErrors([
-                'phone' => 'Enter a valid Philippine mobile number, such as 0917 123 4567.',
-            ]);
-        }
-
-        $data['phone'] = $normalizedPhone;
         $data['amount'] = round(self::WALK_IN_PRICE_PER_GALLON * $data['gallons'], 2);
 
-        $walkInOrder = WalkInOrder::create([
-            ...$data,
-            'status' => 'completed',
-            'created_by' => $request->user()->id,
-            'completed_at' => now(),
-        ]);
+        $walkInOrder = WalkInOrder::firstOrCreate(
+            ['request_key' => $data['request_key']],
+            [
+                'full_name' => $data['full_name'],
+                'gallons' => $data['gallons'],
+                'amount' => $data['amount'],
+                'payment_method' => $data['payment_method'],
+                'status' => 'completed',
+                'created_by' => $request->user()->id,
+                'completed_at' => now(),
+            ]
+        );
+
+        if ($walkInOrder->wasRecentlyCreated) {
+            Cache::store('file')->forget('admin:orders:stats');
+            Cache::forget('admin:dashboard:station-kpis');
+
+            foreach (['all', 'today', 'week', 'month'] as $range) {
+                foreach (['all', 'cash', 'credit', 'debt', 'online', 'gcash', 'paymongo'] as $method) {
+                    Cache::store('file')->forget("admin:reports:{$range}:{$method}");
+                }
+            }
+        }
 
         return redirect()
             ->route('admin.orders.index')
