@@ -857,7 +857,9 @@
                 customerDetails.style.display = 'none';
             }
             document.getElementById('latestRfidScanTime').textContent = result.scanned_at
-                ? new Date(result.scanned_at).toLocaleString()
+                ? new Date(result.scanned_at).toLocaleString('en-PH', {
+                    timeZone: 'Asia/Manila'
+                })
                 : '';
         } catch (error) {
             document.getElementById('latestRfidScanStatus').textContent = 'SCAN RESULT UNAVAILABLE';
@@ -1192,7 +1194,11 @@
                 document.getElementById('successContainerDisplay').textContent = `${data.container.code || '—'} (${data.container.customer_name || '—'})`;
                 document.getElementById('successCustomerDisplay').textContent = data.container.customer_name || '—';
                 document.getElementById('successDeviceDisplay').textContent = data.device.name || '—';
-                document.getElementById('successRegisteredAtDisplay').textContent = data.completed_at ? new Date(data.completed_at).toLocaleString() : '—';
+                document.getElementById('successRegisteredAtDisplay').textContent = data.completed_at
+                    ? new Date(data.completed_at).toLocaleString('en-PH', {
+                        timeZone: 'Asia/Manila'
+                    })
+                    : '—';
                 activeSessionId = null;
                 document.getElementById('registryRefreshNotice').textContent =
                     `RFID tag ${data.scanned_uid || '—'} is registered to ${data.container.customer_name || 'the selected customer'}.`;

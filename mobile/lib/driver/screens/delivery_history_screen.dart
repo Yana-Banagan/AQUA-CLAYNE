@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/core/utils/pht_datetime.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/delivery_model.dart';
 import '../../core/theme/app_spacing.dart';
@@ -95,11 +96,11 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen>
             return const LoadingView(message: 'Loading delivery history...');
           }
 
-          final now = DateTime.now();
+          final now = PhtDateTime.now();
 
           final today = prov.history.where((d) {
             try {
-              final dt = DateTime.parse(d.createdAt).toLocal();
+              final dt = PhtDateTime.parse(d.createdAt);
               return dt.year == now.year &&
                   dt.month == now.month &&
                   dt.day == now.day;
@@ -111,7 +112,7 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen>
           final weekStart = now.subtract(Duration(days: now.weekday - 1));
           final thisWeek = prov.history.where((d) {
             try {
-              final dt = DateTime.parse(d.createdAt).toLocal();
+              final dt = PhtDateTime.parse(d.createdAt);
               return dt.isAfter(weekStart.subtract(const Duration(seconds: 1)));
             } catch (_) {
               return false;

@@ -23,7 +23,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     weekday: 'short',
                     year: 'numeric',
                     month: 'short',
-                    day: 'numeric'
+                    day: 'numeric',
+                    timeZone: 'Asia/Manila'
                 };
                 dateEl.textContent = now.toLocaleDateString('en-PH', options);
             }
@@ -33,7 +34,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     hour: '2-digit',
                     minute: '2-digit',
                     second: '2-digit',
-                    hour12: true
+                    hour12: true,
+                    timeZone: 'Asia/Manila'
                 };
                 timeEl.textContent = now.toLocaleTimeString('en-PH', timeOptions);
             }

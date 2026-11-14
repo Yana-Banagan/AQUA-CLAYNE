@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:mobile/core/utils/pht_datetime.dart';
 import '../../core/models/delivery_model.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/theme/app_spacing.dart';
@@ -57,7 +58,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
   }
 
   String _greeting() {
-    final h = DateTime.now().hour;
+    final h = PhtDateTime.now().hour;
     if (h < 12) return 'Good morning';
     if (h < 17) return 'Good afternoon';
     return 'Good evening';

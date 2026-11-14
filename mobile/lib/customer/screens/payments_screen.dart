@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:mobile/core/utils/pht_datetime.dart';
 import '../../core/models/payment_model.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../customer/providers/notification_provider.dart';
@@ -1311,7 +1312,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   String _formatDate(String? raw) {
     if (raw == null || raw.isEmpty) return 'Recent';
     try {
-      final dt = DateTime.parse(raw).toLocal();
+      final dt = PhtDateTime.parse(raw);
       final months = [
         'Jan',
         'Feb',

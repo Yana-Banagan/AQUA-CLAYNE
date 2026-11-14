@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:mobile/core/utils/pht_datetime.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/config/station_config.dart';
@@ -114,7 +115,7 @@ class _OrderDriverTrackingMapState extends State<OrderDriverTrackingMap> {
       setState(() {
         _latitude = double.tryParse(raw['driver_latitude']?.toString() ?? '');
         _longitude = double.tryParse(raw['driver_longitude']?.toString() ?? '');
-        _updatedAt = DateTime.tryParse(raw['location_updated_at']?.toString() ?? '')?.toLocal();
+        _updatedAt = PhtDateTime.tryParse(raw['location_updated_at']);
         _deliveryStatus = raw['status']?.toString();
         _deliveryId = raw['delivery_id']?.toString();
         _loading = false;

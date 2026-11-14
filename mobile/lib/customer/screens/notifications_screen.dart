@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/core/utils/pht_datetime.dart';
 import 'package:provider/provider.dart';
 import '../../customer/providers/notification_provider.dart';
 import '../../core/providers/auth_provider.dart';
@@ -73,8 +74,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   String _formatTimeAgo(String raw) {
     if (raw.isEmpty) return 'Just now';
     try {
-      final dt = DateTime.parse(raw).toLocal();
-      final diff = DateTime.now().difference(dt);
+      final dt = PhtDateTime.parse(raw);
+      final diff = PhtDateTime.now().difference(dt);
       if (diff.inMinutes < 1) return 'Just now';
       if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
       if (diff.inHours < 24) return '${diff.inHours}h ago';

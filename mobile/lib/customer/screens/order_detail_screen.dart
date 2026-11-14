@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:mobile/core/utils/pht_datetime.dart';
 import '../../core/api/api_client.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/utils/url_helper.dart';
@@ -188,7 +189,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   String _formatDate(String raw) {
     if (raw.isEmpty) return 'Recent';
     try {
-      final dt = DateTime.parse(raw).toLocal();
+      final dt = PhtDateTime.parse(raw);
       const months = [
         'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'

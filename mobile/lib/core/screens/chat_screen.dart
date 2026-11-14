@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:mobile/core/utils/pht_datetime.dart';
 
 import '../api/api_client.dart';
 import '../providers/auth_provider.dart';
@@ -67,8 +68,8 @@ class _ChatScreenState extends State<ChatScreen> {
     catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
     finally { if (mounted) setState(() => _sending = false); }
   }
-  void _faq(dynamic faq) { final q = faq['question']?.toString() ?? ''; final a = faq['answer']?.toString() ?? ''; setState(() => _messages = [..._messages, {'id': 'faq-${DateTime.now().microsecondsSinceEpoch}', 'sender_role': _isDriver ? 'driver' : 'customer', 'content': q, 'created_at': DateTime.now().toIso8601String()}, {'id': 'faq-answer-${DateTime.now().microsecondsSinceEpoch}', 'sender_role': 'admin', 'content': a, 'created_at': DateTime.now().toIso8601String()}]); _toBottom(); }
-  String _time(dynamic value) { try { final date = DateTime.parse(value.toString()).toLocal(); final h = date.hour % 12 == 0 ? 12 : date.hour % 12; return '$h:${date.minute.toString().padLeft(2, '0')} ${date.hour >= 12 ? 'PM' : 'AM'}'; } catch (_) { return ''; } }
+  void _faq(dynamic faq) { final q = faq['question']?.toString() ?? ''; final a = faq['answer']?.toString() ?? ''; final now = DateTime.now().toUtc().toIso8601String(); setState(() => _messages = [..._messages, {'id': 'faq-${DateTime.now().microsecondsSinceEpoch}', 'sender_role': _isDriver ? 'driver' : 'customer', 'content': q, 'created_at': now}, {'id': 'faq-answer-${DateTime.now().microsecondsSinceEpoch}', 'sender_role': 'admin', 'content': a, 'created_at': now}]); _toBottom(); }
+  String _time(dynamic value) { try { final date = PhtDateTime.parse(value); final h = date.hour % 12 == 0 ? 12 : date.hour % 12; return '$h:${date.minute.toString().padLeft(2, '0')} ${date.hour >= 12 ? 'PM' : 'AM'}'; } catch (_) { return ''; } }
 
   void _selectDashboardTab(int index) {
     Navigator.of(context).pushReplacement(

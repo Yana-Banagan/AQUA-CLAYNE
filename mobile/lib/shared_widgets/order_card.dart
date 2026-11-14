@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/core/utils/pht_datetime.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import 'app_card.dart';
@@ -133,7 +134,7 @@ class OrderCard extends StatelessWidget {
 
   String _formatDate(String raw) {
     try {
-      final dt = DateTime.parse(raw).toLocal();
+      final dt = PhtDateTime.parse(raw);
       final months = [
         'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',

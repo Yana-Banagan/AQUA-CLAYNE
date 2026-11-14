@@ -98,6 +98,7 @@ return [
             'prefix' => '',
             'prefix_indexes' => true,
             'search_path' => 'public',
+            'timezone' => env('DB_TIMEZONE', 'Asia/Manila'),
             'sslmode' => env('DB_SSLMODE', 'prefer'),
             // Do not let unavailable remote databases hold an HTTP request open.
             'connect_timeout' => (int) env('DB_CONNECT_TIMEOUT', 5),

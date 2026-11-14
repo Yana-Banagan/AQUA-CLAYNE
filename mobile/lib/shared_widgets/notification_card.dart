@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/core/utils/pht_datetime.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 
@@ -143,8 +144,8 @@ class NotificationCard extends StatelessWidget {
 
   String _timeAgo(String raw) {
     try {
-      final dt = DateTime.parse(raw).toLocal();
-      final diff = DateTime.now().difference(dt);
+      final dt = PhtDateTime.parse(raw);
+      final diff = PhtDateTime.now().difference(dt);
       if (diff.inMinutes < 1) return 'Just now';
       if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
       if (diff.inHours < 24) return '${diff.inHours}h ago';

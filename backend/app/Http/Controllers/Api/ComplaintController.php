@@ -43,7 +43,7 @@ class ComplaintController extends Controller
                 'description' => $c->description,
                 'status' => strtoupper($c->status ?? 'PENDING'),
                 'admin_response' => $latestHistory ? $latestHistory->note : null,
-                'created_at' => $c->created_at ? (string) $c->created_at : now()->toIso8601String(),
+                'created_at' => $c->created_at?->toIso8601String() ?? now()->toIso8601String(),
             ];
         });
 
@@ -76,7 +76,7 @@ class ComplaintController extends Controller
             'description' => $complaint->description,
             'status' => strtoupper($complaint->status ?? 'PENDING'),
             'admin_response' => $latestHistory ? $latestHistory->note : null,
-            'created_at' => $complaint->created_at ? (string) $complaint->created_at : now()->toIso8601String(),
+            'created_at' => $complaint->created_at?->toIso8601String() ?? now()->toIso8601String(),
         ]);
     }
 
@@ -132,7 +132,7 @@ class ComplaintController extends Controller
             'description' => $complaint->description,
             'status' => 'PENDING',
             'admin_response' => null,
-            'created_at' => (string) $complaint->created_at,
+            'created_at' => $complaint->created_at->toIso8601String(),
         ], 'Complaint submitted successfully.', 201);
     }
 

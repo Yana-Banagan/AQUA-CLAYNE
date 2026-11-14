@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/core/utils/pht_datetime.dart';
 import 'package:provider/provider.dart';
 import '../../customer/providers/complaint_provider.dart';
 import '../../core/models/complaint_model.dart';
@@ -434,7 +435,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
 
   String _formatDate(String raw) {
     try {
-      final dt = DateTime.parse(raw).toLocal();
+      final dt = PhtDateTime.parse(raw);
       final months = [
         'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'

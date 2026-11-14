@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/core/utils/pht_datetime.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/driver_colors.dart';
@@ -269,7 +270,10 @@ class _DriverNotificationsScreenState extends State<DriverNotificationsScreen> {
                                         if (createdAt.isNotEmpty) ...[
                                           const SizedBox(height: 6),
                                           Text(
-                                            createdAt.split('T').first,
+                                            PhtDateTime.parse(createdAt)
+                                                .toIso8601String()
+                                                .split('T')
+                                                .first,
                                             style: const TextStyle(
                                               fontSize: 11,
                                               color: DriverColors.textHint,

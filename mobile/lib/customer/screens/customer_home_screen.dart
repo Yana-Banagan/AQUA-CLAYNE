@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:mobile/core/utils/pht_datetime.dart';
 import '../widgets/interactive_tutorial_overlay.dart';
 
 import '../../core/providers/auth_provider.dart';
@@ -46,7 +47,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   }
 
   String _getGreeting() {
-    final hour = DateTime.now().hour;
+    final hour = PhtDateTime.now().hour;
     if (hour < 12) {
       return 'Good Morning,';
     } else if (hour < 17) {
@@ -59,7 +60,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   String _formatDate(String raw) {
     if (raw.isEmpty) return 'Recent';
     try {
-      final dt = DateTime.parse(raw).toLocal();
+      final dt = PhtDateTime.parse(raw);
       const months = [
         'Jan',
         'Feb',

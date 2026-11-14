@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/core/utils/pht_datetime.dart';
 import '../../core/models/notification_model.dart';
 import 'customer_shell.dart';
 import 'order_detail_screen.dart';
@@ -14,7 +15,7 @@ class NotificationDetailScreen extends StatelessWidget {
   String _formatFullDate(String raw) {
     if (raw.isEmpty) return 'Recent update';
     try {
-      final dt = DateTime.parse(raw).toLocal();
+      final dt = PhtDateTime.parse(raw);
       const months = [
         'January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'

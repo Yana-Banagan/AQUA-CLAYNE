@@ -583,7 +583,11 @@ function navigateTo(viewId, param = null, pushHistory = true) {
     // =========================================================================
     async function loadDashboard() {
         // Greet time
-        const hour = new Date().getHours();
+        const hour = Number(new Intl.DateTimeFormat('en-PH', {
+            hour: 'numeric',
+            hourCycle: 'h23',
+            timeZone: 'Asia/Manila'
+        }).format(new Date()));
         let greet = 'Good Evening,';
         if (hour < 12) greet = 'Good Morning,';
         else if (hour < 17) greet = 'Good Afternoon,';
@@ -3608,7 +3612,8 @@ function navigateTo(viewId, param = null, pushHistory = true) {
                 year: 'numeric',
                 hour: 'numeric',
                 minute: '2-digit',
-                hour12: true
+                hour12: true,
+                timeZone: 'Asia/Manila'
             });
         } catch (_) {
             return raw;
@@ -3622,7 +3627,8 @@ function navigateTo(viewId, param = null, pushHistory = true) {
             return dt.toLocaleTimeString('en-US', {
                 hour: 'numeric',
                 minute: '2-digit',
-                hour12: true
+                hour12: true,
+                timeZone: 'Asia/Manila'
             });
         } catch (_) {
             return '';

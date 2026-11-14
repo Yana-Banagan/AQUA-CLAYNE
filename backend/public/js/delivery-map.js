@@ -47,7 +47,9 @@
         if (!point) return null;
         var timestamp = updatedAt ? new Date(updatedAt) : null;
         var updatedText = timestamp && !Number.isNaN(timestamp.getTime())
-            ? 'Last GPS update: ' + timestamp.toLocaleString()
+            ? 'Last GPS update: ' + timestamp.toLocaleString('en-PH', {
+                timeZone: 'Asia/Manila'
+            })
             : '';
         var popup = '<div class="delivery-map-popup"><strong>' + escapeHtml(title) + '</strong>' +
             '<span>' + escapeHtml(detail) + '</span>' +

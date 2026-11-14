@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/core/utils/pht_datetime.dart';
 import 'package:provider/provider.dart';
 import '../../core/api/api_client.dart';
 import '../../core/models/delivery_model.dart';
@@ -343,7 +344,7 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                       if (d.createdAt.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Text(
-                          'Created: ${d.createdAt.split('T').first}',
+                          'Created: ${PhtDateTime.parse(d.createdAt).toIso8601String().split('T').first}',
                           style: const TextStyle(
                             fontSize: 12,
                             color: DriverColors.textSecondary,

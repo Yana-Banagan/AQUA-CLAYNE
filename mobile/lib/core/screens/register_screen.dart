@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/core/utils/pht_datetime.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
@@ -152,14 +153,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   int _ageOn(DateTime birthdate, DateTime today) {
     var age = today.year - birthdate.year;
-    if (DateTime(today.year, birthdate.month, birthdate.day).isAfter(today)) age--;
+    if (birthdate.month > today.month ||
+        (birthdate.month == today.month && birthdate.day > today.day)) {
+      age--;
+    }
     return age;
   }
 
   String? _validateBirthdate(String? _) {
     if (_birthdate == null) return 'Birthdate is required.';
-    final age = _ageOn(_birthdate!, DateTime.now());
-    if (_birthdate!.isAfter(DateTime.now()) || age < 18 || age > 99) {
+    final today = PhtDateTime.now();
+    final age = _ageOn(_birthdate!, today);
+    final isFutureDate = _birthdate!.year > today.year ||
+        (_birthdate!.year == today.year &&
+            (_birthdate!.month > today.month ||
+                (_birthdate!.month == today.month &&
+                    _birthdate!.day > today.day)));
+    if (isFutureDate || age < 18 || age > 99) {
       return 'You must be between 18 and 99 years old to create an account.';
     }
     return null;
