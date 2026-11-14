@@ -2,6 +2,8 @@
 #define DEVICE_MANAGER_H
 
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 #include "wifi_manager.h"
 #include "rfid_manager.h"
 #include "oled_manager.h"
@@ -20,6 +22,14 @@ public:
     void loop();
 
 private:
+    struct RFIDScanEvent {
+        char uid[21];
+        char deviceId[37];
+        char sessionId[37];
+        char scanId[37];
+        bool registrationMode;
+    };
+
     WiFiManager& _wifi;
     RFIDManager& _rfid;
     OLEDManager& _oled;
@@ -27,9 +37,11 @@ private:
 
     unsigned long _lastHeartbeat;
     unsigned long _lastSessionPoll;
+    unsigned long _retryScanAt = 0;
+    QueueHandle_t _scanQueue = nullptr;
     portMUX_TYPE _scanMux = portMUX_INITIALIZER_UNLOCKED;
-    char _pendingUID[21] = {};
-    bool _hasPendingUID = false;
+    char _scanDeviceId[37] = {};
+    char _scanSessionId[37] = {};
 
     // Active session state
     bool _hasActiveSession;
@@ -43,6 +55,7 @@ private:
     void handleHeartbeat();
     void handleSessionPoll();
     void handleRFIDScan();
+    void finishPendingScan();
     static void rfidScanTask(void* parameter);
     void beep(int ms = 80);
 };

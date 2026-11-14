@@ -413,9 +413,12 @@ class RfidGallonTrackingTest extends TestCase
             'error' => 'DUPLICATE_RFID_TAG',
         ]);
 
-        // The rejected scan is terminal and auditable, with no new tag created.
+        // A rejected UID is auditable, but the live session remains available for another tap.
         $session->refresh();
-        $this->assertEquals('failed', $session->status);
+        $this->assertEquals('pending', $session->status);
+        $this->withHeader('X-Device-Token', $this->deviceToken)
+            ->getJson('/api/iot/rfid/registration-session/active')
+            ->assertJsonPath('session.session_id', $session->id);
         $this->assertDatabaseMissing('customer_container_rfid_tags', [
             'customer_container_id' => $container2->id,
         ]);
@@ -423,6 +426,24 @@ class RfidGallonTrackingTest extends TestCase
             'customer_container_id' => $container2->id,
             'transaction_type' => 'REGISTRATION',
             'scan_result' => 'rejected',
+        ]);
+
+        $validResponse = $this->withHeader('X-Device-Token', $this->deviceToken)
+            ->postJson('/api/iot/rfid/registration-scan', [
+                'device_id' => $this->device->id,
+                'session_id' => $session->id,
+                'uid' => 'C1C2C3C4',
+            ]);
+
+        $validResponse->assertOk()->assertJsonPath('success', true);
+        $this->assertDatabaseHas('customer_container_rfid_tags', [
+            'customer_container_id' => $container2->id,
+            'uid' => 'C1C2C3C4',
+            'status' => 'active',
+        ]);
+        $this->assertDatabaseHas('rfid_registration_sessions', [
+            'id' => $session->id,
+            'status' => 'completed',
         ]);
     }
 
@@ -456,7 +477,7 @@ class RfidGallonTrackingTest extends TestCase
         ]);
         $this->assertDatabaseHas('rfid_registration_sessions', [
             'id' => $session->id,
-            'status' => 'failed',
+            'status' => 'pending',
             'failure_code' => 'INVALID_UID',
         ]);
     }
@@ -532,17 +553,80 @@ class RfidGallonTrackingTest extends TestCase
             'registered_at' => now(),
         ]);
 
-        $response = $this->withHeader('X-Device-Token', $this->deviceToken)
-            ->postJson('/api/iot/rfid/scan', [
+        $payload = [
                 'uid' => 'B1B2B3B4',
                 'scan_type' => 'VERIFICATION',
-            ]);
+                'scan_id' => 'd1b61244-23c6-4f30-9b4a-0b3e4c85cf08',
+            ];
+        $response = $this->withHeader('X-Device-Token', $this->deviceToken)
+            ->postJson('/api/iot/rfid/scan', $payload);
 
         $response->assertOk()->assertJson([
             'success' => true,
             'customer_name' => 'Juan Dela Cruz',
             'gallon_count' => 2,
         ]);
+        $repeatResponse = $this->withHeader('X-Device-Token', $this->deviceToken)
+            ->postJson('/api/iot/rfid/scan', $payload);
+        $repeatResponse->assertOk()->assertJsonPath('transaction_id', $response->json('transaction_id'));
+        $this->assertDatabaseCount('rfid_transactions', 1);
+        $this->assertDatabaseHas('realtime_events', [
+            'entity_type' => 'rfid',
+            'entity_id' => $response->json('transaction_id'),
+            'event' => 'RFID_SCAN_RESULT',
+            'status' => 'accepted',
+        ]);
+
+        $dashboardResult = $this->actingAs($this->admin)
+            ->getJson("/admin/rfid/scans/{$response->json('transaction_id')}/result");
+        $dashboardResult->assertOk()->assertJson([
+            'scan_id' => $response->json('transaction_id'),
+            'status' => 'SUCCESS',
+            'customer_name' => 'Juan Dela Cruz',
+            'gallon_count' => 2,
+        ]);
+        $this->assertArrayNotHasKey('uid', $dashboardResult->json());
+        $this->assertArrayNotHasKey('email', $dashboardResult->json());
+        $this->assertArrayNotHasKey('phone', $dashboardResult->json());
+    }
+
+    public function test_unregistered_verification_scan_publishes_a_privacy_safe_failure(): void
+    {
+        $response = $this->withHeader('X-Device-Token', $this->deviceToken)
+            ->postJson('/api/iot/rfid/scan', [
+                'uid' => 'DEADBEEF',
+                'scan_type' => 'VERIFICATION',
+                'scan_id' => '35d664cc-25a0-4b17-964c-440ccaf001bb',
+            ]);
+
+        $response->assertStatus(422)->assertJson([
+            'success' => false,
+            'error' => 'TAG_NOT_FOUND',
+            'message' => 'RFID TAG NOT REGISTERED',
+        ]);
+        $transactionId = $response->json('transaction_id');
+        $repeatResponse = $this->withHeader('X-Device-Token', $this->deviceToken)
+            ->postJson('/api/iot/rfid/scan', [
+                'uid' => 'DEADBEEF',
+                'scan_type' => 'VERIFICATION',
+                'scan_id' => '35d664cc-25a0-4b17-964c-440ccaf001bb',
+            ]);
+        $repeatResponse->assertStatus(422)->assertJsonPath('transaction_id', $transactionId);
+        $this->assertDatabaseCount('rfid_transactions', 1);
+        $this->assertDatabaseHas('realtime_events', [
+            'entity_type' => 'rfid',
+            'entity_id' => $transactionId,
+            'event' => 'RFID_SCAN_RESULT',
+            'status' => 'rejected',
+        ]);
+
+        $dashboardResult = $this->actingAs($this->admin)
+            ->getJson("/admin/rfid/scans/{$transactionId}/result");
+        $dashboardResult->assertOk()->assertJson([
+            'status' => 'FAILED',
+            'message' => 'RFID TAG NOT REGISTERED',
+        ]);
+        $this->assertArrayNotHasKey('uid', $dashboardResult->json());
     }
 
     public function test_expired_registration_session_is_rejected(): void

@@ -29,6 +29,16 @@
     </div>
 </div>
 
+<section id="latestRfidScan" aria-live="polite" aria-atomic="true" style="display:flex; align-items:flex-start; gap:14px; padding:16px 18px; margin-bottom:22px; background:#F8FAFC; border:1px solid #CBD5E1; border-radius:12px;">
+    <span id="latestRfidScanIndicator" aria-hidden="true" style="width:10px; height:10px; margin-top:5px; border-radius:50%; background:#94A3B8; flex:none;"></span>
+    <div>
+        <strong id="latestRfidScanStatus" style="display:block; color:#334155;">Waiting for RFID scan</strong>
+        <span id="latestRfidScanMessage" style="display:block; margin-top:4px; color:#64748B;">Scanner ONLINE status reflects its heartbeat, not whether a tag was read.</span>
+        <div id="latestRfidScanCustomerDetails" style="display:none; margin-top:6px; color:#334155;"></div>
+        <time id="latestRfidScanTime" style="display:block; margin-top:4px; color:#64748B; font-size:12px;"></time>
+    </div>
+</section>
+
 <!-- Section A: Live Operational Statistics Cards -->
 <section class="stat-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-bottom: 24px;">
     <article class="stat-card">
@@ -814,6 +824,45 @@
     let customerSearchTimeout = null;
     let customerSearchSequence = 0;
     let selectedRegistrationCustomerId = null;
+    let lastDisplayedScanId = null;
+    const scanResultUrlTemplate = @json(route('admin.rfid.scans.result', ['transaction' => 'SCAN_ID_PLACEHOLDER']));
+
+    window.addEventListener('aqua:realtime', async event => {
+        const signal = event.detail || {};
+        if (signal.entity_type !== 'rfid' || signal.event !== 'RFID_SCAN_RESULT' || !signal.entity_id) return;
+        if (signal.entity_id === lastDisplayedScanId) return;
+
+        try {
+            const resultUrl = scanResultUrlTemplate.replace('SCAN_ID_PLACEHOLDER', encodeURIComponent(signal.entity_id));
+            const response = await fetch(resultUrl, { headers: { 'Accept': 'application/json' } });
+            if (!response.ok) throw new Error('Could not load the latest RFID scan result.');
+            const result = await response.json();
+
+            lastDisplayedScanId = result.scan_id;
+            const succeeded = result.status === 'SUCCESS';
+            document.getElementById('latestRfidScanIndicator').style.background = succeeded ? '#059669' : '#DC2626';
+            document.getElementById('latestRfidScanStatus').textContent = succeeded ? 'SUCCESS' : 'FAILED';
+            document.getElementById('latestRfidScanStatus').style.color = succeeded ? '#047857' : '#B91C1C';
+            document.getElementById('latestRfidScanMessage').textContent = result.message || 'RFID scan rejected.';
+
+            const customerDetails = document.getElementById('latestRfidScanCustomerDetails');
+            if (succeeded) {
+                const count = Number(result.gallon_count) || 0;
+                customerDetails.textContent = `Customer: ${result.customer_name} · Gallons: ${count}`;
+                customerDetails.style.display = 'block';
+            } else {
+                customerDetails.textContent = '';
+                customerDetails.style.display = 'none';
+            }
+            document.getElementById('latestRfidScanTime').textContent = result.scanned_at
+                ? new Date(result.scanned_at).toLocaleString()
+                : '';
+        } catch (error) {
+            document.getElementById('latestRfidScanStatus').textContent = 'SCAN RESULT UNAVAILABLE';
+            document.getElementById('latestRfidScanStatus').style.color = '#B91C1C';
+            document.getElementById('latestRfidScanMessage').textContent = error.message || 'Could not load the RFID scan result.';
+        }
+    });
 
     // Helper: Copy text to clipboard
     function copyToClipboard(elementId) {
@@ -1153,12 +1202,20 @@
                 document.getElementById('scanningAnimTitle').textContent = 'Waiting for ESP32 reconnection';
             } else if (data.progress === 'waiting_for_tag') {
                 document.getElementById('registrationConnectionIndicator').textContent = 'ESP32 connected · registration command sent';
-                document.getElementById('scanningAnimTitle').textContent = 'Waiting for physical RFID tag';
+                document.getElementById('scanningAnimTitle').textContent = 'WAITING FOR RFID TAG';
+            } else if (data.progress === 'retry_scan') {
+                document.getElementById('registrationConnectionIndicator').textContent = 'RFID REGISTRATION FAILED — PLEASE TAP ANOTHER RFID TAG';
+                document.getElementById('scanningAnimTitle').textContent = 'RFID REGISTRATION FAILED';
+                document.getElementById('registrationFailureMessage').textContent = data.progress_message;
+                document.getElementById('registrationFailureMessage').style.display = 'block';
             } else if (data.status === 'pending') {
                 document.getElementById('registrationConnectionIndicator').textContent = 'RFID tag detected · validating UID';
                 document.getElementById('scanningAnimTitle').textContent = 'Validating RFID UID';
             }
             document.getElementById('scanningAnimSub').textContent = data.progress_message || 'Please tap the physical RFID tag on the ESP32 RFID reader.';
+            if (data.status === 'pending' && data.progress !== 'retry_scan') {
+                document.getElementById('registrationFailureMessage').style.display = 'none';
+            }
 
             if (data.status === 'failed' || data.status === 'expired' || data.status === 'cancelled') {
                 clearInterval(pollInterval);

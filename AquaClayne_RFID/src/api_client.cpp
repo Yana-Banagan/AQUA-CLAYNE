@@ -15,6 +15,7 @@ APIClient::APIClient(const char* baseUrl, const char* deviceToken)
     : _baseUrl(baseUrl), _deviceToken(deviceToken) {}
 
 String APIClient::executeGet(const String& endpoint, int& outStatusCode, String& outError) {
+    outError = "";
     String fullUrl = String(_baseUrl) + endpoint;
     HTTPClient http;
     WiFiClientSecure secureClient;
@@ -34,10 +35,11 @@ String APIClient::executeGet(const String& endpoint, int& outStatusCode, String&
     outStatusCode = http.GET();
     String response = "";
 
+    Serial.printf("[API] HTTP response: %d\n", outStatusCode);
     if (outStatusCode > 0) {
         response = http.getString();
     } else {
-        outError = http.errorToString(outStatusCode);
+        outError = "NETWORK_ERROR: " + http.errorToString(outStatusCode);
         Serial.printf("[HTTP GET Error] %s -> %s\n", fullUrl.c_str(), outError.c_str());
     }
 
@@ -46,6 +48,7 @@ String APIClient::executeGet(const String& endpoint, int& outStatusCode, String&
 }
 
 String APIClient::executePost(const String& endpoint, const String& jsonBody, int& outStatusCode, String& outError) {
+    outError = "";
     String fullUrl = String(_baseUrl) + endpoint;
     HTTPClient http;
     WiFiClientSecure secureClient;
@@ -66,10 +69,11 @@ String APIClient::executePost(const String& endpoint, const String& jsonBody, in
     outStatusCode = http.POST(jsonBody);
     String response = "";
 
+    Serial.printf("[API] HTTP response: %d\n", outStatusCode);
     if (outStatusCode > 0) {
         response = http.getString();
     } else {
-        outError = http.errorToString(outStatusCode);
+        outError = "NETWORK_ERROR: " + http.errorToString(outStatusCode);
         Serial.printf("[HTTP POST Error] %s -> %s\n", fullUrl.c_str(), outError.c_str());
     }
 
@@ -91,7 +95,7 @@ bool APIClient::sendHeartbeat(const String& firmwareVersion, String& outError) {
     }
     if (statusCode == 401 || statusCode == 403) {
         outError = "UNAUTHORIZED";
-    } else {
+    } else if (statusCode > 0) {
         outError = "HTTP_" + String(statusCode);
     }
     return false;
@@ -164,13 +168,27 @@ bool APIClient::submitRegistrationScan(
     deserializeJson(resDoc, response);
 
     outMessage = resDoc["message"] | "";
+    if (outMessage == "The given data was invalid." && resDoc["errors"].is<JsonObject>()) {
+        JsonObject errors = resDoc["errors"].as<JsonObject>();
+        for (JsonPair error : errors) {
+            JsonArray messages = error.value().as<JsonArray>();
+            if (!messages.isNull() && messages.size() > 0) {
+                outMessage = messages[0].as<String>();
+                break;
+            }
+        }
+    }
     String errCode = resDoc["error"] | "";
 
     if (statusCode == 200 && resDoc["success"] == true) {
         return true;
     }
 
-    outError = errCode.length() > 0 ? errCode : ("HTTP_" + String(statusCode));
+    if (errCode.length() > 0) {
+        outError = errCode;
+    } else if (statusCode > 0) {
+        outError = "HTTP_" + String(statusCode);
+    }
     return false;
 }
 
@@ -178,6 +196,7 @@ bool APIClient::submitOperationalScan(
     const String& uid,
     const String& scanType,
     const String& orderId,
+    const String& scanId,
     String& outMessage,
     String& outCustomerName,
     int& outGallonCount,
@@ -186,6 +205,9 @@ bool APIClient::submitOperationalScan(
     StaticJsonDocument<256> doc;
     doc["uid"] = uid;
     doc["scan_type"] = scanType;
+    if (scanId.length() > 0) {
+        doc["scan_id"] = scanId;
+    }
     if (orderId.length() > 0) {
         doc["order_id"] = orderId;
     }
@@ -199,14 +221,26 @@ bool APIClient::submitOperationalScan(
     deserializeJson(resDoc, response);
 
     outMessage = resDoc["message"] | "";
+    if (outMessage == "The given data was invalid." && resDoc["errors"].is<JsonObject>()) {
+        JsonObject errors = resDoc["errors"].as<JsonObject>();
+        for (JsonPair error : errors) {
+            JsonArray messages = error.value().as<JsonArray>();
+            if (!messages.isNull() && messages.size() > 0) {
+                outMessage = messages[0].as<String>();
+                break;
+            }
+        }
+    }
     if (statusCode == 200 && resDoc["success"] == true) {
         outCustomerName = resDoc["customer_name"] | "";
         outGallonCount = resDoc["gallon_count"] | 0;
         return true;
     }
 
-    outError = resDoc["error"].as<String>();
-    if (outError.length() == 0) {
+    String errCode = resDoc["error"].as<String>();
+    if (errCode.length() > 0) {
+        outError = errCode;
+    } else if (statusCode > 0) {
         outError = String("HTTP_") + String(statusCode);
     }
     return false;

@@ -566,6 +566,7 @@ Route::middleware(['auth', 'role:admin,staff'])
         Route::post('/rfid/registration-sessions', [\App\Http\Controllers\Admin\RfidController::class, 'createSession'])->name('rfid.sessions.create');
         Route::get('/rfid/registration-sessions/{session}/status', [\App\Http\Controllers\Admin\RfidController::class, 'checkSessionStatus'])->name('rfid.sessions.status');
         Route::post('/rfid/registration-sessions/{session}/cancel', [\App\Http\Controllers\Admin\RfidController::class, 'cancelSession'])->name('rfid.sessions.cancel');
+        Route::get('/rfid/scans/{transaction}/result', [\App\Http\Controllers\Admin\RfidController::class, 'scanResult'])->name('rfid.scans.result');
         Route::post('/rfid/containers', [\App\Http\Controllers\Admin\RfidController::class, 'storeContainer'])->name('rfid.containers.store');
         Route::post('/rfid/tags/{tag}/replace', [\App\Http\Controllers\Admin\RfidController::class, 'replaceTag'])->name('rfid.tags.replace');
         Route::post('/rfid/tags/{tag}/deactivate', [\App\Http\Controllers\Admin\RfidController::class, 'deactivateTag'])->name('rfid.tags.deactivate');

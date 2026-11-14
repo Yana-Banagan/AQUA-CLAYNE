@@ -89,14 +89,16 @@ Hardware and server settings are in `AquaClayne_RFID/include/config.h`. Copy `in
 1. In the Admin Dashboard (`/admin/rfid`), click **"Register New RFID Tag"**. Eligible customers (those with active, untagged containers) load immediately; search by name, phone, or email to filter.
 2. Select a customer and one of their eligible containers (or click `+ New Container`), then select a scanner marked **ONLINE**.
 3. Click **"Start RFID Registration"**. Laravel checks the selected customer/container, a recent authenticated device heartbeat, and that neither the container nor scanner has another active registration. It creates a device-bound 3-minute session.
-4. The ESP32 polls the authenticated active-session endpoint every 1.5 seconds. RFID polling runs continuously in a separate task, so HTTPS requests do not cause quick physical taps to be missed. Once the scanner receives the command, tap a physical RFID tag on the RC522 reader.
+4. The ESP32 polls the authenticated active-session endpoint every 1.5 seconds. RFID polling runs continuously in a separate task and queues scans while HTTPS requests run. The reader does not enqueue the same card again until it has been removed.
 5. The ESP32 sends the actual UID, device ID, and session ID to `POST /api/iot/rfid/registration-scan`. Laravel validates the scanner, session, UID format, and duplicate assignment in a transaction.
-6. Only after Laravel confirms success does the modal show the actual UID, customer, container, scanner, and registration time. It refreshes the registry and eligible-container data without reloading the page. Failed scans are recorded in the existing RFID transaction/audit history.
+6. Only after Laravel confirms success does the modal show the actual UID, customer, container, scanner, and registration time. It refreshes the registry and eligible-container data without reloading the page. Rejected UIDs show Laravel's reason and leave an unexpired registration session available for another physical tap. The rejected attempt is recorded in the existing RFID transaction/audit history.
 
 ### Step 3: Registered Tag Identification
 - Outside a registration session, a customer tag is sent to authenticated `POST /api/iot/rfid/scan` with `scan_type: VERIFICATION`.
 - Laravel looks up the current customer and counts their active customer-container records.
 - The OLED displays only the customer name and current gallon count. An unregistered UID displays `RFID Tag Not Registered.` A registered tag without retrievable customer/gallon data displays an error.
+- The RFID management dashboard receives each processed verification result through the existing `realtime_events` Supabase subscription and displays only status, customer name, and active gallon count. Scanner heartbeat status is not used as a substitute for scan results.
+- Every verification request includes a unique `scan_id`. Laravel uses it to return the existing result rather than recording a second transaction if the ESP32 retries after a communication failure.
 
 ### Step 4: Station Intake Verification
 - When empty gallons arrive at the station, staff scans the gallon tag.
@@ -133,6 +135,8 @@ to `POST /api/iot/rfid/registration-scan`. The backend compares the submitted de
 - From the repository root, build with `python -m platformio run --project-dir AquaClayne_RFID`; flash with `python -m platformio run --project-dir AquaClayne_RFID --target upload`. Select the correct serial port if needed.
 - Open the serial monitor at 115200 baud. Confirm heartbeat and registration-session polling.
 - Open the registration modal, select an online scanner and an untagged container, start registration, and tap a physical tag. Verify the UID and success details in the modal and registry.
+- During registration, tap a previously registered UID and confirm the modal displays the failure reason while remaining open for another tap; then tap a new UID and confirm registration succeeds.
 - Tap the registered tag again in normal mode. Confirm the OLED displays only the customer name and current active gallon count. Test an unregistered tag and confirm `RFID Tag Not Registered.`
+- Keep a tag on the reader and confirm it is processed once; remove it and tap it again to confirm it can be scanned again. Verify dashboard scan results update without a page refresh.
 - Apply pending Laravel migrations before deploying the updated backend. Do not manually mark a scanner online as a substitute for its heartbeat.
 

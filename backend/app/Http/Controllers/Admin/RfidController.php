@@ -265,7 +265,9 @@ class RfidController extends Controller
 
         $progress = $session->status;
         if ($session->status === 'pending') {
-            if (!$session->command_sent_at) {
+            if ($session->failure_code) {
+                $progress = 'retry_scan';
+            } elseif (!$session->command_sent_at) {
                 $progress = 'waiting_for_device';
             } elseif (!$session->device?->isOnline()) {
                 $progress = 'device_disconnected';
@@ -277,10 +279,12 @@ class RfidController extends Controller
         return response()->json([
             'status' => $session->status,
             'progress' => $progress,
-            'progress_message' => match ($progress) {
+            'progress_message' => $progress === 'retry_scan'
+                ? (($session->failure_message ?? 'RFID registration failed.') . ' RFID REGISTRATION FAILED. PLEASE TAP ANOTHER RFID TAG.')
+                : match ($progress) {
                 'waiting_for_device' => 'Waiting for the selected ESP32 scanner to connect.',
                 'device_disconnected' => 'ESP32 connection lost. Waiting for the scanner to reconnect.',
-                'waiting_for_tag' => 'ESP32 connected. Registration command sent. Please tap the physical RFID tag on the ESP32 RFID reader.',
+                'waiting_for_tag' => 'WAITING FOR RFID TAG',
                 'failed' => $session->failure_message ?? 'RFID registration failed.',
                 'expired' => 'Registration session expired.',
                 'cancelled' => 'Registration session was cancelled.',
@@ -303,6 +307,43 @@ class RfidController extends Controller
                 'id' => $session->device?->id,
                 'name' => $session->device?->device_name,
             ],
+        ]);
+    }
+
+    /**
+     * Return a privacy-filtered result for a normal verification scan.
+     */
+    public function scanResult(RfidTransaction $transaction): JsonResponse
+    {
+        abort_unless($transaction->transaction_type === 'VERIFICATION', 404);
+
+        $transaction->load('customerContainer.customer.user');
+        $container = $transaction->customerContainer;
+        $customerName = $container?->customer?->user?->name;
+        $success = $transaction->scan_result === 'accepted' && $customerName !== null;
+        $unregistered = $transaction->scan_result === 'rejected'
+            && !$transaction->customer_container_rfid_tag_id
+            && !$transaction->rfid_tag_id;
+
+        $message = $success
+            ? 'RFID tag verified successfully.'
+            : ($unregistered
+                ? 'RFID TAG NOT REGISTERED'
+                : (!$customerName && $transaction->scan_result === 'accepted'
+                    ? 'RFID tag is not linked to an active customer container.'
+                    : ($transaction->message ?? 'RFID scan rejected.')));
+
+        return response()->json([
+            'scan_id' => $transaction->id,
+            'status' => $success ? 'SUCCESS' : 'FAILED',
+            'message' => $message,
+            'customer_name' => $success ? $customerName : null,
+            'gallon_count' => $success
+                ? CustomerContainer::where('customer_id', $container->customer_id)
+                    ->where('status', 'active')
+                    ->count()
+                : null,
+            'scanned_at' => $transaction->scanned_at?->toIso8601String(),
         ]);
     }
 

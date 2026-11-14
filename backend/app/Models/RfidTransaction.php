@@ -25,6 +25,7 @@ class RfidTransaction extends Model
         'scan_result',
         'message',
         'metadata',
+        'scan_id',
         'scanned_by',
         'scanned_at',
     ];

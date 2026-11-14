@@ -30,7 +30,6 @@
 #define HTTP_TIMEOUT_MS 5000
 #define HEARTBEAT_INTERVAL_MS 15000 // Send heartbeat every 15 seconds
 #define SESSION_POLL_MS 1500        // Poll for active registration session every 1.5s
-#define SCAN_DEBOUNCE_MS 2500       // Prevent duplicate triggers for 2.5s
 
 // =============================================================================
 // HARDWARE PIN DEFINITIONS (ESP32 DEVKIT V1)

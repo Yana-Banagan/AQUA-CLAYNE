@@ -22,9 +22,34 @@ class RfidTransactionService
         string $rawUid,
         string $scanType,
         ?string $orderId = null,
-        ?User $actor = null
+        ?User $actor = null,
+        ?string $scanId = null
     ): array {
         $uid = strtoupper(trim(preg_replace('/[\s:]+/', '', $rawUid)));
+
+        if ($scanId) {
+            $existingScan = RfidTransaction::where('scan_id', $scanId)->first();
+            if ($existingScan) {
+                $existingScan->load('customerContainer.customer.user');
+                $container = $existingScan->customerContainer;
+                $unregistered = $existingScan->scan_result === 'rejected'
+                    && !$existingScan->customer_container_rfid_tag_id
+                    && !$existingScan->rfid_tag_id;
+
+                return [
+                    'success' => $existingScan->scan_result === 'accepted',
+                    'error' => $existingScan->metadata['error'] ?? ($unregistered ? 'TAG_NOT_FOUND' : null),
+                    'message' => $unregistered ? 'RFID TAG NOT REGISTERED' : $existingScan->message,
+                    'transaction_id' => $existingScan->id,
+                    'customer_name' => $container?->customer?->user?->name,
+                    'gallon_count' => $container
+                        ? CustomerContainer::where('customer_id', $container->customer_id)
+                            ->where('status', 'active')
+                            ->count()
+                        : null,
+                ];
+            }
+        }
 
         if (empty($uid)) {
             return [
@@ -48,27 +73,29 @@ class RfidTransactionService
 
         if (!$customerTag && !$stationTag) {
             // Log unknown tag scan for security monitoring
-            RfidTransaction::create([
+            $transaction = RfidTransaction::create([
                 'device_id' => $device->id,
                 'action' => strtolower($scanType),
                 'transaction_type' => strtoupper($scanType),
                 'scan_result' => 'rejected',
                 'message' => "Unknown or unregistered RFID tag scanned: {$uid}",
+                'metadata' => ['raw_uid' => $uid, 'error' => 'TAG_NOT_FOUND'],
+                'scan_id' => $scanId,
                 'scanned_by' => $actor?->id,
                 'scanned_at' => now(),
-                'metadata' => ['raw_uid' => $uid],
             ]);
 
             return [
                 'success' => false,
                 'error' => 'TAG_NOT_FOUND',
-                'message' => "RFID UID {$uid} is not registered or active.",
+                'message' => 'RFID TAG NOT REGISTERED',
+                'transaction_id' => $transaction->id,
             ];
         }
 
         $container = $customerTag?->container;
         if ($container && $container->status !== 'active') {
-            RfidTransaction::create([
+            $transaction = RfidTransaction::create([
                 'customer_container_id' => $container->id,
                 'customer_container_rfid_tag_id' => $customerTag->id,
                 'device_id' => $device->id,
@@ -76,6 +103,8 @@ class RfidTransactionService
                 'transaction_type' => strtoupper($scanType),
                 'scan_result' => 'rejected',
                 'message' => "Container {$container->container_code} is {$container->status}.",
+                'metadata' => ['error' => 'CONTAINER_NOT_ACTIVE'],
+                'scan_id' => $scanId,
                 'scanned_by' => $actor?->id,
                 'scanned_at' => now(),
             ]);
@@ -84,6 +113,7 @@ class RfidTransactionService
                 'success' => false,
                 'error' => 'CONTAINER_NOT_ACTIVE',
                 'message' => "Container {$container->container_code} is marked {$container->status}.",
+                'transaction_id' => $transaction->id,
             ];
         }
 
@@ -154,7 +184,7 @@ class RfidTransactionService
                 : 0;
 
             if (!$customerName || $gallonCount < 1) {
-                RfidTransaction::create([
+                $transaction = RfidTransaction::create([
                     'rfid_tag_id' => $stationTag?->id,
                     'customer_container_id' => $container?->id,
                     'customer_container_rfid_tag_id' => $customerTag?->id,
@@ -164,6 +194,8 @@ class RfidTransactionService
                     'transaction_type' => strtoupper($scanType),
                     'scan_result' => 'rejected',
                     'message' => 'RFID tag is registered but customer or active gallon details are unavailable.',
+                    'metadata' => ['error' => 'CUSTOMER_DETAILS_NOT_FOUND'],
+                    'scan_id' => $scanId,
                     'scanned_by' => $actor?->id,
                     'scanned_at' => now(),
                 ]);
@@ -172,6 +204,7 @@ class RfidTransactionService
                     'success' => false,
                     'error' => 'CUSTOMER_DETAILS_NOT_FOUND',
                     'message' => 'RFID tag is registered, but customer or gallon details could not be retrieved.',
+                    'transaction_id' => $transaction->id,
                 ];
             }
         }
@@ -189,6 +222,7 @@ class RfidTransactionService
             'new_status' => $order?->status,
             'scan_result' => 'accepted',
             'message' => "Successfully validated RFID scan ({$scanType}) for tag {$uid}.",
+            'scan_id' => $scanId,
             'scanned_by' => $actor?->id,
             'scanned_at' => now(),
         ]);

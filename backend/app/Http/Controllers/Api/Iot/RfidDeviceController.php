@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\RfidDevice;
 use App\Models\RfidRegistrationSession;
 use App\Services\RfidRegistrationService;
+use App\Services\RealtimeEventService;
 use App\Services\RfidTransactionService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -88,11 +90,31 @@ class RfidDeviceController extends Controller
             ], 403);
         }
 
-        $result = $registrationService->completeRegistration(
-            $device,
-            $data['session_id'],
-            $data['uid']
-        );
+        try {
+            $result = $registrationService->completeRegistration(
+                $device,
+                $data['session_id'],
+                $data['uid']
+            );
+        } catch (QueryException $exception) {
+            report($exception);
+            $message = 'Database error while registering this RFID tag. Please tap another tag or retry.';
+            RfidRegistrationSession::whereKey($data['session_id'])
+                ->where('station_device_id', $device->id)
+                ->where('status', 'pending')
+                ->where('expires_at', '>', now())
+                ->update([
+                    'scan_received_at' => now(),
+                    'failure_code' => 'DATABASE_ERROR',
+                    'failure_message' => $message,
+                ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'DATABASE_ERROR',
+                'message' => $message,
+            ], 500);
+        }
 
         $statusCode = $result['success'] ? 200 : 422;
 
@@ -134,14 +156,26 @@ class RfidDeviceController extends Controller
             'uid' => ['required', 'string', 'max:64'],
             'scan_type' => ['required', 'string', 'in:STATION_INTAKE,REFILL_START,REFILL_COMPLETE,DRIVER_PICKUP,DELIVERY,VERIFICATION'],
             'order_id' => ['nullable', 'uuid'],
+            'scan_id' => ['nullable', 'uuid'],
         ]);
 
         $result = $transactionService->validateAndRecordScan(
             $device,
             $data['uid'],
             $data['scan_type'],
-            $data['order_id'] ?? null
+            $data['order_id'] ?? null,
+            null,
+            $data['scan_id'] ?? null
         );
+
+        if (!empty($result['transaction_id'])) {
+            app(RealtimeEventService::class)->emit(
+                'rfid',
+                $result['transaction_id'],
+                'RFID_SCAN_RESULT',
+                $result['success'] ? 'accepted' : 'rejected'
+            );
+        }
 
         $statusCode = $result['success'] ? 200 : 422;
 

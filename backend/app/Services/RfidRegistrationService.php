@@ -187,6 +187,8 @@ class RfidRegistrationService
             }
 
             $session->scan_received_at = now();
+            $session->failure_code = null;
+            $session->failure_message = null;
             $session->save();
 
             if (!preg_match('/\A(?:[A-F0-9]{8}|[A-F0-9]{10}|[A-F0-9]{12}|[A-F0-9]{14}|[A-F0-9]{16}|[A-F0-9]{18}|[A-F0-9]{20})\z/', $uid)) {
@@ -289,8 +291,8 @@ class RfidRegistrationService
             // Emit Realtime event
             try {
                 app(RealtimeEventService::class)->emit('rfid', $tag->id, 'RFID_TAG_REGISTERED', 'active');
-            } catch (\Throwable) {
-                // Silently continue if realtime service is unavailable
+            } catch (\Throwable $exception) {
+                report($exception);
             }
 
             return [
@@ -326,7 +328,6 @@ class RfidRegistrationService
             string $error,
             string $message
     ): array {
-            $session->status = 'failed';
             $session->failure_code = $error;
             $session->failure_message = $message;
             $session->save();

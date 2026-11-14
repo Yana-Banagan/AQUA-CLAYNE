@@ -10,6 +10,7 @@ public:
     RFIDManager(uint8_t ssPin, uint8_t rstPin);
     void begin();
     bool isTagPresent();
+    bool isCardStillPresent();
     String readUID();
     void halt();
 

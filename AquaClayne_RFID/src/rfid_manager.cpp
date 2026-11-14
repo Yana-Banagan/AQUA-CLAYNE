@@ -15,7 +15,10 @@ void RFIDManager::begin() {
     _mfrc522.PCD_Init();
     delay(10);
     byte version = _mfrc522.PCD_ReadRegister(MFRC522::VersionReg);
-    Serial.printf("[RFID] RC522 Reader initialized. Firmware version: 0x%02X\n", version);
+    Serial.printf("[RFID] Reader initialized. RC522 firmware version: 0x%02X\n", version);
+    if (version == 0x00 || version == 0xFF) {
+        Serial.println("[RFID] Warning: RC522 did not return a valid firmware version; check SPI wiring and 3.3V power.");
+    }
 }
 
 bool RFIDManager::isTagPresent() {
@@ -26,6 +29,12 @@ bool RFIDManager::isTagPresent() {
         return false;
     }
     return true;
+}
+
+bool RFIDManager::isCardStillPresent() {
+    byte atqa[2];
+    byte atqaSize = sizeof(atqa);
+    return _mfrc522.PICC_WakeupA(atqa, &atqaSize) == MFRC522::STATUS_OK;
 }
 
 String RFIDManager::readUID() {

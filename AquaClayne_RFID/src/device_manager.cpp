@@ -1,4 +1,5 @@
 #include "device_manager.h"
+#include <esp_system.h>
 #if __has_include("config.h")
 #include "config.h"
 #elif __has_include("../include/config.h")
@@ -6,6 +7,9 @@
 #else
 #error "config.h not found. Check the project include path."
 #endif
+
+static String makeScanId();
+static bool isRetryableError(const String& error);
 
 DeviceManager::DeviceManager(
     WiFiManager& wifi,
@@ -35,6 +39,13 @@ void DeviceManager::begin() {
     }
 
     _rfid.begin();
+    _scanQueue = xQueueCreate(8, sizeof(RFIDScanEvent));
+    if (!_scanQueue) {
+        Serial.println("[RFID] Failed to create scan queue.");
+        _oled.showCustom("RFID QUEUE FAILED", "Restart device");
+        return;
+    }
+
     _wasWifiConnected = _wifi.isConnected();
     if (_wifi.isConnected()) {
         _oled.setState(STATE_WIFI_CONNECTED, _wifi.getIP());
@@ -57,6 +68,8 @@ void DeviceManager::begin() {
     if (scanTaskStarted != pdPASS) {
         Serial.println("[RFID] Failed to start continuous reader polling task.");
         _oled.showCustom("RFID POLL FAILED", "Restart device");
+        vQueueDelete(_scanQueue);
+        _scanQueue = nullptr;
     }
 }
 
@@ -118,12 +131,16 @@ void DeviceManager::handleSessionPoll() {
         if (found && sessionId.length() > 0 && deviceId.length() > 0) {
             if (!_hasActiveSession || _activeSessionId != sessionId) {
                 // New registration session started on admin dashboard!
-                _hasActiveSession = true;
                 _activeDeviceId = deviceId;
                 _activeSessionId = sessionId;
                 _activeContainerCode = containerCode;
                 _activeCustomerName = customerName;
                 _sessionExpiresIn = expiresIn;
+                taskENTER_CRITICAL(&_scanMux);
+                _hasActiveSession = true;
+                sessionId.toCharArray(_scanSessionId, sizeof(_scanSessionId));
+                deviceId.toCharArray(_scanDeviceId, sizeof(_scanDeviceId));
+                taskEXIT_CRITICAL(&_scanMux);
 
                 Serial.printf("[Registration] Active session: %s for %s (%s)\n",
                     sessionId.c_str(), containerCode.c_str(), customerName.c_str());
@@ -139,6 +156,11 @@ void DeviceManager::handleSessionPoll() {
                 _hasActiveSession = false;
                 _activeDeviceId = "";
                 _activeSessionId = "";
+                taskENTER_CRITICAL(&_scanMux);
+                _hasActiveSession = false;
+                _scanSessionId[0] = '\0';
+                _scanDeviceId[0] = '\0';
+                taskEXIT_CRITICAL(&_scanMux);
                 _oled.setState(STATE_DEVICE_ONLINE);
             }
         } else {
@@ -151,100 +173,153 @@ void DeviceManager::handleSessionPoll() {
 }
 
 void DeviceManager::handleRFIDScan() {
-    char uidBuffer[sizeof(_pendingUID)] = {};
-    taskENTER_CRITICAL(&_scanMux);
-    if (_hasPendingUID) {
-        memcpy(uidBuffer, _pendingUID, sizeof(uidBuffer));
-        _pendingUID[0] = '\0';
-        _hasPendingUID = false;
-    }
-    taskEXIT_CRITICAL(&_scanMux);
-
-    if (uidBuffer[0] == '\0') {
+    if (!_scanQueue || millis() < _retryScanAt) {
         return;
     }
 
-    String uid(uidBuffer);
+    RFIDScanEvent event = {};
+    if (xQueuePeek(_scanQueue, &event, 0) != pdTRUE || event.uid[0] == '\0') {
+        return;
+    }
 
-    Serial.printf("[RFID] Physical Tag Scanned: %s\n", uid.c_str());
+    String uid(event.uid);
+
+    Serial.printf("[RFID] Physical tag scanned: %s\n", uid.c_str());
     beep(60);
-    _oled.setState(STATE_RFID_DETECTED, uid);
 
-    if (_hasActiveSession && _activeSessionId.length() > 0) {
+    if (event.registrationMode) {
         // Submit registration scan
         _oled.setState(STATE_REGISTERING_TAG);
         String msg, err;
-        bool success = _api.submitRegistrationScan(_activeDeviceId, _activeSessionId, uid, msg, err);
+        Serial.println("[RFID] Registration session active");
+        Serial.println("[RFID] Sending registration scan to Laravel");
+        bool success = _api.submitRegistrationScan(String(event.deviceId), String(event.sessionId), uid, msg, err);
 
         if (success) {
-            Serial.printf("[Registration] Tag %s registered successfully!\n", uid.c_str());
+            finishPendingScan();
+            Serial.printf("[RFID] Registration successful. UID: %s\n", uid.c_str());
             _oled.setState(STATE_REGISTER_SUCCESS, uid);
             beep(150);
-            delay(100);
             beep(150);
-            _hasActiveSession = false;
             _activeDeviceId = "";
             _activeSessionId = "";
-            delay(3500);
-            _oled.setState(STATE_DEVICE_ONLINE);
+            taskENTER_CRITICAL(&_scanMux);
+            _hasActiveSession = false;
+            _scanSessionId[0] = '\0';
+            _scanDeviceId[0] = '\0';
+            taskEXIT_CRITICAL(&_scanMux);
         } else {
-            Serial.printf("[Registration Error] %s: %s\n", err.c_str(), msg.c_str());
+            Serial.printf("[Registration] Failed (%s): %s\n", err.c_str(), msg.c_str());
+            if (isRetryableError(err)) {
+                _retryScanAt = millis() + 2000;
+                _oled.showCustom("COMMUNICATION", "FAILURE", err.substring(0, 20));
+                return;
+            }
+            finishPendingScan();
             if (err == "DUPLICATE_RFID_TAG") {
                 _oled.setState(STATE_DUPLICATE_TAG);
             } else if (err == "SESSION_EXPIRED") {
                 _oled.setState(STATE_SESSION_EXPIRED);
             } else {
-                _oled.showCustom("REGISTRATION FAILED", err, msg.substring(0, 20));
+                _oled.showCustom("REGISTRATION FAILED", msg.length() ? msg : err, "");
             }
             beep(400);
-            delay(3000);
-            _oled.setState(STATE_READY_TO_SCAN, _activeContainerCode);
+            if (err == "SESSION_EXPIRED" || err.startsWith("SESSION_")) {
+                _activeDeviceId = "";
+                _activeSessionId = "";
+                taskENTER_CRITICAL(&_scanMux);
+                _hasActiveSession = false;
+                _scanSessionId[0] = '\0';
+                _scanDeviceId[0] = '\0';
+                taskEXIT_CRITICAL(&_scanMux);
+            } else {
+                _oled.setState(STATE_READY_TO_SCAN, _activeContainerCode);
+            }
         }
     } else {
         // Operational scan (Station Intake / Verification)
         String msg, customerName, err;
         int gallonCount = 0;
-        bool success = _api.submitOperationalScan(uid, "VERIFICATION", "", msg, customerName, gallonCount, err);
+        Serial.println("[RFID] Sending verification scan to Laravel");
+        bool success = _api.submitOperationalScan(uid, "VERIFICATION", "", String(event.scanId), msg, customerName, gallonCount, err);
+        if (!success && isRetryableError(err)) {
+            _retryScanAt = millis() + 2000;
+            Serial.printf("[RFID] Scan retained for retry: %s\n", err.c_str());
+            _oled.showCustom("COMMUNICATION", "FAILURE", err.substring(0, 20));
+            return;
+        }
+        finishPendingScan();
         if (success) {
             const String gallonLabel = gallonCount == 1 ? " Gallon" : " Gallons";
             _oled.showCustom("Customer Name:", customerName, "Number of Gallons: " + String(gallonCount) + gallonLabel);
             beep(100);
         } else if (err == "TAG_NOT_FOUND") {
-            _oled.showCustom("RFID Tag Not", "Registered.");
+            _oled.showCustom("RFID TAG NOT", "REGISTERED");
             beep(300);
         } else if (err == "CUSTOMER_DETAILS_NOT_FOUND") {
             _oled.showCustom("Customer or gallon", "details unavailable.");
             beep(300);
         } else {
-            _oled.showCustom("SCAN REJECTED", err.substring(0, 20));
+            _oled.showCustom("SCAN REJECTED", msg.length() ? msg : err);
             beep(300);
         }
-        delay(2500);
-        _oled.setState(STATE_DEVICE_ONLINE);
     }
+}
+
+void DeviceManager::finishPendingScan() {
+    RFIDScanEvent completed = {};
+    if (_scanQueue) {
+        xQueueReceive(_scanQueue, &completed, 0);
+    }
+    _retryScanAt = 0;
+}
+
+static String makeScanId() {
+    char scanId[37];
+    const uint32_t first = esp_random();
+    const uint32_t second = esp_random();
+    const uint32_t third = esp_random();
+    const uint16_t fourth = static_cast<uint16_t>(esp_random());
+    snprintf(scanId, sizeof(scanId), "%08lx-%04x-4%03x-%04x-%08lx%04x",
+        static_cast<unsigned long>(first),
+        static_cast<unsigned int>(second >> 16),
+        static_cast<unsigned int>(second & 0x0fff),
+        static_cast<unsigned int>((third >> 16) & 0x3fff) | 0x8000,
+        static_cast<unsigned long>(third),
+        static_cast<unsigned int>(fourth));
+    return String(scanId);
+}
+
+static bool isRetryableError(const String& error) {
+    return error.startsWith("NETWORK_ERROR") || error.startsWith("HTTP_5");
 }
 
 void DeviceManager::rfidScanTask(void* parameter) {
     DeviceManager* manager = static_cast<DeviceManager*>(parameter);
-    String lastUID;
-    unsigned long lastScanTime = 0;
 
     for (;;) {
         if (manager->_rfid.isTagPresent()) {
             String uid = manager->_rfid.readUID();
-            const unsigned long now = millis();
-
-            if (uid.length() > 0 &&
-                (uid != lastUID || now - lastScanTime >= SCAN_DEBOUNCE_MS)) {
+            if (uid.length() > 0) {
+                RFIDScanEvent event = {};
+                uid.toCharArray(event.uid, sizeof(event.uid));
+                makeScanId().toCharArray(event.scanId, sizeof(event.scanId));
                 taskENTER_CRITICAL(&manager->_scanMux);
-                if (!manager->_hasPendingUID) {
-                    uid.toCharArray(manager->_pendingUID, sizeof(manager->_pendingUID));
-                    manager->_hasPendingUID = true;
+                event.registrationMode = manager->_hasActiveSession;
+                if (event.registrationMode) {
+                    memcpy(event.deviceId, manager->_scanDeviceId, sizeof(event.deviceId));
+                    memcpy(event.sessionId, manager->_scanSessionId, sizeof(event.sessionId));
                 }
                 taskEXIT_CRITICAL(&manager->_scanMux);
 
-                lastUID = uid;
-                lastScanTime = now;
+                Serial.println("[RFID] Card detected");
+                Serial.printf("[RFID] UID read successfully: %s\n", uid.c_str());
+                if (xQueueSend(manager->_scanQueue, &event, 0) != pdTRUE) {
+                    Serial.println("[RFID] Scan queue full; physical scan could not be queued.");
+                }
+                while (manager->_rfid.isCardStillPresent()) {
+                    vTaskDelay(pdMS_TO_TICKS(50));
+                }
             }
         }
 
