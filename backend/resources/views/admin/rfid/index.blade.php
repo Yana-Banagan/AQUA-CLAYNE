@@ -24,7 +24,7 @@
         </button>
         <button type="button" id="registerRfidTagButton" class="btn-rfid-primary" onclick="openRegisterRfidModal()" aria-label="Register RFID tags for customer gallons">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
-            + Register Tags
+            + Register Tag
         </button>
     </div>
 </div>
@@ -54,12 +54,6 @@
     </article>
 
     <article class="stat-card">
-        <span class="stat-label">Inactive / Replaced Tags</span>
-        <strong class="stat-value" style="color: #64748B;">{{ number_format($stats['inactiveTags']) }}</strong>
-        <small class="stat-meta">Deactivated or superseded</small>
-    </article>
-
-    <article class="stat-card">
         <span class="stat-label">Untagged Containers</span>
         <strong class="stat-value" style="color: #D97706;">{{ number_format($stats['unassignedContainers']) }}</strong>
         <small class="stat-meta">Customer gallons awaiting RFID</small>
@@ -71,12 +65,6 @@
             <span class="pulsing-dot online" style="margin-right: 6px;"></span>{{ $stats['devicesOnline'] }}
         </strong>
         <small class="stat-meta">{{ $stats['devicesOffline'] }} offline or idle</small>
-    </article>
-
-    <article class="stat-card">
-        <span class="stat-label">Gallons at Station</span>
-        <strong class="stat-value">{{ number_format($stats['gallonsAtStation']) }}</strong>
-        <small class="stat-meta">In queue or refilling bay</small>
     </article>
 
     <article class="stat-card">
