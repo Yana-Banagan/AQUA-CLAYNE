@@ -263,9 +263,9 @@ class RfidController extends Controller
             }
         }
         $session->load([
-            'container:id,customer_id,container_code',
+            'container:id,customer_id,container_code,container_type',
             'container.customer:id,user_id',
-            'container.customer.user:id,name',
+            'container.customer.user:id,name,phone',
             'container.activeTag:id,customer_container_id,uid,status',
             'device:id,device_name,status,last_heartbeat_at',
         ]);
@@ -305,13 +305,18 @@ class RfidController extends Controller
             'scanned_uid' => $session->scanned_uid,
             'completed_at' => $session->completed_at?->toIso8601String(),
             'scan_received_at' => $session->scan_received_at?->toIso8601String(),
+            'expires_at' => $session->expires_at?->toIso8601String(),
             'failure_code' => $session->failure_code,
             'failure_message' => $session->failure_message,
             'container' => [
                 'id' => $session->container?->id,
                 'code' => $session->container?->container_code,
+                'type' => $session->container?->container_type,
                 'customer_name' => $session->container?->customer?->user?->name,
                 'active_tag_uid' => $session->container?->activeTag?->uid,
+            ],
+            'customer' => [
+                'phone' => $session->container?->customer?->user?->phone,
             ],
             'device' => [
                 'id' => $session->device?->id,
@@ -542,27 +547,40 @@ class RfidController extends Controller
     }
 
     /**
-     * Get only active, untagged containers that can be used for registration.
+     * List this customer's containers and indicate which can be registered.
      */
     public function customerContainers(Customer $customer): JsonResponse
     {
         $containers = CustomerContainer::query()
             ->where('customer_id', $customer->id)
-            ->where('status', 'active')
-            ->whereDoesntHave('activeTag')
-            ->whereDoesntHave('registrationSessions', function ($q) {
-                $q->where('status', 'pending')
+            ->with('activeTag:id,customer_container_id,uid,status')
+            ->withCount(['registrationSessions as pending_registration_count' => function ($query) {
+                $query->where('status', 'pending')
                     ->where('expires_at', '>', now());
-            })
+            }])
             ->orderBy('created_at')
             ->get()
-            ->map(fn($c) => [
-                'id' => $c->id,
-                'container_code' => $c->container_code,
-                'container_type' => $c->container_type,
-                'capacity' => $c->capacity,
-                'status' => 'Ready for RFID registration',
-            ]);
+            ->map(function ($container) {
+                $hasPendingSession = $container->pending_registration_count > 0;
+                $eligible = $container->status === 'active'
+                    && !$container->activeTag
+                    && !$hasPendingSession;
+
+                return [
+                    'id' => $container->id,
+                    'container_code' => $container->container_code,
+                    'container_type' => $container->container_type,
+                    'capacity' => $container->capacity,
+                    'status' => $container->status,
+                    'registration_status' => $container->activeTag
+                        ? 'Already registered'
+                        : ($hasPendingSession
+                            ? 'Registration in progress'
+                            : ($eligible ? 'Ready for RFID registration' : 'Container inactive')),
+                    'active_tag_uid' => $container->activeTag?->uid,
+                    'eligible' => $eligible,
+                ];
+            });
 
         return response()->json(['containers' => $containers]);
     }

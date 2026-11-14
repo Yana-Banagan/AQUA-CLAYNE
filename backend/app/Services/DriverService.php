@@ -63,17 +63,25 @@ class DriverService
     public function update(Driver $driver, array $data, ?User $actor = null): void
     {
         DB::transaction(function () use ($driver, $data, $actor) {
-            $driver->user->update([
+            $userData = [
                 'name' => $data['name'],
                 'email' => $data['email'],
                 'phone' => $data['phone'] ?? null,
-                'status' => $data['status'],
-            ]);
+            ];
+            if (array_key_exists('status', $data)) {
+                $userData['status'] = $data['status'];
+            }
+            $driver->user->update($userData);
 
-            $driver->update([
-                'license_number' => $data['license_number'] ?? null,
-                'vehicle_plate' => $data['vehicle_plate'] ?? null,
-            ]);
+            $driverData = [];
+            foreach (['license_number', 'vehicle_plate'] as $field) {
+                if (array_key_exists($field, $data)) {
+                    $driverData[$field] = $data[$field];
+                }
+            }
+            if ($driverData) {
+                $driver->update($driverData);
+            }
 
             AuditLog::create([
                 'actor_id' => $actor?->id,

@@ -24,7 +24,7 @@
         </button>
         <button type="button" class="btn-rfid-primary" onclick="openRegisterRfidModal()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
-            Register New RFID Tag
+            + Register Tag
         </button>
     </div>
 </div>
@@ -137,7 +137,7 @@
     </div>
 
     <div class="data-table-wrap">
-        <table class="data-table">
+        <table class="data-table" id="rfidTagsTable">
             <thead>
                 <tr>
                     <th>RFID UID</th>
@@ -152,7 +152,7 @@
             </thead>
             <tbody>
                 @forelse($tags as $tag)
-                    <tr>
+                    <tr data-rfid-uid="{{ $tag->uid }}">
                         <td>
                             <span class="rfid-uid-pill">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path></svg>
@@ -265,7 +265,7 @@
             </thead>
             <tbody>
                 @forelse($containers as $c)
-                    <tr>
+                    <tr data-rfid-container-row="{{ $c->id }}">
                         <td>
                             <strong>{{ $c->container_code }}</strong>
                         </td>
@@ -281,7 +281,7 @@
                         <td>
                             <span style="font-size: 12.5px;">{{ number_format($c->capacity, 1) }} gal</span>
                         </td>
-                        <td>
+                        <td data-container-tag>
                             @if($c->activeTag)
                                 <span class="rfid-uid-pill">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path></svg>
@@ -300,7 +300,7 @@
                                 <span class="badge-rfid-inactive">{{ ucfirst($c->status) }}</span>
                             @endif
                         </td>
-                        <td style="text-align: right;">
+                        <td data-container-actions style="text-align: right;">
                             <div style="display: inline-flex; gap: 6px;">
                                 @if(!$c->activeTag && $c->status === 'active')
                                     <button type="button" class="btn-rfid-primary" style="padding: 5px 12px; font-size: 12px;" onclick="startRegistrationForContainer('{{ $c->id }}', '{{ $c->container_code }}', '{{ $c->customer?->id }}', '{{ addslashes($c->customer?->user?->name ?? '') }}')">
@@ -503,7 +503,7 @@
 {{-- MODAL 1: REGISTER NEW RFID TAG (CORE REQUIREMENT) --}}
 {{-- ========================================================================= --}}
 <div class="modal-backdrop" id="registerRfidModal" style="display: none; position: fixed; inset: 0; background: rgba(3, 27, 55, 0.7); z-index: 1050; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
-    <div class="modal-card" style="background: #ffffff; width: 100%; max-width: 540px; border-radius: 16px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2); overflow: hidden; margin: 20px;">
+    <div class="modal-card" style="background: #ffffff; box-sizing: border-box; width: 100%; max-width: 540px; max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 16px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2); margin: 20px;">
         <div style="padding: 18px 22px; background: linear-gradient(135deg, #041a33, #0284c7); color: #ffffff; display: flex; justify-content: space-between; align-items: center;">
             <div>
                 <h3 style="margin: 0; font-size: 16px; font-weight: 700;">Register New RFID Tag</h3>
@@ -534,12 +534,14 @@
                 <!-- Container Selection -->
                 <div style="margin-bottom: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <label style="font-weight: 600; font-size: 13px; color: #1E293B;">2. Select Customer Container</label>
+                        <label style="font-weight: 600; font-size: 13px; color: #1E293B;">2. Select Gallons</label>
                         <a href="javascript:void(0)" onclick="toggleQuickAddContainer()" style="font-size: 12px; color: #0284C7; font-weight: 600;">+ New Container</a>
                     </div>
-                    <select id="regContainerSelect" style="width: 100%; padding: 10px 12px; border: 1px solid #CBD5E1; border-radius: 8px; font-size: 13.5px; box-sizing: border-box;" disabled>
-                        <option value="">Loading eligible containers...</option>
+                    <select id="regContainerSelect" multiple size="4" aria-describedby="regContainerHelp" style="width: 100%; padding: 10px 12px; border: 1px solid #CBD5E1; border-radius: 8px; font-size: 13.5px; box-sizing: border-box;" disabled>
+                        <option value="">Loading eligible gallons...</option>
                     </select>
+                    <small id="regContainerHelp" style="display:block; margin-top:5px; color:#64748B;">Select each physical customer gallon that needs a tag. One real ESP32 scan will be required for each selected gallon.</small>
+                    <div id="regSelectionCount" role="status" style="margin-top:8px; color:#0369A1; font-size:13px;">Required tags: 0</div>
                 </div>
 
                 <!-- Quick Add Container Inline Form -->
@@ -590,6 +592,14 @@
 
                 <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px;">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="color: #64748B;">Registration progress:</span>
+                        <strong id="registrationProgress">0 / 0</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #64748B;">Remaining tags:</span>
+                        <strong id="registrationRemaining">0</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                         <span style="color: #64748B;">Target Container:</span>
                         <strong id="scanSummaryContainer">—</strong>
                     </div>
@@ -604,7 +614,7 @@
                 </div>
 
                 <div id="registrationFailureMessage" role="alert" style="display: none; background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px;"></div>
-                <button type="button" id="btnRetryRegistration" class="btn-rfid-secondary" style="display: none; width: 100%; justify-content: center; padding: 10px; margin-bottom: 8px;" onclick="returnToRegistrationSetup()">Start New Registration</button>
+                <button type="button" id="btnRetryRegistration" class="btn-rfid-secondary" style="display: none; width: 100%; justify-content: center; padding: 10px; margin-bottom: 8px;" onclick="returnToRegistrationSetup()">Retry Current Gallon</button>
                 <button type="button" class="btn-rfid-secondary" style="width: 100%; justify-content: center; padding: 10px; color: #EF4444; border-color: #FECACA;" onclick="cancelRegistrationSession()">
                     Cancel Registration
                 </button>
@@ -826,6 +836,8 @@
     let customerSearchTimeout = null;
     let customerSearchSequence = 0;
     let selectedRegistrationCustomerId = null;
+    let registrationBatch = null;
+    const registrationStorageKey = @json('aqua.rfid.registration.' . auth()->id());
     let lastDisplayedScanId = null;
     const scanResultUrlTemplate = @json(route('admin.rfid.scans.result', ['transaction' => 'SCAN_ID_PLACEHOLDER']));
 
@@ -880,6 +892,16 @@
 
     // Modal Control: Register RFID
     function openRegisterRfidModal() {
+        if (registrationBatch) {
+            document.getElementById('registerRfidModal').style.display = 'flex';
+            showBatchStep();
+            if (registrationBatch.activeSessionId) {
+                activeSessionId = registrationBatch.activeSessionId;
+                checkSessionProgress();
+            }
+            return;
+        }
+
         clearTimeout(pollInterval);
         clearInterval(countdownInterval);
         if (sessionPollController) sessionPollController.abort();
@@ -902,6 +924,7 @@
         document.getElementById('btnStartRegistration').disabled = false;
         document.getElementById('btnStartRegistration').textContent = 'Start RFID Registration';
         document.getElementById('registerRfidModal').style.display = 'flex';
+        updateRegistrationSelectionCount();
         loadEligibleCustomers('');
     }
 
@@ -913,6 +936,7 @@
         document.getElementById('registerRfidModal').style.display = 'none';
         clearTimeout(pollInterval);
         clearInterval(countdownInterval);
+        clearRegistrationBatch();
     }
 
     function renderCustomerDropdownMessage(message, isError = false) {
@@ -933,7 +957,7 @@
         renderCustomerDropdownMessage('Loading active customers...');
 
         try {
-            const response = await fetch(`{{ route('admin.rfid.customers.search') }}?q=${encodeURIComponent(query)}&include_all=1`, {
+            const response = await fetch(`{{ route('admin.rfid.customers.search') }}?q=${encodeURIComponent(query)}`, {
                 headers: { 'Accept': 'application/json' }
             });
             if (!response.ok) throw new Error('Unable to load eligible customers.');
@@ -962,7 +986,11 @@
                 name.textContent = customer.name || 'Unknown customer';
                 const details = document.createElement('span');
                 details.style.cssText = 'color:#64748B; font-size:12px; display:block;';
-                details.textContent = [customer.phone, customer.email].filter(Boolean).join(' · ');
+                details.textContent = [
+                    customer.phone,
+                    customer.email,
+                    `ID ${customer.id.slice(0, 8)}`
+                ].filter(Boolean).join(' · ');
                 item.append(name, details);
                 item.onclick = () => selectCustomer(customer);
                 item.onkeydown = event => {
@@ -985,10 +1013,12 @@
         clearTimeout(customerSearchTimeout);
         customerSearchSequence++;
         selectedRegistrationCustomerId = null;
+        clearRegistrationBatch();
         document.getElementById('regSelectedCustomerId').value = '';
         document.getElementById('selectedCustomerCard').style.display = 'none';
         document.getElementById('regContainerSelect').disabled = true;
         document.getElementById('regContainerSelect').innerHTML = '<option value="">Select a customer first...</option>';
+        updateRegistrationSelectionCount();
         customerSearchTimeout = setTimeout(() => loadEligibleCustomers(query.trim()), 250);
     }
 
@@ -1025,22 +1055,22 @@
             select.replaceChildren();
 
             if (data.containers && data.containers.length > 0) {
-                const placeholder = document.createElement('option');
-                placeholder.value = '';
-                placeholder.textContent = 'Select an unregistered container...';
-                select.appendChild(placeholder);
                 data.containers.forEach(container => {
                     const option = document.createElement('option');
                     option.value = container.id;
-                    option.textContent = `${container.container_code} (${container.container_type}) · ${container.capacity} gal · ${container.status}`;
+                    option.textContent = `${container.container_code} · ${container.container_type} · ${container.capacity} gal · ${container.registration_status}${container.active_tag_uid ? ` · UID ${container.active_tag_uid}` : ''}`;
                     option.selected = selectContainerId === container.id;
+                    option.disabled = !container.eligible;
+                    option.dataset.containerCode = container.container_code;
+                    option.dataset.containerType = container.container_type;
                     select.appendChild(option);
                 });
                 select.disabled = false;
+                updateRegistrationSelectionCount();
             } else {
                 const placeholder = document.createElement('option');
                 placeholder.value = '';
-                placeholder.textContent = 'No eligible containers. Create a new container below.';
+                placeholder.textContent = 'No customer gallons found. Create a container below.';
                 select.appendChild(placeholder);
                 document.getElementById('quickAddContainerWrap').style.display = 'block';
             }
@@ -1051,6 +1081,14 @@
             showRegistrationError(error.message || 'Could not load customer containers.');
         }
     }
+
+    function updateRegistrationSelectionCount() {
+        const selected = Array.from(document.getElementById('regContainerSelect').selectedOptions)
+            .filter(option => option.value && !option.disabled);
+        document.getElementById('regSelectionCount').textContent = `Required tags: ${selected.length}`;
+    }
+
+    document.getElementById('regContainerSelect').addEventListener('change', updateRegistrationSelectionCount);
 
     function toggleQuickAddContainer() {
         const wrap = document.getElementById('quickAddContainerWrap');
@@ -1092,23 +1130,117 @@
         return firstValidationError || 'The registration request could not be completed.';
     }
 
+    function persistRegistrationBatch() {
+        if (registrationBatch) {
+            localStorage.setItem(registrationStorageKey, JSON.stringify(registrationBatch));
+        }
+    }
+
+    function clearRegistrationBatch() {
+        registrationBatch = null;
+        try {
+            localStorage.removeItem(registrationStorageKey);
+        } catch (error) {
+            console.error('Could not clear saved RFID registration progress.', error);
+        }
+    }
+
+    function updateBatchProgress() {
+        if (!registrationBatch) return;
+        const required = registrationBatch.containers.length;
+        const registered = registrationBatch.completedContainerIds.length;
+        document.getElementById('registrationProgress').textContent = `${registered} / ${required}`;
+        document.getElementById('registrationRemaining').textContent = String(Math.max(0, required - registered));
+        document.getElementById('scanSummaryCustomer').textContent = registrationBatch.customer.name;
+        document.getElementById('scanSummaryDevice').textContent =
+            document.getElementById('regDeviceSelect').selectedOptions[0]?.textContent || 'Selected ESP32 scanner';
+    }
+
+    function showBatchStep() {
+        if (!registrationBatch) return;
+        document.getElementById('rfidSuccessStep').style.display = 'none';
+        document.getElementById('registrationProgress').textContent =
+            `${registrationBatch.completedContainerIds.length} / ${registrationBatch.containers.length}`;
+        document.getElementById('registrationRemaining').textContent =
+            String(registrationBatch.containers.length - registrationBatch.completedContainerIds.length);
+        document.getElementById('scanSummaryCustomer').textContent = registrationBatch.customer.name;
+        document.getElementById('scanSummaryDevice').textContent =
+            document.getElementById('regDeviceSelect').selectedOptions[0]?.textContent || 'Selected ESP32 scanner';
+
+        if (registrationBatch.activeSessionId) {
+            const current = registrationBatch.containers[registrationBatch.currentIndex];
+            document.getElementById('scanSummaryContainer').textContent =
+                current ? `${current.code} (${current.type})` : '—';
+            document.getElementById('rfidSetupStep').style.display = 'none';
+            document.getElementById('rfidScanningStep').style.display = 'block';
+        } else {
+            document.getElementById('rfidSetupStep').style.display = 'block';
+            document.getElementById('rfidScanningStep').style.display = 'none';
+            document.getElementById('btnStartRegistration').textContent = 'Resume RFID Registration';
+            document.getElementById('btnStartRegistration').disabled = false;
+        }
+    }
+
     async function startRegistrationSession() {
         const customerId = document.getElementById('regSelectedCustomerId').value;
-        const containerId = document.getElementById('regContainerSelect').value;
         const deviceId = document.getElementById('regDeviceSelect').value;
         const errBanner = document.getElementById('regErrorBanner');
         errBanner.style.display = 'none';
 
-        if (!customerId || customerId !== selectedRegistrationCustomerId) {
-            showRegistrationError('Please select an eligible customer.');
+        if (!registrationBatch) {
+            const selectedOptions = Array.from(document.getElementById('regContainerSelect').selectedOptions)
+                .filter(option => option.value && !option.disabled);
+            if (!customerId || customerId !== selectedRegistrationCustomerId) {
+                showRegistrationError('Please select an eligible customer.');
+                return;
+            }
+            if (selectedOptions.length === 0) {
+                showRegistrationError('Select at least one eligible customer gallon.');
+                return;
+            }
+            if (!deviceId) {
+                showRegistrationError('Please select an online ESP32 RFID scanner.');
+                return;
+            }
+
+            registrationBatch = {
+                customer: {
+                    id: customerId,
+                    name: document.getElementById('displayCustomerName').textContent,
+                },
+                containers: selectedOptions.map(option => ({
+                    id: option.value,
+                    code: option.dataset.containerCode || option.textContent,
+                    type: option.dataset.containerType || '',
+                })),
+                completedContainerIds: [],
+                currentIndex: 0,
+                deviceId,
+                activeSessionId: null,
+            };
+            try {
+                persistRegistrationBatch();
+            } catch (_) {
+                clearRegistrationBatch();
+                showRegistrationError('This browser cannot save registration progress. Enable local storage before starting a multi-gallon registration.');
+                return;
+            }
+        } else if (registrationBatch.activeSessionId) {
+            showRegistrationError('A registration session is already active. Wait for its scan or cancel it first.');
             return;
         }
-        if (!containerId) {
-            showRegistrationError('Please select an eligible, unregistered customer container.');
-            return;
-        }
-        if (!deviceId) {
-            showRegistrationError('Please select an online ESP32 RFID scanner.');
+
+        selectedRegistrationCustomerId = registrationBatch.customer.id;
+        document.getElementById('regSelectedCustomerId').value = registrationBatch.customer.id;
+        registrationBatch.deviceId = deviceId;
+        await beginRegistrationSession();
+    }
+
+    async function beginRegistrationSession() {
+        if (!registrationBatch) return;
+        const current = registrationBatch.containers[registrationBatch.currentIndex];
+        if (!current) {
+            showRegistrationError('No unregistered gallon remains in this registration batch.');
             return;
         }
 
@@ -1121,20 +1253,24 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
                 body: JSON.stringify({
-                    customer_id: customerId,
-                    customer_container_id: containerId,
-                    station_device_id: deviceId
+                    customer_id: registrationBatch.customer.id,
+                    customer_container_id: current.id,
+                    station_device_id: registrationBatch.deviceId
                 })
             });
             const data = await response.json();
             if (!response.ok || !data.success) throw new Error(responseError(data));
             btn.disabled = false;
-            btn.textContent = 'Start RFID Registration';
+            btn.textContent = 'Resume RFID Registration';
 
             activeSessionId = data.session.id;
-            document.getElementById('scanSummaryContainer').textContent = data.session.container_code;
+            registrationBatch.activeSessionId = activeSessionId;
+            registrationBatch.expiresAt = data.session.expires_at;
+            persistRegistrationBatch();
+            document.getElementById('scanSummaryContainer').textContent = `${data.session.container_code} (${current.type})`;
             document.getElementById('scanSummaryCustomer').textContent = data.session.customer_name;
             document.getElementById('scanSummaryDevice').textContent = data.session.device_name;
+            updateBatchProgress();
             document.getElementById('registrationFailureMessage').style.display = 'none';
             document.getElementById('btnRetryRegistration').style.display = 'none';
             document.getElementById('registrationConnectionIndicator').textContent = 'Waiting for RFID Scan';
@@ -1147,6 +1283,7 @@
 
             countdownRemaining = data.session.expires_in_seconds || 180;
             updateCountdownBadge();
+            clearInterval(countdownInterval);
             countdownInterval = setInterval(() => {
                 countdownRemaining = Math.max(0, countdownRemaining - 1);
                 updateCountdownBadge();
@@ -1155,8 +1292,17 @@
             checkSessionProgress();
         } catch (error) {
             btn.disabled = false;
-            btn.textContent = 'Start RFID Registration';
-            showRegistrationError(error.message || 'Could not communicate with the backend to start registration.');
+            btn.textContent = 'Resume RFID Registration';
+            if (activeSessionId) {
+                document.getElementById('registrationFailureMessage').textContent =
+                    error.message || 'Could not save registration progress after starting the session.';
+                document.getElementById('registrationFailureMessage').style.display = 'block';
+                document.getElementById('rfidSetupStep').style.display = 'none';
+                document.getElementById('rfidScanningStep').style.display = 'block';
+                checkSessionProgress();
+            } else {
+                showRegistrationError(error.message || 'Could not communicate with the backend to start registration.');
+            }
         }
     }
 
@@ -1165,6 +1311,101 @@
         if (badge) {
             badge.textContent = `Session expires in ${countdownRemaining}s`;
         }
+    }
+
+    function updateRfidRegistry(data) {
+        const containerRow = document.querySelector(`[data-rfid-container-row="${CSS.escape(data.container.id)}"]`);
+        if (containerRow) {
+            const tagCell = containerRow.querySelector('[data-container-tag]');
+            const tagPill = document.createElement('span');
+            tagPill.className = 'rfid-uid-pill';
+            tagPill.textContent = data.scanned_uid;
+            tagCell.replaceChildren(tagPill);
+            containerRow.querySelector('[data-container-actions]')?.querySelector('button')?.remove();
+        }
+
+        const table = document.getElementById('rfidTagsTable');
+        if (!table || table.querySelector(`[data-rfid-uid="${CSS.escape(data.scanned_uid)}"]`)) return;
+        const body = table.tBodies[0];
+        body.querySelector('tr td[colspan]')?.closest('tr')?.remove();
+        const row = document.createElement('tr');
+        row.dataset.rfidUid = data.scanned_uid;
+        const values = [
+            data.scanned_uid,
+            data.container.code || '—',
+            data.container.customer_name || '—',
+            data.customer?.phone || '—',
+            data.container.type || '—',
+            data.completed_at
+                ? new Date(data.completed_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })
+                : '—',
+            'Active',
+        ];
+        values.forEach((value, index) => {
+            const cell = document.createElement('td');
+            if (index === 0) {
+                const pill = document.createElement('span');
+                pill.className = 'rfid-uid-pill';
+                pill.textContent = value;
+                cell.appendChild(pill);
+            } else if (index === 6) {
+                const badge = document.createElement('span');
+                badge.className = 'badge-rfid-active';
+                badge.textContent = value;
+                cell.appendChild(badge);
+            } else {
+                cell.textContent = value;
+            }
+            row.appendChild(cell);
+        });
+        const actions = document.createElement('td');
+        actions.style.textAlign = 'right';
+        const history = document.createElement('a');
+        history.className = 'btn-rfid-secondary';
+        history.style.cssText = 'padding:5px 10px;font-size:12px;';
+        history.href = `{{ route('admin.rfid.index') }}?tab=transactions&tx_search=${encodeURIComponent(data.scanned_uid)}`;
+        history.textContent = 'History';
+        actions.appendChild(history);
+        row.appendChild(actions);
+        body.prepend(row);
+    }
+
+    function completeBatchContainer(data) {
+        if (!registrationBatch) return;
+        const current = registrationBatch.containers[registrationBatch.currentIndex];
+        if (current && !registrationBatch.completedContainerIds.includes(current.id)) {
+            registrationBatch.completedContainerIds.push(current.id);
+        }
+        activeSessionId = null;
+        registrationBatch.activeSessionId = null;
+        registrationBatch.currentIndex = registrationBatch.completedContainerIds.length;
+        updateRfidRegistry(data);
+        updateBatchProgress();
+        persistRegistrationBatch();
+
+        if (registrationBatch.completedContainerIds.length < registrationBatch.containers.length) {
+            document.getElementById('scanningAnimTitle').textContent = 'Tag registered · preparing next gallon';
+            document.getElementById('registrationConnectionIndicator').textContent = 'Tag saved successfully';
+            document.getElementById('scanSummaryContainer').textContent =
+                registrationBatch.containers[registrationBatch.currentIndex].code;
+            beginRegistrationSession();
+            return;
+        }
+
+        document.getElementById('rfidScanningStep').style.display = 'none';
+        document.getElementById('rfidSuccessStep').style.display = 'block';
+        document.getElementById('successUidDisplay').textContent = data.scanned_uid || '—';
+        document.getElementById('successContainerIdDisplay').textContent = data.container.id || '—';
+        document.getElementById('successContainerDisplay').textContent = `${data.container.code || '—'} (${data.container.customer_name || '—'})`;
+        document.getElementById('successCustomerDisplay').textContent = data.container.customer_name || '—';
+        document.getElementById('successDeviceDisplay').textContent = data.device?.name || '—';
+        document.getElementById('successRegisteredAtDisplay').textContent = data.completed_at
+            ? new Date(data.completed_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })
+            : '—';
+        const completedCount = registrationBatch.containers.length;
+        document.getElementById('registryRefreshNotice').textContent =
+            `Registration complete: ${completedCount} of ${completedCount} selected gallons have unique RFID tags.`;
+        clearRegistrationBatch();
     }
 
     async function checkSessionProgress() {
@@ -1187,21 +1428,7 @@
             if (data.status === 'completed') {
                 clearTimeout(pollInterval);
                 clearInterval(countdownInterval);
-                document.getElementById('rfidScanningStep').style.display = 'none';
-                document.getElementById('rfidSuccessStep').style.display = 'block';
-                document.getElementById('successUidDisplay').textContent = data.scanned_uid || '—';
-                document.getElementById('successContainerIdDisplay').textContent = data.container.id || '—';
-                document.getElementById('successContainerDisplay').textContent = `${data.container.code || '—'} (${data.container.customer_name || '—'})`;
-                document.getElementById('successCustomerDisplay').textContent = data.container.customer_name || '—';
-                document.getElementById('successDeviceDisplay').textContent = data.device.name || '—';
-                document.getElementById('successRegisteredAtDisplay').textContent = data.completed_at
-                    ? new Date(data.completed_at).toLocaleString('en-PH', {
-                        timeZone: 'Asia/Manila'
-                    })
-                    : '—';
-                activeSessionId = null;
-                document.getElementById('registryRefreshNotice').textContent =
-                    `RFID tag ${data.scanned_uid || '—'} is registered to ${data.container.customer_name || 'the selected customer'}.`;
+                completeBatchContainer(data);
                 return;
             }
 
@@ -1235,6 +1462,10 @@
                 clearTimeout(pollInterval);
                 clearInterval(countdownInterval);
                 activeSessionId = null;
+                if (registrationBatch) {
+                    registrationBatch.activeSessionId = null;
+                    persistRegistrationBatch();
+                }
                 document.getElementById('registrationFailureMessage').textContent = data.failure_message || data.progress_message || 'Registration failed.';
                 document.getElementById('registrationFailureMessage').style.display = 'block';
                 document.getElementById('btnRetryRegistration').style.display = 'block';
@@ -1280,6 +1511,7 @@
         clearTimeout(pollInterval);
         clearInterval(countdownInterval);
         activeSessionId = null;
+        clearRegistrationBatch();
         document.getElementById('rfidScanningStep').style.display = 'none';
         document.getElementById('rfidSetupStep').style.display = 'block';
         return true;
@@ -1287,19 +1519,75 @@
 
     function returnToRegistrationSetup() {
         activeSessionId = null;
+        if (registrationBatch) {
+            registrationBatch.activeSessionId = null;
+            persistRegistrationBatch();
+        }
         document.getElementById('registrationFailureMessage').style.display = 'none';
         document.getElementById('btnRetryRegistration').style.display = 'none';
         document.getElementById('rfidScanningStep').style.display = 'none';
         document.getElementById('rfidSetupStep').style.display = 'block';
         document.getElementById('regErrorBanner').style.display = 'none';
         document.getElementById('btnStartRegistration').disabled = false;
-        document.getElementById('btnStartRegistration').textContent = 'Start RFID Registration';
+        document.getElementById('btnStartRegistration').textContent =
+            registrationBatch ? 'Resume RFID Registration' : 'Start RFID Registration';
+    }
+
+    function restoreSavedRegistration() {
+        let saved;
+        try {
+            saved = JSON.parse(localStorage.getItem(registrationStorageKey) || 'null');
+        } catch (error) {
+            console.error('Could not restore saved RFID registration progress.', error);
+            return;
+        }
+        if (!saved || !saved.customer?.id || !Array.isArray(saved.containers) ||
+            !saved.containers.length || !Array.isArray(saved.completedContainerIds)) return;
+
+        registrationBatch = saved;
+        selectedRegistrationCustomerId = saved.customer.id;
+        document.getElementById('regSelectedCustomerId').value = saved.customer.id;
+        document.getElementById('regCustomerSearch').value = saved.customer.name || '';
+        document.getElementById('displayCustomerName').textContent = saved.customer.name || 'Customer';
+        document.getElementById('selectedCustomerCard').style.display = 'block';
+        document.getElementById('regDeviceSelect').value = saved.deviceId || '';
+        document.getElementById('regContainerSelect').replaceChildren();
+        saved.containers.forEach(container => {
+            const option = document.createElement('option');
+            option.value = container.id;
+            option.textContent = `${container.code} · ${container.type || 'Customer gallon'}`;
+            option.dataset.containerCode = container.code;
+            option.dataset.containerType = container.type || '';
+            option.selected = true;
+            document.getElementById('regContainerSelect').appendChild(option);
+        });
+        document.getElementById('regContainerSelect').disabled = true;
+        document.getElementById('registerRfidModal').style.display = 'flex';
+
+        if (saved.activeSessionId) {
+            activeSessionId = saved.activeSessionId;
+            showBatchStep();
+            const remainingSeconds = saved.expiresAt
+                ? Math.max(0, Math.ceil((new Date(saved.expiresAt).getTime() - Date.now()) / 1000))
+                : 0;
+            countdownRemaining = remainingSeconds;
+            updateCountdownBadge();
+            countdownInterval = setInterval(() => {
+                countdownRemaining = Math.max(0, countdownRemaining - 1);
+                updateCountdownBadge();
+            }, 1000);
+            checkSessionProgress();
+        } else {
+            showBatchStep();
+        }
     }
 
     function startRegistrationForContainer(containerId, containerCode, customerId, customerName) {
         openRegisterRfidModal();
         selectCustomer({ id: customerId, name: customerName, phone: '' }, containerId);
     }
+
+    restoreSavedRegistration();
 
     // Modal 2: Add Container
     function openAddContainerModal() {

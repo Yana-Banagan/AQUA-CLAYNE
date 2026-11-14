@@ -12,6 +12,7 @@ use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class AdminRecordEditTest extends TestCase
@@ -167,6 +168,225 @@ class AdminRecordEditTest extends TestCase
         $this->get(route('admin.customers.edit', $customer))
             ->assertOk()
             ->assertSee('Updated Customer');
+    }
+
+    public function test_customer_json_edit_loads_and_updates_the_existing_profile_and_address(): void
+    {
+        $customerUser = User::factory()->create([
+            'role' => 'customer',
+            'name' => 'JSON Customer',
+            'email' => 'json-customer@example.test',
+        ]);
+        $customer = Customer::create(['user_id' => $customerUser->id]);
+        $address = CustomerAddress::create([
+            'customer_id' => $customer->id,
+            'address_line' => 'Old Street',
+            'barangay' => 'Old Barangay',
+            'city' => 'Old City',
+            'province' => 'Old Province',
+            'zip_code' => '1000',
+            'is_default' => true,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->getJson(route('admin.customers.edit', $customer))
+            ->assertOk()
+            ->assertJsonPath('name', 'JSON Customer')
+            ->assertJsonPath('address.id', $address->id)
+            ->assertJsonPath('address.barangay', 'Old Barangay');
+
+        $this->putJson(route('admin.customers.update', $customer), [
+            'name' => 'Updated JSON Customer',
+            'email' => $customerUser->email,
+            'phone' => '09171234567',
+            'status' => 'active',
+            'address_id' => $address->id,
+            'address_line' => 'New Street',
+            'barangay' => 'New Barangay',
+            'city' => 'New City',
+            'province' => 'New Province',
+            'zip_code' => '2000',
+        ])->assertOk()
+            ->assertJsonPath('customer.name', 'Updated JSON Customer')
+            ->assertJsonPath('customer.address', 'New Street, New Barangay');
+
+        $this->assertDatabaseCount('customers', 1);
+        $this->assertDatabaseHas('customer_addresses', [
+            'id' => $address->id,
+            'customer_id' => $customer->id,
+            'address_line' => 'New Street',
+            'barangay' => 'New Barangay',
+        ]);
+    }
+
+    public function test_customer_json_edit_rejects_an_address_owned_by_another_customer(): void
+    {
+        $firstUser = User::factory()->create(['role' => 'customer', 'name' => 'First']);
+        $first = Customer::create(['user_id' => $firstUser->id]);
+        $secondUser = User::factory()->create(['role' => 'customer', 'name' => 'Second']);
+        $second = Customer::create(['user_id' => $secondUser->id]);
+        $foreignAddress = CustomerAddress::create([
+            'customer_id' => $second->id,
+            'address_line' => 'Private Street',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->putJson(route('admin.customers.update', $first), [
+                'name' => 'Attempted Change',
+                'email' => $firstUser->email,
+                'status' => 'active',
+                'address_id' => $foreignAddress->id,
+                'address_line' => 'Changed Street',
+                'barangay' => 'Changed Barangay',
+            ])->assertNotFound();
+
+        $this->assertDatabaseHas('users', ['id' => $firstUser->id, 'name' => 'First']);
+        $this->assertDatabaseHas('customer_addresses', [
+            'id' => $foreignAddress->id,
+            'customer_id' => $second->id,
+            'address_line' => 'Private Street',
+        ]);
+    }
+
+    public function test_customer_and_driver_edits_enforce_unique_contacts_and_staff_restrictions(): void
+    {
+        $customerUser = User::factory()->create([
+            'role' => 'customer',
+            'email' => 'customer-unique@example.test',
+            'phone' => '09173333333',
+        ]);
+        $customer = Customer::create(['user_id' => $customerUser->id]);
+        $otherUser = User::factory()->create([
+            'role' => 'customer',
+            'email' => 'other-customer@example.test',
+            'phone' => '09174444444',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->putJson(route('admin.customers.update', $customer), [
+                'name' => 'Customer',
+                'email' => $otherUser->email,
+                'phone' => $otherUser->phone,
+                'status' => 'active',
+            ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['email', 'phone']);
+
+        $staff = User::factory()->create(['role' => 'staff', 'status' => 'active']);
+        $driverUser = User::factory()->create([
+            'role' => 'driver',
+            'email' => 'restricted-driver@example.test',
+        ]);
+        $driver = Driver::create(['user_id' => $driverUser->id]);
+
+        $this->actingAs($staff)
+            ->getJson(route('admin.drivers.edit', $driver))
+            ->assertOk()
+            ->assertJsonPath('can_manage_restricted_fields', false);
+
+        $this->putJson(route('admin.drivers.update', $driver), [
+            'name' => 'Restricted Driver',
+            'email' => $driverUser->email,
+            'status' => 'inactive',
+            'license_number' => 'NOT-ALLOWED',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['status', 'license_number']);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $driverUser->id,
+            'name' => $driverUser->name,
+            'status' => 'active',
+        ]);
+        $this->assertDatabaseHas('drivers', [
+            'id' => $driver->id,
+            'license_number' => null,
+        ]);
+    }
+
+    public function test_driver_json_edit_loads_and_updates_profile_without_changing_password(): void
+    {
+        $driverUser = User::factory()->create([
+            'role' => 'driver',
+            'name' => 'JSON Driver',
+            'email' => 'json-driver@example.test',
+            'phone' => '09170000000',
+        ]);
+        $passwordHash = $driverUser->password_hash;
+        $driver = Driver::create([
+            'user_id' => $driverUser->id,
+            'license_number' => 'LIC-1',
+            'vehicle_plate' => 'PLATE-1',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->getJson(route('admin.drivers.edit', $driver))
+            ->assertOk()
+            ->assertJsonPath('name', 'JSON Driver')
+            ->assertJsonPath('license_number', 'LIC-1')
+            ->assertJsonPath('can_manage_restricted_fields', true);
+
+        $this->putJson(route('admin.drivers.update', $driver), [
+            'name' => 'Updated JSON Driver',
+            'email' => $driverUser->email,
+            'phone' => '09171111111',
+            'status' => 'active',
+            'license_number' => 'LIC-2',
+            'vehicle_plate' => 'PLATE-2',
+        ])->assertOk()
+            ->assertJsonPath('driver.name', 'Updated JSON Driver');
+
+        $this->assertDatabaseCount('drivers', 1);
+        $this->assertDatabaseHas('users', [
+            'id' => $driverUser->id,
+            'name' => 'Updated JSON Driver',
+            'password_hash' => $passwordHash,
+        ]);
+        $this->assertDatabaseHas('drivers', [
+            'id' => $driver->id,
+            'license_number' => 'LIC-2',
+            'vehicle_plate' => 'PLATE-2',
+        ]);
+    }
+
+    public function test_admin_credentials_command_updates_only_the_explicit_admin_and_verifies_password(): void
+    {
+        $password = 'test-only-secure-password';
+        $this->artisan('admin:update-credentials', [
+            'current-email' => $this->admin->email,
+            'new-email' => 'updated-admin@example.test',
+        ])
+            ->expectsQuestion('New administrator password (input hidden)', $password)
+            ->expectsQuestion('Confirm new administrator password (input hidden)', $password)
+            ->expectsOutputToContain('updated and verified')
+            ->assertExitCode(0);
+
+        $updated = User::findOrFail($this->admin->id);
+        $this->assertSame('updated-admin@example.test', $updated->email);
+        $this->assertSame('admin', $updated->role);
+        $this->assertNotSame($password, $updated->password_hash);
+        $this->assertTrue(Hash::check($password, $updated->password_hash));
+    }
+
+    public function test_admin_credentials_command_refuses_to_overwrite_an_unrelated_account(): void
+    {
+        $originalHash = $this->admin->password_hash;
+        User::factory()->create([
+            'role' => 'staff',
+            'email' => 'unrelated-account@example.test',
+        ]);
+
+        $this->artisan('admin:update-credentials', [
+            'current-email' => $this->admin->email,
+            'new-email' => 'unrelated-account@example.test',
+        ])
+            ->expectsOutputToContain('already assigned to another account')
+            ->assertExitCode(1);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $this->admin->id,
+            'email' => $this->admin->email,
+            'password_hash' => $originalHash,
+            'role' => 'admin',
+        ]);
     }
 
     public function test_driver_edit_updates_user_and_driver_without_changing_password_or_creating_an_account(): void

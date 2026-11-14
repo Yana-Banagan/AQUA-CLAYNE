@@ -43,6 +43,19 @@ class DriverController extends Controller
     {
         $driver->load('user');
 
+        if (request()->expectsJson()) {
+            return response()->json([
+                'id' => $driver->id,
+                'name' => $driver->user?->name,
+                'email' => $driver->user?->email,
+                'phone' => $driver->user?->phone,
+                'status' => $driver->user?->status,
+                'license_number' => $driver->license_number,
+                'vehicle_plate' => $driver->vehicle_plate,
+                'can_manage_restricted_fields' => request()->user()->role === 'admin',
+            ]);
+        }
+
         return view(
             'admin.drivers.edit',
             compact('driver')
@@ -53,6 +66,7 @@ class DriverController extends Controller
         Request $request,
         Driver $driver
     ) {
+        $isAdmin = $request->user()->role === 'admin';
         $data = $request->validate([
             'name' => 'required|string|max:150',
             'email' => [
@@ -61,13 +75,36 @@ class DriverController extends Controller
                 'max:150',
                 Rule::unique('users', 'email')->ignore($driver->user_id),
             ],
-            'phone' => 'nullable|string|max:30',
-            'status' => 'required|in:active,inactive',
-            'license_number' => 'nullable|string|max:50',
-            'vehicle_plate' => 'nullable|string|max:20',
+            'phone' => [
+                'nullable',
+                'string',
+                'regex:/^09\d{9}$/',
+                Rule::unique('users', 'phone')->ignore($driver->user_id),
+            ],
+            'status' => $isAdmin ? 'required|in:active,inactive' : 'prohibited',
+            'license_number' => $isAdmin ? 'nullable|string|max:50' : 'prohibited',
+            'vehicle_plate' => $isAdmin ? 'nullable|string|max:20' : 'prohibited',
         ]);
 
         $this->driverService->update($driver, $data, $request->user());
+
+        if ($request->expectsJson()) {
+            $driver->load('user');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Driver profile updated.',
+                'driver' => [
+                    'id' => $driver->id,
+                    'name' => $driver->user?->name,
+                    'email' => $driver->user?->email,
+                    'phone' => $driver->user?->phone,
+                    'status' => $driver->user?->status,
+                    'license_number' => $driver->license_number,
+                    'vehicle_plate' => $driver->vehicle_plate,
+                ],
+            ]);
+        }
 
         return redirect()
             ->route('admin.drivers.index', $request->query())

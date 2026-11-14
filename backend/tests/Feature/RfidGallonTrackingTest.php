@@ -201,7 +201,7 @@ class RfidGallonTrackingTest extends TestCase
         $containerOwnerSearch->assertOk()->assertJsonPath('customers.0.id', $ineligibleCustomer->id);
     }
 
-    public function test_customer_container_list_only_returns_eligible_untagged_containers(): void
+    public function test_customer_container_list_reports_eligibility_and_existing_rfid_status(): void
     {
         $eligible = CustomerContainer::create([
             'customer_id' => $this->customer->id,
@@ -224,10 +224,16 @@ class RfidGallonTrackingTest extends TestCase
         $response = $this->actingAs($this->admin)
             ->getJson("/admin/rfid/customers/{$this->customer->id}/containers");
 
-        $response->assertOk()->assertJsonCount(1, 'containers');
+        $response->assertOk()->assertJsonCount(2, 'containers');
         $response->assertJsonPath('containers.0.id', $eligible->id);
-        $response->assertJsonPath('containers.0.status', 'Ready for RFID registration');
-        $this->assertArrayNotHasKey('active_tag_uid', $response->json('containers.0'));
+        $response->assertJsonPath('containers.0.status', 'active');
+        $response->assertJsonPath('containers.0.registration_status', 'Ready for RFID registration');
+        $response->assertJsonPath('containers.0.eligible', true);
+        $response->assertJsonPath('containers.0.active_tag_uid', null);
+        $response->assertJsonPath('containers.1.id', $tagged->id);
+        $response->assertJsonPath('containers.1.registration_status', 'Already registered');
+        $response->assertJsonPath('containers.1.active_tag_uid', 'A1B2C3D4');
+        $response->assertJsonPath('containers.1.eligible', false);
     }
 
     public function test_registration_cannot_start_with_an_offline_scanner(): void
