@@ -12,6 +12,7 @@ use App\Models\RfidTag;
 use App\Models\RfidTransaction;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class RfidRegistrationService
@@ -133,11 +134,18 @@ class RfidRegistrationService
     /**
      * Complete an RFID registration scan submitted by an ESP32 device.
      */
-    public function completeRegistration(RfidDevice $device, string $sessionId, string $rawUid): array
+    public function completeRegistration(
+        RfidDevice $device,
+        string $sessionId,
+        string $rawUid,
+        ?string $scanId = null
+    ): array
     {
         $uid = strtoupper(trim(preg_replace('/[\s:]+/', '', $rawUid)));
+        $createdTagId = null;
+        $databaseStartedAt = microtime(true);
 
-        return DB::transaction(function () use ($device, $sessionId, $uid) {
+        $result = DB::transaction(function () use ($device, $sessionId, $uid, $scanId, &$createdTagId) {
             /** @var RfidRegistrationSession|null $session */
             $session = RfidRegistrationSession::where('id', $sessionId)
                 ->lockForUpdate()
@@ -159,7 +167,42 @@ class RfidRegistrationService
                 ];
             }
 
+            if ($scanId) {
+                $previousScan = RfidTransaction::where('scan_id', $scanId)->first();
+                if ($previousScan) {
+                    if ($previousScan->device_id !== $device->id ||
+                        $previousScan->transaction_type !== 'REGISTRATION') {
+                        return [
+                            'success' => false,
+                            'error' => 'SCAN_ID_CONFLICT',
+                            'message' => 'This scan ID has already been used for a different RFID operation.',
+                        ];
+                    }
+
+                    if ($previousScan->scan_result !== 'accepted' && $session->status === 'pending') {
+                        $session->failure_code = $previousScan->metadata['error'] ?? 'REGISTRATION_REJECTED';
+                        $session->failure_message = $previousScan->message;
+                        $session->save();
+                    }
+
+                    return $this->registrationResultForTransaction($previousScan, $device, $uid);
+                }
+            }
+
             if ($session->status !== 'pending') {
+                if ($session->status === 'completed' && $session->scanned_uid === $uid) {
+                    $previousScan = RfidTransaction::where('customer_container_id', $session->customer_container_id)
+                        ->where('device_id', $device->id)
+                        ->where('transaction_type', 'REGISTRATION')
+                        ->where('scan_result', 'accepted')
+                        ->latest('scanned_at')
+                        ->first();
+
+                    if ($previousScan) {
+                        return $this->registrationResultForTransaction($previousScan, $device, $uid);
+                    }
+                }
+
                 return [
                     'success' => false,
                     'error' => 'SESSION_' . strtoupper($session->status),
@@ -197,17 +240,21 @@ class RfidRegistrationService
                     $device,
                     $uid,
                     'INVALID_UID',
-                    'The scanned RFID UID must contain 4 to 10 bytes of hexadecimal data.'
+                    'The scanned RFID UID must contain 4 to 10 bytes of hexadecimal data.',
+                    $scanId
                 );
             }
 
             /** @var CustomerContainer $container */
-            $container = CustomerContainer::where('id', $session->customer_container_id)
+            $container = CustomerContainer::with([
+                'customer:id,user_id',
+                'customer.user:id,name',
+            ])->where('id', $session->customer_container_id)
                 ->lockForUpdate()
                 ->first();
 
             if (!$container || $container->status !== 'active') {
-                return $this->rejectRegistration($session, $device, $uid, 'CONTAINER_INACTIVE', 'Customer container is no longer active.');
+                return $this->rejectRegistration($session, $device, $uid, 'CONTAINER_INACTIVE', 'Customer container is no longer active.', $scanId);
             }
 
             // A UID remains reserved after deactivation or replacement.
@@ -220,7 +267,8 @@ class RfidRegistrationService
                     $device,
                     $uid,
                     'DUPLICATE_RFID_TAG',
-                    "This RFID tag is already registered to container {$existingCustomerTag->container?->container_code}."
+                    "This RFID tag is already registered to container {$existingCustomerTag->container?->container_code}.",
+                    $scanId
                 );
             }
 
@@ -232,7 +280,8 @@ class RfidRegistrationService
                     $device,
                     $uid,
                     'DUPLICATE_RFID_TAG',
-                    'This RFID tag is already assigned to a station gallon.'
+                    'This RFID tag is already assigned to a station gallon.',
+                    $scanId
                 );
             }
 
@@ -247,7 +296,8 @@ class RfidRegistrationService
                     $device,
                     $uid,
                     'CONTAINER_ALREADY_TAGGED',
-                    'This container already has an active RFID tag assigned.'
+                    'This container already has an active RFID tag assigned.',
+                    $scanId
                 );
             }
 
@@ -258,6 +308,7 @@ class RfidRegistrationService
                 'status' => 'active',
                 'registered_at' => now(),
             ]);
+            $createdTagId = $tag->id;
 
             // Mark session completed
             $session->status = 'completed';
@@ -276,6 +327,7 @@ class RfidRegistrationService
                 'new_status' => 'active',
                 'scan_result' => 'accepted',
                 'message' => "Successfully registered RFID tag {$uid} to container {$container->container_code}.",
+                'scan_id' => $scanId,
                 'scanned_by' => $session->created_by,
                 'scanned_at' => now(),
             ]);
@@ -287,13 +339,6 @@ class RfidRegistrationService
                 'table_name' => 'customer_container_rfid_tags',
                 'record_id' => $tag->id,
             ]);
-
-            // Emit Realtime event
-            try {
-                app(RealtimeEventService::class)->emit('rfid', $tag->id, 'RFID_TAG_REGISTERED', 'active');
-            } catch (\Throwable $exception) {
-                report($exception);
-            }
 
             return [
                 'success' => true,
@@ -319,6 +364,28 @@ class RfidRegistrationService
                 'transaction_id' => $transaction->id,
             ];
         });
+
+        Log::info('RFID registration processed', [
+            'device_id' => $device->id,
+            'session_id' => $sessionId,
+            'scan_id' => $scanId,
+            'uid' => substr($uid, 0, 64),
+            'success' => $result['success'],
+            'error' => $result['error'] ?? null,
+            'database_transaction_ms' => (int) round((microtime(true) - $databaseStartedAt) * 1000),
+        ]);
+
+        if ($createdTagId !== null) {
+            app()->terminating(function () use ($createdTagId) {
+                try {
+                    app(RealtimeEventService::class)->emit('rfid', $createdTagId, 'RFID_TAG_REGISTERED', 'active');
+                } catch (\Throwable $exception) {
+                    report($exception);
+                }
+            });
+        }
+
+        return $result;
     }
 
     private function rejectRegistration(
@@ -326,7 +393,8 @@ class RfidRegistrationService
             RfidDevice $device,
             string $uid,
             string $error,
-            string $message
+            string $message,
+            ?string $scanId
     ): array {
             $session->failure_code = $error;
             $session->failure_message = $message;
@@ -340,6 +408,7 @@ class RfidRegistrationService
                 'scan_result' => 'rejected',
                 'message' => $message,
                 'metadata' => ['uid' => $uid, 'error' => $error],
+                'scan_id' => $scanId,
                 'scanned_by' => $session->created_by,
                 'scanned_at' => now(),
             ]);
@@ -356,6 +425,48 @@ class RfidRegistrationService
                 'error' => $error,
                 'message' => $message,
             ];
+    }
+
+    private function registrationResultForTransaction(
+        RfidTransaction $transaction,
+        RfidDevice $device,
+        string $uid
+    ): array {
+        if ($transaction->scan_result !== 'accepted') {
+            return [
+                'success' => false,
+                'error' => $transaction->metadata['error'] ?? 'REGISTRATION_REJECTED',
+                'message' => $transaction->message ?? 'RFID registration was rejected.',
+            ];
+        }
+
+        $tag = CustomerContainerRfidTag::with('container.customer.user')
+            ->find($transaction->customer_container_rfid_tag_id);
+        $container = $tag?->container ?? $transaction->customerContainer;
+
+        return [
+            'success' => true,
+            'message' => 'RFID tag registered successfully.',
+            'tag' => [
+                'id' => $tag?->id ?? $transaction->customer_container_rfid_tag_id,
+                'uid' => $tag?->uid ?? $uid,
+                'registered_at' => $tag?->registered_at?->toIso8601String() ?? $transaction->scanned_at?->toIso8601String(),
+            ],
+            'container' => [
+                'id' => $container?->id,
+                'container_code' => $container?->container_code,
+                'container_type' => $container?->container_type,
+            ],
+            'customer' => [
+                'id' => $container?->customer?->id,
+                'name' => $container?->customer?->user?->name,
+            ],
+            'device' => [
+                'id' => $device->id,
+                'name' => $device->device_name,
+            ],
+            'transaction_id' => $transaction->id,
+        ];
     }
 
     /**

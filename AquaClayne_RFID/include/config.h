@@ -28,7 +28,7 @@
 
 // Request timeouts & intervals (in milliseconds)
 #define HTTP_CONNECT_TIMEOUT_MS 3000
-#define HTTP_TIMEOUT_MS 5000
+#define HTTP_TIMEOUT_MS 20000
 #define HEARTBEAT_INTERVAL_MS 15000 // Send heartbeat every 15 seconds
 #define HEARTBEAT_MAX_RETRY_MS 60000
 #define SESSION_POLL_MS 5000
@@ -40,7 +40,7 @@
 // HARDWARE PIN DEFINITIONS (ESP32 DEVKIT V1)
 // =============================================================================
 // RC522 RFID Reader (SPI Interface)
-#define RFID_SS 5    // RC522 SDA / SS
+#define RFID_SS 5 // RC522 SDA / SS
 #define RFID_RST 27
 #define RFID_SCK 18
 #define RFID_MISO 19

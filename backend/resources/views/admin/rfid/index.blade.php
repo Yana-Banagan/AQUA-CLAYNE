@@ -820,6 +820,8 @@
     let activeSessionId = null;
     let pollInterval = null;
     let countdownInterval = null;
+    let sessionPollInFlight = false;
+    let sessionPollController = null;
     let countdownRemaining = 180;
     let customerSearchTimeout = null;
     let customerSearchSequence = 0;
@@ -876,8 +878,11 @@
 
     // Modal Control: Register RFID
     function openRegisterRfidModal() {
-        clearInterval(pollInterval);
+        clearTimeout(pollInterval);
         clearInterval(countdownInterval);
+        if (sessionPollController) sessionPollController.abort();
+        sessionPollController = null;
+        sessionPollInFlight = false;
         activeSessionId = null;
         selectedRegistrationCustomerId = null;
         document.getElementById('rfidSetupStep').style.display = 'block';
@@ -904,7 +909,7 @@
             if (!cancelled) return;
         }
         document.getElementById('registerRfidModal').style.display = 'none';
-        clearInterval(pollInterval);
+        clearTimeout(pollInterval);
         clearInterval(countdownInterval);
     }
 
@@ -923,10 +928,10 @@
     async function loadEligibleCustomers(query = '') {
         const dropdown = document.getElementById('customerSearchResults');
         const requestSequence = ++customerSearchSequence;
-        renderCustomerDropdownMessage('Loading eligible customers...');
+        renderCustomerDropdownMessage('Loading active customers...');
 
         try {
-            const response = await fetch(`{{ route('admin.rfid.customers.search') }}?q=${encodeURIComponent(query)}`, {
+            const response = await fetch(`{{ route('admin.rfid.customers.search') }}?q=${encodeURIComponent(query)}&include_all=1`, {
                 headers: { 'Accept': 'application/json' }
             });
             if (!response.ok) throw new Error('Unable to load eligible customers.');
@@ -942,7 +947,7 @@
             });
 
             if (customers.length === 0) {
-                renderCustomerDropdownMessage(query ? 'No eligible customers match your search.' : 'No customers have an unregistered active container.');
+                renderCustomerDropdownMessage(query ? 'No active customers match your search.' : 'No active customers found. Search by name, mobile, or email.');
                 return;
             }
 
@@ -1130,7 +1135,9 @@
             document.getElementById('scanSummaryDevice').textContent = data.session.device_name;
             document.getElementById('registrationFailureMessage').style.display = 'none';
             document.getElementById('btnRetryRegistration').style.display = 'none';
-            document.getElementById('registrationConnectionIndicator').textContent = 'Waiting for selected ESP32 scanner';
+            document.getElementById('registrationConnectionIndicator').textContent = 'Waiting for RFID Scan';
+            document.getElementById('scanningAnimTitle').textContent = 'WAITING FOR RFID TAG';
+            document.getElementById('scanningAnimSub').textContent = 'Tap the physical RFID tag on the selected ESP32 reader.';
 
             // Transition to Step 2
             document.getElementById('rfidSetupStep').style.display = 'none';
@@ -1143,10 +1150,7 @@
                 updateCountdownBadge();
             }, 1000);
 
-            await checkSessionProgress();
-            if (activeSessionId) {
-                pollInterval = setInterval(checkSessionProgress, 1500);
-            }
+            checkSessionProgress();
         } catch (error) {
             btn.disabled = false;
             btn.textContent = 'Start RFID Registration';
@@ -1162,17 +1166,24 @@
     }
 
     async function checkSessionProgress() {
-        if (!activeSessionId) return;
+        if (!activeSessionId || sessionPollInFlight) return;
+        const sessionId = activeSessionId;
+        const controller = new AbortController();
+        sessionPollController = controller;
+        sessionPollInFlight = true;
+        const requestTimeout = setTimeout(() => controller.abort(), 8000);
 
         try {
-            const response = await fetch(`/admin/rfid/registration-sessions/${activeSessionId}/status`, {
-                headers: { 'Accept': 'application/json' }
+            const response = await fetch(`/admin/rfid/registration-sessions/${sessionId}/status`, {
+                headers: { 'Accept': 'application/json' },
+                signal: controller.signal
             });
             const data = await response.json();
             if (!response.ok) throw new Error(responseError(data));
+            if (activeSessionId !== sessionId) return;
 
             if (data.status === 'completed') {
-                clearInterval(pollInterval);
+                clearTimeout(pollInterval);
                 clearInterval(countdownInterval);
                 document.getElementById('rfidScanningStep').style.display = 'none';
                 document.getElementById('rfidSuccessStep').style.display = 'block';
@@ -1183,14 +1194,8 @@
                 document.getElementById('successDeviceDisplay').textContent = data.device.name || '—';
                 document.getElementById('successRegisteredAtDisplay').textContent = data.completed_at ? new Date(data.completed_at).toLocaleString() : '—';
                 activeSessionId = null;
-                await Promise.all([
-                    loadEligibleCustomers(''),
-                    loadCustomerContainers(selectedRegistrationCustomerId)
-                ]);
-                const refreshed = await refreshRfidRegistry();
-                document.getElementById('registryRefreshNotice').textContent = refreshed
-                    ? 'RFID registry and eligible containers have been refreshed.'
-                    : 'Tag registration succeeded. Reload the page if the registry list does not update.';
+                document.getElementById('registryRefreshNotice').textContent =
+                    `RFID tag ${data.scanned_uid || '—'} is registered to ${data.container.customer_name || 'the selected customer'}.`;
                 return;
             }
 
@@ -1208,6 +1213,9 @@
                 document.getElementById('scanningAnimTitle').textContent = 'RFID REGISTRATION FAILED';
                 document.getElementById('registrationFailureMessage').textContent = data.progress_message;
                 document.getElementById('registrationFailureMessage').style.display = 'block';
+            } else if (data.progress === 'processing_scan') {
+                document.getElementById('registrationConnectionIndicator').textContent = 'RFID tag detected · processing registration';
+                document.getElementById('scanningAnimTitle').textContent = 'PROCESSING REGISTRATION';
             } else if (data.status === 'pending') {
                 document.getElementById('registrationConnectionIndicator').textContent = 'RFID tag detected · validating UID';
                 document.getElementById('scanningAnimTitle').textContent = 'Validating RFID UID';
@@ -1218,7 +1226,7 @@
             }
 
             if (data.status === 'failed' || data.status === 'expired' || data.status === 'cancelled') {
-                clearInterval(pollInterval);
+                clearTimeout(pollInterval);
                 clearInterval(countdownInterval);
                 activeSessionId = null;
                 document.getElementById('registrationFailureMessage').textContent = data.failure_message || data.progress_message || 'Registration failed.';
@@ -1227,30 +1235,21 @@
                 document.getElementById('registrationConnectionIndicator').textContent = data.status === 'expired' ? 'Registration session expired' : 'Registration ended';
             }
         } catch (error) {
-            document.getElementById('registrationConnectionIndicator').textContent = 'Registration status unavailable';
-            document.getElementById('scanningAnimSub').textContent = error.message || 'Could not reach the backend. Retrying shortly.';
-        }
-    }
-
-    async function refreshRfidRegistry() {
-        try {
-            const response = await fetch(window.location.href, { headers: { 'Accept': 'text/html' } });
-            if (!response.ok) return false;
-            const html = await response.text();
-            const refreshedPage = new DOMParser().parseFromString(html, 'text/html');
-            ['.stat-grid', '.data-table-wrap'].forEach(selector => {
-                const current = document.querySelector(selector);
-                const refreshed = refreshedPage.querySelector(selector);
-                if (current && refreshed) current.replaceWith(refreshed);
-            });
-            const currentBadges = document.querySelectorAll('.rfid-tab-badge');
-            const refreshedBadges = refreshedPage.querySelectorAll('.rfid-tab-badge');
-            currentBadges.forEach((badge, index) => {
-                if (refreshedBadges[index]) badge.textContent = refreshedBadges[index].textContent;
-            });
-            return true;
-        } catch (error) {
-            return false;
+            if (activeSessionId === sessionId) {
+                document.getElementById('registrationConnectionIndicator').textContent = 'Registration status unavailable';
+                document.getElementById('scanningAnimSub').textContent = error.name === 'AbortError'
+                    ? 'The backend did not respond yet. The session remains active; checking again shortly.'
+                    : error.message || 'Could not reach the backend. Retrying shortly.';
+            }
+        } finally {
+            clearTimeout(requestTimeout);
+            if (sessionPollController === controller) {
+                sessionPollController = null;
+                sessionPollInFlight = false;
+            }
+            if (activeSessionId === sessionId) {
+                pollInterval = setTimeout(checkSessionProgress, 1500);
+            }
         }
     }
 
@@ -1272,7 +1271,7 @@
                 return false;
             }
         }
-        clearInterval(pollInterval);
+        clearTimeout(pollInterval);
         clearInterval(countdownInterval);
         activeSessionId = null;
         document.getElementById('rfidScanningStep').style.display = 'none';

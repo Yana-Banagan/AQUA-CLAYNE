@@ -22,12 +22,15 @@ public:
     void loop();
 
 private:
+    static constexpr uint8_t SCAN_QUEUE_CAPACITY = 8;
+
     struct RFIDScanEvent {
         char uid[21];
         char deviceId[37];
         char sessionId[37];
         char scanId[37];
         bool registrationMode;
+        uint8_t pendingSlot;
     };
 
     WiFiManager& _wifi;
@@ -44,6 +47,7 @@ private:
     unsigned long _lastStackReport;
     QueueHandle_t _scanQueue = nullptr;
     portMUX_TYPE _scanMux = portMUX_INITIALIZER_UNLOCKED;
+    char _pendingUids[SCAN_QUEUE_CAPACITY][21] = {};
     char _scanDeviceId[37] = {};
     char _scanSessionId[37] = {};
 
@@ -56,6 +60,7 @@ private:
     int _sessionExpiresIn;
     bool _wasWifiConnected;
     bool _heartbeatAuthenticated;
+    bool _sessionStateKnown;
 
     void handleHeartbeat();
     void handleSessionPoll();

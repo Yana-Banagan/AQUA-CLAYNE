@@ -251,22 +251,31 @@ class RfidController extends Controller
      */
     public function checkSessionStatus(RfidRegistrationSession $session): JsonResponse
     {
-        $session = DB::transaction(function () use ($session) {
-            $lockedSession = RfidRegistrationSession::whereKey($session->id)
-                ->lockForUpdate()
-                ->firstOrFail();
-            if ($lockedSession->status === 'pending' && $lockedSession->expires_at->isPast()) {
-                $lockedSession->status = 'expired';
-                $lockedSession->save();
+        if ($session->status === 'pending' && $session->expires_at->isPast()) {
+            $expired = RfidRegistrationSession::whereKey($session->id)
+                ->where('status', 'pending')
+                ->where('expires_at', '<=', now())
+                ->update(['status' => 'expired']);
+            if ($expired) {
+                $session->status = 'expired';
+            } else {
+                $session->refresh();
             }
-            return $lockedSession;
-        });
-        $session->load(['container.customer.user', 'container.activeTag', 'device']);
+        }
+        $session->load([
+            'container:id,customer_id,container_code',
+            'container.customer:id,user_id',
+            'container.customer.user:id,name',
+            'container.activeTag:id,customer_container_id,uid,status',
+            'device:id,device_name,status,last_heartbeat_at',
+        ]);
 
         $progress = $session->status;
         if ($session->status === 'pending') {
             if ($session->failure_code) {
                 $progress = 'retry_scan';
+            } elseif ($session->scan_received_at) {
+                $progress = 'processing_scan';
             } elseif (!$session->command_sent_at) {
                 $progress = 'waiting_for_device';
             } elseif (!$session->device?->isOnline()) {
@@ -285,6 +294,7 @@ class RfidController extends Controller
                 'waiting_for_device' => 'Waiting for the selected ESP32 scanner to connect.',
                 'device_disconnected' => 'ESP32 connection lost. Waiting for the scanner to reconnect.',
                 'waiting_for_tag' => 'WAITING FOR RFID TAG',
+                'processing_scan' => 'RFID tag detected. Laravel is validating and saving the registration.',
                 'failed' => $session->failure_message ?? 'RFID registration failed.',
                 'expired' => 'Registration session expired.',
                 'cancelled' => 'Registration session was cancelled.',
@@ -489,7 +499,7 @@ class RfidController extends Controller
     }
 
     /**
-     * List eligible customers and optionally filter by name, phone, or email.
+     * List active customers and optionally filter by name, phone, or email.
      */
     public function searchCustomers(Request $request): JsonResponse
     {

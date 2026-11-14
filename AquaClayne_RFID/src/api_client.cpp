@@ -96,6 +96,9 @@ String APIClient::executeRequest(
     WiFiClientSecure secureClient;
     WiFiClient client;
     HTTPClient http;
+    const unsigned long requestStartedAt = millis();
+
+    Serial.printf("[API] Starting %s %s\n", jsonBody ? "POST" : "GET", endpoint.c_str());
 
     secureClient.setTimeout(HTTP_TIMEOUT_MS);
     client.setTimeout(HTTP_TIMEOUT_MS);
@@ -128,9 +131,16 @@ String APIClient::executeRequest(
     String response;
     if (outStatusCode > 0) {
         response = http.getString();
-        Serial.printf("[API] %s %s -> HTTP %d (%u response bytes)\n",
+        Serial.printf("[API] %s %s -> HTTP %d (%u response bytes, %lu ms)\n",
             jsonBody ? "POST" : "GET", endpoint.c_str(), outStatusCode,
-            static_cast<unsigned int>(response.length()));
+            static_cast<unsigned int>(response.length()),
+            static_cast<unsigned long>(millis() - requestStartedAt));
+        if (outStatusCode == 400 || outStatusCode == 401 || outStatusCode == 403 ||
+            outStatusCode == 404 || outStatusCode == 409 || outStatusCode == 422 ||
+            outStatusCode == 429 || outStatusCode >= 500) {
+            Serial.printf("[API] HTTP %d response body: %s\n",
+                outStatusCode, response.c_str());
+        }
     } else {
         outError = "NETWORK_ERROR: " + http.errorToString(outStatusCode);
         Serial.printf("[API] %s %s failed (%d): %s\n",
@@ -254,13 +264,15 @@ bool APIClient::submitRegistrationScan(
     const String& deviceId,
     const String& sessionId,
     const String& uid,
+    const String& scanId,
     String& outMessage,
     String& outError
 ) {
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<320> doc;
     doc["device_id"] = deviceId;
     doc["session_id"] = sessionId;
     doc["uid"] = uid;
+    doc["scan_id"] = scanId;
     String payload;
     serializeJson(doc, payload);
 

@@ -86,15 +86,16 @@ Hardware and server settings are in `AquaClayne_RFID/include/config.h`. Copy `in
 - The scanner is shown as **ONLINE** only after Laravel confirms an authenticated heartbeat.
 
 ### Step 2: RFID Registration
-1. In the Admin Dashboard (`/admin/rfid`), click **"Register New RFID Tag"**. Eligible customers (those with active, untagged containers) load immediately; search by name, phone, or email to filter.
+1. In the Admin Dashboard (`/admin/rfid`), click **"Register New RFID Tag"**. Active customers are searchable by name, phone, or email; customers without an eligible container can create one in the same flow.
 2. Select a customer and one of their eligible containers (or click `+ New Container`), then select a scanner marked **ONLINE**.
 3. Click **"Start RFID Registration"**. Laravel checks the selected customer/container, a recent authenticated device heartbeat, and that neither the container nor scanner has another active registration. It creates a device-bound 3-minute session.
-4. The ESP32 polls the authenticated active-session endpoint every 5 seconds. Polling backs off to 60 seconds after errors and does not discard an active session on a network failure. RFID polling runs continuously in a separate task and queues scans while HTTPS requests run. The reader does not enqueue the same card again until it has been removed.
-5. The ESP32 sends the actual UID, device ID, and session ID to `POST /api/iot/rfid/registration-scan`. Laravel validates the scanner, session, UID format, and duplicate assignment in a transaction.
-6. Only after Laravel confirms success does the modal show the actual UID, customer, container, scanner, and registration time. It refreshes the registry and eligible-container data without reloading the page. Rejected UIDs show Laravel's reason and leave an unexpired registration session available for another physical tap. The rejected attempt is recorded in the existing RFID transaction/audit history.
+4. The ESP32 polls the authenticated active-session endpoint every 5 seconds. Polling backs off to 60 seconds after errors and does not discard an active session on a network failure. RFID polling runs continuously in a separate task, beeps on card detection, and queues scans while HTTPS requests run. The reader does not enqueue the same card again until it has been removed.
+5. The ESP32 sends the actual UID, device ID, session ID, and stable scan ID to `POST /api/iot/rfid/registration-scan`. Laravel validates the scanner, session, UID format, and duplicate assignment in a transaction. Repeating the same scan ID returns the saved result instead of creating another registration.
+6. Only after Laravel confirms success does the modal show the actual UID, customer, container, scanner, and registration time. Session polling is single-flight and bounded; it displays scan processing separately from a backend status outage. Rejected UIDs show Laravel's reason and leave an unexpired registration session available for another physical tap. The rejected attempt is recorded in the existing RFID transaction/audit history.
 
 ### Step 3: Registered Tag Identification
 - Outside a registration session, a customer tag is sent to authenticated `POST /api/iot/rfid/scan` with `scan_type: VERIFICATION`.
+- If Laravel sees an active registration session for the scanner, it rejects an operational scan with HTTP 409 instead of recording it as a verification.
 - Laravel looks up the current customer and counts their active customer-container records.
 - The OLED displays only the customer name and current gallon count. An unregistered UID displays `RFID Tag Not Registered.` A registered tag without retrievable customer/gallon data displays an error.
 - The RFID management dashboard receives each processed verification result through the existing `realtime_events` Supabase subscription and displays only status, customer name, and active gallon count. Scanner heartbeat status is not used as a substitute for scan results.
@@ -124,7 +125,8 @@ The modal loads eligible customers from `GET /admin/rfid/search-customers` and c
 {
   "device_id": "<authenticated device UUID>",
   "session_id": "<active registration session UUID>",
-  "uid": "<actual RC522 hexadecimal UID>"
+  "uid": "<actual RC522 hexadecimal UID>",
+  "scan_id": "<stable UUID for this physical scan>"
 }
 ```
 

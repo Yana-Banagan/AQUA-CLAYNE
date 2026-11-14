@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\RfidDevice;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticateRfidDevice
@@ -49,13 +50,28 @@ class AuthenticateRfidDevice
             ], 403);
         }
 
-        // Keep heartbeat fresh on authenticated request
-        $device->markHeartbeat($request->ip());
-
-        // Attach device instance to request attributes
         $request->attributes->set('rfid_device', $device);
+        $startedAt = microtime(true);
+        $response = $next($request);
 
-        return $next($request);
+        $body = json_decode($response->getContent(), true);
+        Log::info('RFID device request completed', [
+            'endpoint' => '/' . ltrim($request->path(), '/'),
+            'device_id' => $device->id,
+            'scan_id' => $request->input('scan_id'),
+            'session_id' => $request->input('session_id'),
+            'uid' => is_string($request->input('uid'))
+                ? substr($request->input('uid'), 0, 64)
+                : null,
+            'http_status' => $response->getStatusCode(),
+            'error' => is_array($body) ? ($body['error'] ?? null) : null,
+            'error_message' => is_array($body) && is_string($body['message'] ?? null)
+                ? substr($body['message'], 0, 200)
+                : null,
+            'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+        ]);
+
+        return $response;
     }
 }
 

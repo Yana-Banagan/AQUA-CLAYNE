@@ -9,7 +9,7 @@ public:
 
     bool sendHeartbeat(const String& firmwareVersion, String& outError);
     bool checkActiveSession(String& outDeviceId, String& outSessionId, String& outContainerCode, String& outCustomerName, int& outExpiresIn, String& outError);
-    bool submitRegistrationScan(const String& deviceId, const String& sessionId, const String& uid, String& outMessage, String& outError);
+    bool submitRegistrationScan(const String& deviceId, const String& sessionId, const String& uid, const String& scanId, String& outMessage, String& outError);
     bool submitOperationalScan(const String& uid, const String& scanType, const String& orderId, const String& scanId, String& outMessage, String& outCustomerName, int& outGallonCount, String& outError);
 
 private:
