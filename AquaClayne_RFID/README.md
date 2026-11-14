@@ -89,7 +89,7 @@ Hardware and server settings are in `AquaClayne_RFID/include/config.h`. Copy `in
 1. In the Admin Dashboard (`/admin/rfid`), click **"Register New RFID Tag"**. Eligible customers (those with active, untagged containers) load immediately; search by name, phone, or email to filter.
 2. Select a customer and one of their eligible containers (or click `+ New Container`), then select a scanner marked **ONLINE**.
 3. Click **"Start RFID Registration"**. Laravel checks the selected customer/container, a recent authenticated device heartbeat, and that neither the container nor scanner has another active registration. It creates a device-bound 3-minute session.
-4. The ESP32 polls the authenticated active-session endpoint every 1.5 seconds. Once the scanner receives the command, tap a physical RFID tag on the RC522 reader.
+4. The ESP32 polls the authenticated active-session endpoint every 1.5 seconds. RFID polling runs continuously in a separate task, so HTTPS requests do not cause quick physical taps to be missed. Once the scanner receives the command, tap a physical RFID tag on the RC522 reader.
 5. The ESP32 sends the actual UID, device ID, and session ID to `POST /api/iot/rfid/registration-scan`. Laravel validates the scanner, session, UID format, and duplicate assignment in a transaction.
 6. Only after Laravel confirms success does the modal show the actual UID, customer, container, scanner, and registration time. It refreshes the registry and eligible-container data without reloading the page. Failed scans are recorded in the existing RFID transaction/audit history.
 

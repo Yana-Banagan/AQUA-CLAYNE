@@ -27,8 +27,9 @@ private:
 
     unsigned long _lastHeartbeat;
     unsigned long _lastSessionPoll;
-    unsigned long _lastScanTime;
-    String _lastScannedUID;
+    portMUX_TYPE _scanMux = portMUX_INITIALIZER_UNLOCKED;
+    char _pendingUID[21] = {};
+    bool _hasPendingUID = false;
 
     // Active session state
     bool _hasActiveSession;
@@ -42,6 +43,7 @@ private:
     void handleHeartbeat();
     void handleSessionPoll();
     void handleRFIDScan();
+    static void rfidScanTask(void* parameter);
     void beep(int ms = 80);
 };
 

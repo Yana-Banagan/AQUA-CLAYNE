@@ -13,8 +13,7 @@ DeviceManager::DeviceManager(
     OLEDManager& oled,
     APIClient& api
 ) : _wifi(wifi), _rfid(rfid), _oled(oled), _api(api),
-    _lastHeartbeat(0), _lastSessionPoll(0), _lastScanTime(0),
-    _lastScannedUID(""), _hasActiveSession(false),
+    _lastHeartbeat(0), _lastSessionPoll(0), _hasActiveSession(false),
     _activeDeviceId(""), _activeSessionId(""), _activeContainerCode(""),
     _activeCustomerName(""), _sessionExpiresIn(0),
     _wasWifiConnected(false) {}
@@ -44,6 +43,20 @@ void DeviceManager::begin() {
         beep(100);
     } else {
         _oled.setState(STATE_WIFI_DISCONNECTED);
+    }
+
+    BaseType_t scanTaskStarted = xTaskCreatePinnedToCore(
+        rfidScanTask,
+        "rfid_scan",
+        4096,
+        this,
+        2,
+        nullptr,
+        1
+    );
+    if (scanTaskStarted != pdPASS) {
+        Serial.println("[RFID] Failed to start continuous reader polling task.");
+        _oled.showCustom("RFID POLL FAILED", "Restart device");
     }
 }
 
@@ -138,22 +151,20 @@ void DeviceManager::handleSessionPoll() {
 }
 
 void DeviceManager::handleRFIDScan() {
-    if (!_rfid.isTagPresent()) {
+    char uidBuffer[sizeof(_pendingUID)] = {};
+    taskENTER_CRITICAL(&_scanMux);
+    if (_hasPendingUID) {
+        memcpy(uidBuffer, _pendingUID, sizeof(uidBuffer));
+        _pendingUID[0] = '\0';
+        _hasPendingUID = false;
+    }
+    taskEXIT_CRITICAL(&_scanMux);
+
+    if (uidBuffer[0] == '\0') {
         return;
     }
 
-    String uid = _rfid.readUID();
-    if (uid.length() == 0) {
-        return;
-    }
-
-    unsigned long now = millis();
-    // Debounce duplicate scans
-    if (uid == _lastScannedUID && (now - _lastScanTime < SCAN_DEBOUNCE_MS)) {
-        return;
-    }
-    _lastScanTime = now;
-    _lastScannedUID = uid;
+    String uid(uidBuffer);
 
     Serial.printf("[RFID] Physical Tag Scanned: %s\n", uid.c_str());
     beep(60);
@@ -210,6 +221,34 @@ void DeviceManager::handleRFIDScan() {
         }
         delay(2500);
         _oled.setState(STATE_DEVICE_ONLINE);
+    }
+}
+
+void DeviceManager::rfidScanTask(void* parameter) {
+    DeviceManager* manager = static_cast<DeviceManager*>(parameter);
+    String lastUID;
+    unsigned long lastScanTime = 0;
+
+    for (;;) {
+        if (manager->_rfid.isTagPresent()) {
+            String uid = manager->_rfid.readUID();
+            const unsigned long now = millis();
+
+            if (uid.length() > 0 &&
+                (uid != lastUID || now - lastScanTime >= SCAN_DEBOUNCE_MS)) {
+                taskENTER_CRITICAL(&manager->_scanMux);
+                if (!manager->_hasPendingUID) {
+                    uid.toCharArray(manager->_pendingUID, sizeof(manager->_pendingUID));
+                    manager->_hasPendingUID = true;
+                }
+                taskEXIT_CRITICAL(&manager->_scanMux);
+
+                lastUID = uid;
+                lastScanTime = now;
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(2));
     }
 }
 
