@@ -15,6 +15,7 @@ public:
 private:
     const char* _baseUrl;
     const char* _deviceToken;
+    String executeRequest(const String& endpoint, const String* jsonBody, int& outStatusCode, String& outError);
     String executeGet(const String& endpoint, int& outStatusCode, String& outError);
     String executePost(const String& endpoint, const String& jsonBody, int& outStatusCode, String& outError);
 };

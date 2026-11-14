@@ -38,6 +38,10 @@ private:
     unsigned long _lastHeartbeat;
     unsigned long _lastSessionPoll;
     unsigned long _retryScanAt = 0;
+    unsigned long _heartbeatRetryInterval;
+    unsigned long _sessionPollInterval;
+    unsigned long _scanRetryInterval;
+    unsigned long _lastStackReport;
     QueueHandle_t _scanQueue = nullptr;
     portMUX_TYPE _scanMux = portMUX_INITIALIZER_UNLOCKED;
     char _scanDeviceId[37] = {};
@@ -51,11 +55,15 @@ private:
     String _activeCustomerName;
     int _sessionExpiresIn;
     bool _wasWifiConnected;
+    bool _heartbeatAuthenticated;
 
     void handleHeartbeat();
     void handleSessionPoll();
     void handleRFIDScan();
     void finishPendingScan();
+    void clearActiveSession();
+    bool hasActiveSession();
+    void reportLoopStack();
     static void rfidScanTask(void* parameter);
     void beep(int ms = 80);
 };

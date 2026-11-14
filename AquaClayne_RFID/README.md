@@ -81,15 +81,15 @@ Hardware and server settings are in `AquaClayne_RFID/include/config.h`. Copy `in
 
 ### Step 1: Device Boot & Heartbeat
 - On startup, ESP32 connects to Wi-Fi.
-- OLED displays: `STARTING DEVICE...` -> `CONNECTING TO WIFI...` -> `WIFI CONNECTED` -> `DEVICE ONLINE`.
-- ESP32 sends periodic heartbeats to `POST /api/iot/rfid/heartbeat` every 15 seconds.
-- The Admin Web Dashboard reflects the scanner status as **ONLINE**.
+- OLED displays startup and Wi-Fi connection; `DEVICE ONLINE` is shown only after a successful authenticated heartbeat.
+- ESP32 sends authenticated heartbeats to `POST /api/iot/rfid/heartbeat` every 15 seconds. Failed heartbeats retry with backoff.
+- The scanner is shown as **ONLINE** only after Laravel confirms an authenticated heartbeat.
 
 ### Step 2: RFID Registration
 1. In the Admin Dashboard (`/admin/rfid`), click **"Register New RFID Tag"**. Eligible customers (those with active, untagged containers) load immediately; search by name, phone, or email to filter.
 2. Select a customer and one of their eligible containers (or click `+ New Container`), then select a scanner marked **ONLINE**.
 3. Click **"Start RFID Registration"**. Laravel checks the selected customer/container, a recent authenticated device heartbeat, and that neither the container nor scanner has another active registration. It creates a device-bound 3-minute session.
-4. The ESP32 polls the authenticated active-session endpoint every 1.5 seconds. RFID polling runs continuously in a separate task and queues scans while HTTPS requests run. The reader does not enqueue the same card again until it has been removed.
+4. The ESP32 polls the authenticated active-session endpoint every 5 seconds. Polling backs off to 60 seconds after errors and does not discard an active session on a network failure. RFID polling runs continuously in a separate task and queues scans while HTTPS requests run. The reader does not enqueue the same card again until it has been removed.
 5. The ESP32 sends the actual UID, device ID, and session ID to `POST /api/iot/rfid/registration-scan`. Laravel validates the scanner, session, UID format, and duplicate assignment in a transaction.
 6. Only after Laravel confirms success does the modal show the actual UID, customer, container, scanner, and registration time. It refreshes the registry and eligible-container data without reloading the page. Rejected UIDs show Laravel's reason and leave an unexpired registration session available for another physical tap. The rejected attempt is recorded in the existing RFID transaction/audit history.
 
@@ -132,11 +132,17 @@ to `POST /api/iot/rfid/registration-scan`. The backend compares the submitted de
 
 ### Build, Flash, and Physical Test
 - Register the ESP32 in Admin → RFID & Gallon and copy its one-time device token to the ignored firmware secrets file.
-- From the repository root, build with `python -m platformio run --project-dir AquaClayne_RFID`; flash with `python -m platformio run --project-dir AquaClayne_RFID --target upload`. Select the correct serial port if needed.
-- Open the serial monitor at 115200 baud. Confirm heartbeat and registration-session polling.
-- Open the registration modal, select an online scanner and an untagged container, start registration, and tap a physical tag. Verify the UID and success details in the modal and registry.
-- During registration, tap a previously registered UID and confirm the modal displays the failure reason while remaining open for another tap; then tap a new UID and confirm registration succeeds.
-- Tap the registered tag again in normal mode. Confirm the OLED displays only the customer name and current active gallon count. Test an unregistered tag and confirm `RFID Tag Not Registered.`
-- Keep a tag on the reader and confirm it is processed once; remove it and tap it again to confirm it can be scanned again. Verify dashboard scan results update without a page refresh.
+- From the repository root, build with `python -m platformio run --project-dir .\AquaClayne_RFID --environment esp32dev`. Flash with `python -m platformio run --project-dir .\AquaClayne_RFID --environment esp32dev --target upload --upload-port COMx`; replace `COMx` with the ESP32's port. Monitor with `python -m platformio device monitor --project-dir .\AquaClayne_RFID --port COMx --baud 115200`.
+- Confirm startup at 115200 baud, RC522 firmware version, Wi-Fi status, and a real authenticated heartbeat before expecting **ONLINE**.
+- With no active admin registration, confirm `/registration-session/active` returns `has_session: false`. Start a session in the admin modal and confirm the next poll displays the correct session/container.
+- Tap a physical unregistered UID during registration. Confirm Laravel returns success before the device displays registration success and the admin registry shows the same actual UID.
+- Try a UID already assigned to a customer container or station gallon. Confirm `DUPLICATE_RFID_TAG` is rejected, the session remains ready for another physical tap, and a new physical tag can still be submitted.
+- Cause a validation rejection (for example, tap a duplicate UID), confirm the display shows failure, then tap another physical tag in the same still-active session and verify its backend result.
+- Tap a registered customer tag outside registration. Confirm the display contains only the customer's name and active gallon count. Tap an unregistered tag and confirm `RFID TAG NOT REGISTERED`.
+- Keep a tag on the reader and confirm it is processed once; remove it, then tap it again to confirm a new read is accepted.
+- Disconnect internet access and confirm RFID detection continues, no registration is reported successful, active session state is retained, and API retry intervals back off. Restore internet and confirm heartbeat/session polling and queued scans recover without rebooting.
+- To check backend timeout behavior, make the backend unreachable (without changing the token) and confirm bounded request timeouts, retained scans, and recovery after restoring service.
+- For a long-duration soak, repeatedly tap/remove physical tags while watching for queue-full messages, watchdog resets, panics, and the periodic loop/RFID minimum-free-stack diagnostics. Record duration and scan counts.
+- This checklist is for deployment testing; tests requiring the ESP32, physical tags, Wi-Fi disruption, or a running Laravel backend have not been performed by a firmware build. A null-PC `InstrFetchProhibited` panic is not considered diagnosed or fixed without the panic backtrace and the matching `AquaClayne_RFID\.pio\build\esp32dev\firmware.elf`. Preserve both for symbolication if it recurs.
 - Apply pending Laravel migrations before deploying the updated backend. Do not manually mark a scanner online as a substitute for its heartbeat.
 

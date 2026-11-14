@@ -17,10 +17,15 @@ DeviceManager::DeviceManager(
     OLEDManager& oled,
     APIClient& api
 ) : _wifi(wifi), _rfid(rfid), _oled(oled), _api(api),
-    _lastHeartbeat(0), _lastSessionPoll(0), _hasActiveSession(false),
+    _lastHeartbeat(0), _lastSessionPoll(0),
+    _heartbeatRetryInterval(HEARTBEAT_INTERVAL_MS),
+    _sessionPollInterval(SESSION_POLL_MS),
+    _scanRetryInterval(RFID_RETRY_INITIAL_MS),
+    _lastStackReport(0),
+    _hasActiveSession(false),
     _activeDeviceId(""), _activeSessionId(""), _activeContainerCode(""),
     _activeCustomerName(""), _sessionExpiresIn(0),
-    _wasWifiConnected(false) {}
+    _wasWifiConnected(false), _heartbeatAuthenticated(false) {}
 
 void DeviceManager::begin() {
     pinMode(BUZZER_1_PIN, OUTPUT);
@@ -47,19 +52,21 @@ void DeviceManager::begin() {
     }
 
     _wasWifiConnected = _wifi.isConnected();
+    _lastHeartbeat = millis() - HEARTBEAT_INTERVAL_MS;
+    _lastSessionPoll = millis() - SESSION_POLL_MS;
     if (_wifi.isConnected()) {
         _oled.setState(STATE_WIFI_CONNECTED, _wifi.getIP());
         delay(1200);
-        _oled.setState(STATE_DEVICE_ONLINE);
         beep(100);
     } else {
         _oled.setState(STATE_WIFI_DISCONNECTED);
     }
 
+    const uint32_t scanTaskStackSize = 4096;
     BaseType_t scanTaskStarted = xTaskCreatePinnedToCore(
         rfidScanTask,
         "rfid_scan",
-        4096,
+        scanTaskStackSize,
         this,
         2,
         nullptr,
@@ -70,6 +77,9 @@ void DeviceManager::begin() {
         _oled.showCustom("RFID POLL FAILED", "Restart device");
         vQueueDelete(_scanQueue);
         _scanQueue = nullptr;
+    } else {
+        Serial.printf("[RFID] Reader task started (stack=%lu, queue capacity=8 scans).\n",
+            static_cast<unsigned long>(scanTaskStackSize));
     }
 }
 
@@ -88,40 +98,68 @@ void DeviceManager::loop() {
         if (_wasWifiConnected) {
             Serial.println("[WiFi] Connection lost.");
             _wasWifiConnected = false;
+            _heartbeatAuthenticated = false;
             _oled.setState(STATE_WIFI_DISCONNECTED);
         }
+        handleRFIDScan();
+        reportLoopStack();
         return;
     }
 
     if (!_wasWifiConnected) {
         _wasWifiConnected = true;
+        _heartbeatAuthenticated = false;
+        _lastHeartbeat = millis() - HEARTBEAT_INTERVAL_MS;
         Serial.printf("[WiFi] Reconnected. IP: %s\n", _wifi.getIP().c_str());
-        _oled.setState(STATE_DEVICE_ONLINE);
+        _oled.setState(STATE_WIFI_CONNECTED, _wifi.getIP());
     }
 
     handleHeartbeat();
     handleSessionPoll();
     handleRFIDScan();
+    reportLoopStack();
 }
 
 void DeviceManager::handleHeartbeat() {
     unsigned long now = millis();
-    if (now - _lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
+    if (now - _lastHeartbeat >= _heartbeatRetryInterval) {
         _lastHeartbeat = now;
         String err = "";
         bool ok = _api.sendHeartbeat(FIRMWARE_VERSION, err);
         if (!ok) {
+            _heartbeatAuthenticated = false;
+            if (_heartbeatRetryInterval < HEARTBEAT_MAX_RETRY_MS) {
+                _heartbeatRetryInterval *= 2;
+                if (_heartbeatRetryInterval > HEARTBEAT_MAX_RETRY_MS) {
+                    _heartbeatRetryInterval = HEARTBEAT_MAX_RETRY_MS;
+                }
+            }
             Serial.printf("[Heartbeat] Failed: %s\n", err.c_str());
             if (err == "UNAUTHORIZED") {
                 _oled.setState(STATE_UNAUTHORIZED);
+            } else {
+                _oled.setState(STATE_SERVER_ERROR, err);
+            }
+        } else {
+            _heartbeatAuthenticated = true;
+            _heartbeatRetryInterval = HEARTBEAT_INTERVAL_MS;
+            Serial.println("[Heartbeat] Authenticated heartbeat confirmed.");
+            if (hasActiveSession()) {
+                _oled.setState(STATE_READY_TO_SCAN, _activeContainerCode);
+            } else {
+                _oled.setState(STATE_DEVICE_ONLINE);
             }
         }
     }
 }
 
 void DeviceManager::handleSessionPoll() {
+    if (!_heartbeatAuthenticated) {
+        return;
+    }
+
     unsigned long now = millis();
-    if (now - _lastSessionPoll >= SESSION_POLL_MS) {
+    if (now - _lastSessionPoll >= _sessionPollInterval) {
         _lastSessionPoll = now;
 
         String deviceId, sessionId, containerCode, customerName, err;
@@ -129,7 +167,8 @@ void DeviceManager::handleSessionPoll() {
         bool found = _api.checkActiveSession(deviceId, sessionId, containerCode, customerName, expiresIn, err);
 
         if (found && sessionId.length() > 0 && deviceId.length() > 0) {
-            if (!_hasActiveSession || _activeSessionId != sessionId) {
+            _sessionPollInterval = SESSION_POLL_MS;
+            if (_activeSessionId != sessionId) {
                 // New registration session started on admin dashboard!
                 _activeDeviceId = deviceId;
                 _activeSessionId = sessionId;
@@ -151,19 +190,18 @@ void DeviceManager::handleSessionPoll() {
                 beep(80);
             }
         } else if (err.length() == 0) {
-            if (_hasActiveSession) {
-                // Session expired or completed
-                _hasActiveSession = false;
-                _activeDeviceId = "";
-                _activeSessionId = "";
-                taskENTER_CRITICAL(&_scanMux);
-                _hasActiveSession = false;
-                _scanSessionId[0] = '\0';
-                _scanDeviceId[0] = '\0';
-                taskEXIT_CRITICAL(&_scanMux);
-                _oled.setState(STATE_DEVICE_ONLINE);
+            _sessionPollInterval = SESSION_POLL_MS;
+            if (hasActiveSession()) {
+                clearActiveSession();
+                _oled.setState(_heartbeatAuthenticated ? STATE_DEVICE_ONLINE : STATE_WIFI_CONNECTED);
             }
         } else {
+            if (_sessionPollInterval < SESSION_POLL_MAX_MS) {
+                _sessionPollInterval *= 2;
+                if (_sessionPollInterval > SESSION_POLL_MAX_MS) {
+                    _sessionPollInterval = SESSION_POLL_MAX_MS;
+                }
+            }
             Serial.printf("[Registration Poll] Failed: %s\n", err.c_str());
             if (err == "UNAUTHORIZED") {
                 _oled.setState(STATE_UNAUTHORIZED);
@@ -201,17 +239,12 @@ void DeviceManager::handleRFIDScan() {
             _oled.setState(STATE_REGISTER_SUCCESS, uid);
             beep(150);
             beep(150);
-            _activeDeviceId = "";
-            _activeSessionId = "";
-            taskENTER_CRITICAL(&_scanMux);
-            _hasActiveSession = false;
-            _scanSessionId[0] = '\0';
-            _scanDeviceId[0] = '\0';
-            taskEXIT_CRITICAL(&_scanMux);
+            clearActiveSession();
         } else {
             Serial.printf("[Registration] Failed (%s): %s\n", err.c_str(), msg.c_str());
             if (isRetryableError(err)) {
-                _retryScanAt = millis() + 2000;
+                _retryScanAt = millis() + _scanRetryInterval;
+                _scanRetryInterval = min(_scanRetryInterval * 2, static_cast<unsigned long>(RFID_RETRY_MAX_MS));
                 _oled.showCustom("COMMUNICATION", "FAILURE", err.substring(0, 20));
                 return;
             }
@@ -225,15 +258,7 @@ void DeviceManager::handleRFIDScan() {
             }
             beep(400);
             if (err == "SESSION_EXPIRED" || err.startsWith("SESSION_")) {
-                _activeDeviceId = "";
-                _activeSessionId = "";
-                taskENTER_CRITICAL(&_scanMux);
-                _hasActiveSession = false;
-                _scanSessionId[0] = '\0';
-                _scanDeviceId[0] = '\0';
-                taskEXIT_CRITICAL(&_scanMux);
-            } else {
-                _oled.setState(STATE_READY_TO_SCAN, _activeContainerCode);
+                clearActiveSession();
             }
         }
     } else {
@@ -243,7 +268,8 @@ void DeviceManager::handleRFIDScan() {
         Serial.println("[RFID] Sending verification scan to Laravel");
         bool success = _api.submitOperationalScan(uid, "VERIFICATION", "", String(event.scanId), msg, customerName, gallonCount, err);
         if (!success && isRetryableError(err)) {
-            _retryScanAt = millis() + 2000;
+            _retryScanAt = millis() + _scanRetryInterval;
+            _scanRetryInterval = min(_scanRetryInterval * 2, static_cast<unsigned long>(RFID_RETRY_MAX_MS));
             Serial.printf("[RFID] Scan retained for retry: %s\n", err.c_str());
             _oled.showCustom("COMMUNICATION", "FAILURE", err.substring(0, 20));
             return;
@@ -269,9 +295,33 @@ void DeviceManager::handleRFIDScan() {
 void DeviceManager::finishPendingScan() {
     RFIDScanEvent completed = {};
     if (_scanQueue) {
-        xQueueReceive(_scanQueue, &completed, 0);
+        if (xQueueReceive(_scanQueue, &completed, 0) != pdTRUE) {
+            Serial.println("[RFID] Queue changed before pending scan could be removed.");
+        }
     }
     _retryScanAt = 0;
+    _scanRetryInterval = RFID_RETRY_INITIAL_MS;
+}
+
+void DeviceManager::clearActiveSession() {
+    _activeDeviceId = "";
+    _activeSessionId = "";
+    _activeContainerCode = "";
+    _activeCustomerName = "";
+    _sessionExpiresIn = 0;
+
+    taskENTER_CRITICAL(&_scanMux);
+    _hasActiveSession = false;
+    _scanSessionId[0] = '\0';
+    _scanDeviceId[0] = '\0';
+    taskEXIT_CRITICAL(&_scanMux);
+}
+
+bool DeviceManager::hasActiveSession() {
+    taskENTER_CRITICAL(&_scanMux);
+    const bool active = _hasActiveSession;
+    taskEXIT_CRITICAL(&_scanMux);
+    return active;
 }
 
 static String makeScanId() {
@@ -294,9 +344,24 @@ static bool isRetryableError(const String& error) {
     return error.startsWith("NETWORK_ERROR") || error.startsWith("HTTP_5");
 }
 
+void DeviceManager::reportLoopStack() {
+    const unsigned long now = millis();
+    if (now - _lastStackReport >= 60000) {
+        _lastStackReport = now;
+        Serial.printf("[DIAG] Arduino loop task minimum free stack: %u units\n",
+            static_cast<unsigned int>(uxTaskGetStackHighWaterMark(nullptr)));
+    }
+}
+
 void DeviceManager::rfidScanTask(void* parameter) {
     DeviceManager* manager = static_cast<DeviceManager*>(parameter);
+    if (!manager || !manager->_scanQueue) {
+        Serial.println("[RFID] Scan task received invalid manager or queue.");
+        vTaskDelete(nullptr);
+        return;
+    }
 
+    unsigned long lastStackReport = millis();
     for (;;) {
         if (manager->_rfid.isTagPresent()) {
             String uid = manager->_rfid.readUID();
@@ -323,6 +388,12 @@ void DeviceManager::rfidScanTask(void* parameter) {
             }
         }
 
+        const unsigned long now = millis();
+        if (now - lastStackReport >= 60000) {
+            lastStackReport = now;
+            Serial.printf("[DIAG] RFID task minimum free stack: %u units\n",
+                static_cast<unsigned int>(uxTaskGetStackHighWaterMark(nullptr)));
+        }
         vTaskDelay(pdMS_TO_TICKS(2));
     }
 }

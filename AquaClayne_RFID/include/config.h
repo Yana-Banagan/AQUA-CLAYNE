@@ -27,9 +27,14 @@
 #define FIRMWARE_VERSION "1.0.0"
 
 // Request timeouts & intervals (in milliseconds)
+#define HTTP_CONNECT_TIMEOUT_MS 3000
 #define HTTP_TIMEOUT_MS 5000
 #define HEARTBEAT_INTERVAL_MS 15000 // Send heartbeat every 15 seconds
-#define SESSION_POLL_MS 1500        // Poll for active registration session every 1.5s
+#define HEARTBEAT_MAX_RETRY_MS 60000
+#define SESSION_POLL_MS 5000
+#define SESSION_POLL_MAX_MS 60000
+#define RFID_RETRY_INITIAL_MS 2000
+#define RFID_RETRY_MAX_MS 30000
 
 // =============================================================================
 // HARDWARE PIN DEFINITIONS (ESP32 DEVKIT V1)

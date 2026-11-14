@@ -115,14 +115,14 @@ void OLEDManager::setState(DisplayState state, const String& extraText) {
 
         case STATE_DUPLICATE_TAG:
             _display.setTextSize(1);
-            _display.println("ERROR: REJECTED");
+            _display.println("REGISTRATION FAILED");
             _display.println("DUPLICATE RFID TAG");
             _display.println("Already assigned");
             break;
 
         case STATE_SESSION_EXPIRED:
             _display.setTextSize(1);
-            _display.println("REGISTRATION");
+            _display.println("REGISTRATION FAILED");
             _display.println("SESSION EXPIRED");
             _display.println("Restart on dashboard");
             break;
@@ -173,7 +173,7 @@ void OLEDManager::clear() {
 }
 
 void OLEDManager::updateStatusLeds(DisplayState state) {
-    const bool isOnline = state == STATE_WIFI_CONNECTED || state == STATE_DEVICE_ONLINE ||
+    const bool isOnline = state == STATE_DEVICE_ONLINE ||
         state == STATE_WAITING_FOR_ADMIN || state == STATE_READY_TO_SCAN || state == STATE_REGISTER_SUCCESS;
     const bool isError = state == STATE_WIFI_DISCONNECTED || state == STATE_UNAUTHORIZED ||
         state == STATE_SERVER_ERROR || state == STATE_DUPLICATE_TAG || state == STATE_SESSION_EXPIRED;
