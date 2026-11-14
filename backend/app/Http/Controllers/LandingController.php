@@ -23,13 +23,9 @@ class LandingController extends Controller
         ];
 
         try {
-            if (\Illuminate\Support\Facades\Schema::hasTable('products')) {
-                $products = \App\Models\Product::orderBy('is_active', 'desc')
-                    ->orderBy('price', 'desc')
-                    ->get();
-            } else {
-                $products = collect();
-            }
+            $products = \App\Models\Product::orderBy('is_active', 'desc')
+                ->orderBy('price', 'desc')
+                ->get();
         } catch (\Throwable $e) {
             Log::warning('Could not retrieve products from database: ' . $e->getMessage());
             $products = collect();
