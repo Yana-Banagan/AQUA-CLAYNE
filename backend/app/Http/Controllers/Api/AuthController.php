@@ -70,7 +70,13 @@ class AuthController extends Controller
             // the provider rejects the message.
             DB::table('password_reset_otps')->where('email', $email)->delete();
             report($exception);
-            return $this->error('We could not send the OTP email. Please try again later.', 503);
+
+            $message = 'We could not send the OTP email. Please try again later.';
+            if (str_contains($exception->getMessage(), 'BadCredentials') || str_contains($exception->getMessage(), '535')) {
+                $message = 'Unable to send email: Gmail SMTP credentials were not accepted (535 Bad Credentials). Please update the Google App Password in settings.';
+            }
+
+            return $this->error($message, 503);
         }
 
         $atPos = strpos($email, '@');
