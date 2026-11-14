@@ -1,29 +1,30 @@
 @extends('admin.layouts.app')
 
 @section('title', 'RFID & Gallon Management')
+@section('header-title', 'RFID & Gallon Management')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/admin-rfid.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin-rfid.css') }}?v={{ time() }}">
 @endpush
 
 @section('content')
-<div class="page-header rfid-hub-header">
-    <div>
+<div class="page-header rfid-hub-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; min-height: auto; overflow: visible;">
+    <div style="flex: 1 1 320px; min-width: 0;">
         <p class="eyebrow">IoT Hardware &amp; Smart Tracking</p>
         <h1>RFID &amp; Gallon Management</h1>
         <p>ESP32 RFID reader integration, customer container identification, station intake validation, and hardware device health.</p>
     </div>
-    <div class="rfid-actions">
-        <button type="button" class="btn-rfid-secondary" onclick="openAddContainerModal()">
+    <div class="header-actions rfid-actions" style="display: flex; align-items: center; gap: 10px; flex-shrink: 0; z-index: 5; margin-left: auto;">
+        <button type="button" class="secondary-button btn-rfid-secondary" onclick="openAddContainerModal()" style="background: rgba(255,255,255,0.15); color: #ffffff; border: 1px solid rgba(255,255,255,0.4); backdrop-filter: blur(4px); padding: 9px 15px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             Add Container
         </button>
-        <button type="button" class="btn-rfid-secondary" onclick="openAddDeviceModal()">
+        <button type="button" class="secondary-button btn-rfid-secondary" onclick="openAddDeviceModal()" style="background: rgba(255,255,255,0.15); color: #ffffff; border: 1px solid rgba(255,255,255,0.4); backdrop-filter: blur(4px); padding: 9px 15px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line></svg>
             Add Scanner
         </button>
-        <button type="button" id="registerRfidTagButton" class="btn-rfid-primary" onclick="openRegisterRfidModal()" aria-label="Register RFID tags for customer gallons">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+        <button type="button" id="registerRfidTagButton" class="primary-button btn-rfid-primary" onclick="openRegisterRfidModal()" aria-label="Register RFID tags for customer gallons" style="background: #ffffff; color: #0284c7; border: 1px solid #ffffff; padding: 10px 18px; border-radius: 8px; font-weight: 700; font-size: 13.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.18);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2.5"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
             + Register Tag
         </button>
     </div>
