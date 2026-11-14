@@ -18,11 +18,11 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::updateOrCreate(['email' => 'admin@aquaclayne.test'], [
+        User::updateOrCreate(['email' => 'aquaclayne.noreply@gmail.com'], [
             'name' => 'Aqua Clayne Admin',
             'username' => 'admin',
             'phone' => '09170000000',
-            'password_hash' => Hash::make('password123'),
+            'password_hash' => Hash::make('aquaclaynenianton'),
             'role' => 'admin',
             'status' => 'active',
         ]);

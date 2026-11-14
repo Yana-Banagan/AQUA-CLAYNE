@@ -945,7 +945,7 @@
         renderCustomerDropdownMessage('Loading active customers...');
 
         try {
-            const response = await fetch(`{{ route('admin.rfid.customers.search') }}?q=${encodeURIComponent(query)}`, {
+            const response = await fetch(`{{ route('admin.rfid.customers.search') }}?include_all=1&q=${encodeURIComponent(query)}`, {
                 headers: { 'Accept': 'application/json' }
             });
             if (!response.ok) throw new Error('Unable to load eligible customers.');

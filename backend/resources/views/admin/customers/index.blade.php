@@ -235,7 +235,7 @@
         submit.disabled = true;
         try {
             const response = await fetch(form.action, {
-                method: 'PUT',
+                method: 'POST',
                 headers: { Accept: 'application/json', 'X-CSRF-TOKEN': form.elements._token.value },
                 body: new FormData(form)
             });

@@ -124,7 +124,7 @@ class AdminPerformanceOptimizationTest extends TestCase
             ->get('/admin/rfid')
             ->assertOk()
             ->assertSee('id="registerRfidTagButton"', false)
-            ->assertSee('+ Register Tags')
+            ->assertSee('+ Register Tag')
             ->assertSee('id="registerRfidModal"', false)
             ->assertSee('onclick="openRegisterRfidModal()"', false);
     }

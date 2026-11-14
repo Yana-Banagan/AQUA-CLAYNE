@@ -129,7 +129,7 @@
     @include('admin.drivers.partials.register-modal')
 @endif
 
-<div class="modal-backdrop" id="driverEditModal" aria-hidden="true">
+<div class="modal-backdrop" id="driverEditModal" aria-hidden="true" style="display: none;">
     <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="driverEditTitle" style="padding: 24px;">
         <div class="panel-head">
             <div>
@@ -169,6 +169,7 @@
 
     function closeModal() {
         modal.classList.remove('is-active');
+        modal.style.display = 'none';
         modal.setAttribute('aria-hidden', 'true');
         document.body.style.overflow = '';
     }
@@ -178,10 +179,11 @@
         error.hidden = false;
     }
 
-    document.querySelectorAll('[data-driver-edit]').forEach(button => button.addEventListener('click', async () => {
+    async function openDriverEditModal(button) {
         error.hidden = true;
         form.reset();
         form.action = button.dataset.driverEdit;
+        modal.style.display = 'grid';
         modal.classList.add('is-active');
         modal.setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden';
@@ -195,7 +197,18 @@
         } catch (requestError) {
             showError(requestError.message || 'Could not load this driver.');
         }
-    }));
+    }
+
+    document.addEventListener('click', event => {
+        const button = event.target.closest('[data-driver-edit]');
+        if (button) openDriverEditModal(button);
+    });
+
+    const requestedDriverId = new URLSearchParams(window.location.search).get('edit');
+    if (requestedDriverId) {
+        const button = document.querySelector(`[data-driver-row="${CSS.escape(requestedDriverId)}"] [data-driver-edit]`);
+        if (button) openDriverEditModal(button);
+    }
 
     modal.addEventListener('click', event => {
         if (event.target === modal || event.target.closest('[data-driver-modal-close]')) closeModal();
@@ -211,7 +224,7 @@
         submit.disabled = true;
         try {
             const response = await fetch(form.action, {
-                method: 'PUT',
+                method: 'POST',
                 headers: { Accept: 'application/json', 'X-CSRF-TOKEN': form.elements._token.value },
                 body: new FormData(form)
             });

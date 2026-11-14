@@ -534,7 +534,7 @@ class RfidController extends Controller
                 });
             })
             ->orderBy('created_at')
-            ->when($request->boolean('include_all'), fn($customers) => $customers->take(10))
+            ->when($request->boolean('include_all'), fn($customers) => $customers->take(50))
             ->get()
             ->map(fn($c) => [
                 'id' => $c->id,
