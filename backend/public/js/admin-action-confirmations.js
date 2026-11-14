@@ -46,7 +46,9 @@
         document.body.style.overflow = '';
         var action = pendingAction;
         pendingAction = null;
-        action && action.trigger && action.trigger.focus();
+        if (action && action.trigger && typeof action.trigger.focus === 'function') {
+            action.trigger.focus();
+        }
     }
 
     function ask(action, message, trigger) {
@@ -69,9 +71,10 @@
     }
 
     function acceptAction() {
+        if (!pendingAction) return;
         var current = pendingAction;
+        pendingAction = null;
         closeDialog();
-        if (!current) return;
 
         if (current.action === 'delete' || current.action === 'logout') {
             var form = current.trigger;
@@ -79,15 +82,20 @@
                 confirmedForms.add(form);
                 if (form.requestSubmit) form.requestSubmit();
                 else form.submit();
-            } else {
-                current.trigger.dataset.actionConfirmed = 'true';
-                current.trigger.click();
-                delete current.trigger.dataset.actionConfirmed;
+                return;
             }
-        } else {
+        }
+
+        if (current.trigger) {
             current.trigger.dataset.actionConfirmed = 'true';
-            current.trigger.click();
-            delete current.trigger.dataset.actionConfirmed;
+            if (current.trigger.tagName === 'A' && current.trigger.href) {
+                window.location.href = current.trigger.href;
+            } else {
+                current.trigger.click();
+            }
+            setTimeout(function () {
+                if (current.trigger) delete current.trigger.dataset.actionConfirmed;
+            }, 250);
         }
     }
 
@@ -98,6 +106,15 @@
     document.addEventListener('click', function (event) {
         var target = event.target.closest('a, button, input[type="button"]');
         if (!target || target.dataset.actionConfirmed === 'true') return;
+        // Never intercept clicks inside the confirmation dialog itself!
+        if (target.closest('#admin-action-confirmation')) return;
+
+        // Modal triggers and explicit actions must open directly without an extra confirmation dialog
+        if (target.hasAttribute('data-customer-edit') ||
+            target.hasAttribute('data-driver-edit') ||
+            target.closest('[data-customer-edit], [data-driver-edit], [data-no-confirm], [data-modal-target], [data-bs-toggle]')) {
+            return;
+        }
 
         var label = (target.getAttribute('aria-label') || target.title || target.textContent || '').trim().toLowerCase();
         var isStandaloneDelete = /\bdelete\b/.test(label) && !target.closest('form');
@@ -107,13 +124,15 @@
             ask('delete', 'This action may be permanent. Do you want to delete this item?', target);
             return;
         }
+
+        // Only prompt confirmation on navigation links or explicit confirmation requests, NOT general buttons opening local modals
         var isEditLink = target.tagName === 'A' && /(?:^|\/)edit(?:\/|$|\?)/i.test(new URL(target.href, location.href).pathname);
-        var isEditAction = isEditLink || /\bedit\b/.test(label) || (target.getAttribute('onclick') || '').includes('openEdit');
-        if (!isEditAction) return;
+        var hasExplicitConfirm = target.hasAttribute('data-confirm-edit');
+        if (!isEditLink && !hasExplicitConfirm) return;
 
         event.preventDefault();
         event.stopImmediatePropagation();
-        ask('edit', 'Do you want to continue and edit this item?', target);
+        ask('edit', target.dataset.confirmEdit || 'Do you want to continue and edit this item?', target);
     }, true);
 
     document.addEventListener('submit', function (event) {

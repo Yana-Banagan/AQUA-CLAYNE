@@ -91,7 +91,7 @@
                         </td>
                         <td>
                             <div class="row-actions">
-                                <button class="table-action" type="button" data-driver-edit="{{ route('admin.drivers.edit', $driver) }}">
+                                <button class="table-action" type="button" data-driver-edit="{{ route('admin.drivers.edit', $driver) }}" data-driver-update="{{ route('admin.drivers.update', $driver) }}">
                                     Edit Details
                                 </button>
 
@@ -182,14 +182,16 @@
     async function openDriverEditModal(button) {
         error.hidden = true;
         form.reset();
-        form.action = button.dataset.driverEdit;
+        const loadUrl = button.dataset.driverEdit;
+        const updateUrl = button.dataset.driverUpdate || loadUrl.replace(/\/edit\/?$/, '');
+        form.action = updateUrl;
         modal.style.display = 'grid';
         modal.classList.add('is-active');
         modal.setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden';
         fields.name.focus();
         try {
-            const response = await fetch(form.action, { headers: { Accept: 'application/json' } });
+            const response = await fetch(loadUrl, { headers: { Accept: 'application/json' } });
             const data = await response.json();
             if (!response.ok) throw new Error(data.message || 'Could not load this driver.');
             ['name', 'email', 'phone', 'status', 'license_number', 'vehicle_plate'].forEach(key => fields[key].value = data[key] || '');

@@ -485,6 +485,11 @@ Route::middleware(['auth', 'role:admin,staff'])
             'update'
         ])->name('customers.update');
 
+        Route::put('/customers/{customer}/edit', [
+            CustomerController::class,
+            'update'
+        ]);
+
 
         Route::get('/customers/{customer}', [
             CustomerController::class,
@@ -498,6 +503,11 @@ Route::middleware(['auth', 'role:admin,staff'])
                 'destroy',
                 'create',
             ]);
+
+        Route::put('/drivers/{driver}/edit', [
+            DriverController::class,
+            'update'
+        ]);
 
 
         Route::post('/drivers/{driver}/toggle-status', [

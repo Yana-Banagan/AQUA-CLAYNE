@@ -105,7 +105,7 @@
                                 <a href="{{ route('admin.customers.show', array_merge(['customer' => $cust], request()->query())) }}" class="table-action">
                                     View Profile
                                 </a>
-                                <button type="button" class="table-action" data-customer-edit="{{ route('admin.customers.edit', $cust) }}">
+                                <button type="button" class="table-action" data-customer-edit="{{ route('admin.customers.edit', $cust) }}" data-customer-update="{{ route('admin.customers.update', $cust) }}">
                                     Edit
                                 </button>
                             </div>
@@ -186,14 +186,16 @@
     async function openCustomerEditModal(button) {
         error.hidden = true;
         form.reset();
-        form.action = button.dataset.customerEdit;
+        const loadUrl = button.dataset.customerEdit;
+        const updateUrl = button.dataset.customerUpdate || loadUrl.replace(/\/edit\/?$/, '');
+        form.action = updateUrl;
         modal.style.display = 'grid';
         modal.classList.add('is-active');
         modal.setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden';
         fields.name.focus();
         try {
-            const response = await fetch(form.action, { headers: { Accept: 'application/json' } });
+            const response = await fetch(loadUrl, { headers: { Accept: 'application/json' } });
             const data = await response.json();
             if (!response.ok) throw new Error(data.message || 'Could not load this customer.');
             ['name', 'email', 'phone', 'status', 'birthdate'].forEach(key => fields[key].value = data[key] || '');
