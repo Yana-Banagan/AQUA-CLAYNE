@@ -1717,7 +1717,7 @@ ul, ol {
     color: var(--primary-navy);
 }
 
-.app-queue-pill {
+.app-station-pill {
     font-size: 0.65rem;
     font-weight: 700;
     color: var(--secondary-aqua);

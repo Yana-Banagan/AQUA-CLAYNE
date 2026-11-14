@@ -6,7 +6,6 @@ import '../../customer/providers/notification_provider.dart';
 import '../../customer/providers/order_provider.dart';
 import '../../customer/providers/payment_provider.dart';
 import '../../customer/providers/cart_provider.dart';
-import '../../customer/providers/queue_provider.dart';
 import '../../customer/providers/address_provider.dart';
 import '../../customer/providers/credit_provider.dart';
 import '../../customer/providers/complaint_provider.dart';
@@ -80,7 +79,6 @@ class _CustomerShellState extends State<CustomerShell> {
         context.read<PaymentProvider>().clearSessionData();
         context.read<AddressProvider>().clearSessionData();
         context.read<CreditProvider>().clearSessionData();
-        context.read<QueueProvider>().clearSessionData();
         context.read<ComplaintProvider>().clearSessionData();
         await context.read<CartProvider>().clearForGuest();
         return;
@@ -89,7 +87,6 @@ class _CustomerShellState extends State<CustomerShell> {
 
       // ── Start Supabase Realtime for customer-facing data ────────
       context.read<OrderProvider>().startRealtime();
-      context.read<QueueProvider>().startRealtime();
       context.read<NotificationProvider>().startRealtime();
       context.read<PaymentProvider>().startRealtime();
 
@@ -102,7 +99,6 @@ class _CustomerShellState extends State<CustomerShell> {
     CustomerShell._selectedTab.removeListener(_syncSelectedTab);
     try {
       context.read<OrderProvider>().stopRealtime();
-      context.read<QueueProvider>().stopRealtime();
       context.read<NotificationProvider>().stopRealtime();
       context.read<PaymentProvider>().stopRealtime();
     } catch (_) {}

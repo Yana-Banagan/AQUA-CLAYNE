@@ -54,8 +54,6 @@ class OrderController extends Controller
         if ($status && $status !== 'all') {
             if ($status === 'exceptions' || $status === 'failed') {
                 $query->whereIn('status', ['rejected', 'cancelled', 'pickup_failed', 'delivery_failed']);
-            } elseif ($status === 'refill_queue') {
-                $query->whereIn('status', ['waiting_in_queue', 'refilling']);
             } else {
                 $query->where('status', strtolower($status));
             }
@@ -147,7 +145,7 @@ class OrderController extends Controller
                 'out_for_delivery' => (int) ($orderCounts['out_for_delivery'] ?? 0),
                 'completed' => (int) ($orderCounts['completed'] ?? 0) + $walkInSummary['count'],
                 'cancelled' => (int) ($orderCounts['cancelled'] ?? 0),
-                'in_queue' => (int) ($orderCounts['waiting_in_queue'] ?? 0) + (int) ($orderCounts['refilling'] ?? 0),
+                'station_refill' => (int) ($orderCounts['received_at_station'] ?? 0) + (int) ($orderCounts['refilling'] ?? 0),
                 'exceptions' => (int) ($orderCounts['rejected'] ?? 0) + (int) ($orderCounts['cancelled'] ?? 0) + (int) ($orderCounts['pickup_failed'] ?? 0) + (int) ($orderCounts['delivery_failed'] ?? 0),
             ];
 
@@ -188,7 +186,6 @@ class OrderController extends Controller
         $sharedData = app(\App\Services\AdminSharedDataService::class);
         $sharedData->provide([
             'pendingOrders' => $stats['pending'],
-            'waitingInQueue' => (int) ($orderCounts['waiting_in_queue'] ?? 0),
         ]);
         $sidebarCounts = $sharedData->getSidebarCounts($request->user());
 
@@ -257,7 +254,6 @@ class OrderController extends Controller
             'containerIntake.receivedBy',
             'statusHistory.changedBy',
             'payment',
-            'refillQueueEntry',
             'rfidTransactions' => fn ($query) => $query->with(['rfidTag.gallon', 'scannedBy'])->orderByDesc('created_at')->orderByDesc('id'),
         ]);
 
@@ -303,7 +299,6 @@ class OrderController extends Controller
         // Sidebar Navigation Counts
         $sidebarCounts = [
             'pendingOrders' => Order::where('status', 'pending')->count(),
-            'waitingInQueue' => Order::where('status', 'waiting_in_queue')->count(),
             'lowStock' => Inventory::whereColumn('quantity_on_hand', '<=', 'reorder_level')->count(),
         ];
 

@@ -109,7 +109,7 @@ class LandingPageTest extends TestCase
         $response->assertSee('1. Purified Water Refilling');
         $response->assertSee('2. Customer Ordering');
         $response->assertSee('3. Delivery Management');
-        $response->assertSee('4. Refill Queue Management');
+        $response->assertSee('4. Station Refill Operations');
         $response->assertSee('5. Order and Delivery Updates');
         $response->assertSee('6. Payments &amp; Credit Management', false);
         $response->assertSee('7. Gallon and QR Tracking');

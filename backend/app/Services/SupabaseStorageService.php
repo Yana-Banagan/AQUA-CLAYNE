@@ -130,4 +130,13 @@ class SupabaseStorageService
             return $this->signedUrl('profile-photos', $path, 86400);
         });
     }
+
+    public function cachedProfilePhotoUrl(string $userId, ?string $path): ?string
+    {
+        if (!$path) {
+            return null;
+        }
+
+        return Cache::store('file')->get('profile-photo-url:' . $userId . ':' . sha1($path));
+    }
 }

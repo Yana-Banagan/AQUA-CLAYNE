@@ -12,7 +12,6 @@ use App\Models\Order;
 use App\Models\OrderContainerIntake;
 use App\Models\OrderStatusHistory;
 use App\Models\Payment;
-use App\Models\RefillQueueEntry;
 use App\Models\WalkInOrder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -34,19 +33,18 @@ class DashboardController extends Controller
 
         $cacheKey = 'admin:dashboard:station-kpis';
         if ($forceFresh) {
-            Cache::forget($cacheKey);
+            Cache::store()->forget($cacheKey);
         }
 
         // Consolidated Station KPI bundle (KPIs, Financials, Charts, Drivers summary)
         // Cached for 60s (invalidated on realtime operational events) to eliminate repeated remote database round trips.
-        $kpi = Cache::store('file')->remember($cacheKey, now()->addSeconds(60), function () use ($today, $sevenDaysAgo) {
+        $kpi = Cache::remember($cacheKey, now()->addSeconds(60), function () use ($today, $sevenDaysAgo) {
             $isPgsql = DB::getDriverName() === 'pgsql';
 
             if ($isPgsql) {
                 $orderSummary = Order::query()->selectRaw("
                     COUNT(*) AS total,
                     COUNT(*) FILTER (WHERE status = 'pending') AS pending,
-                    COUNT(*) FILTER (WHERE status = 'waiting_in_queue') AS waiting_in_queue,
                     COUNT(*) FILTER (WHERE status = 'refilling') AS refilling,
                     COUNT(*) FILTER (WHERE status = 'confirmed') AS confirmed,
                     COUNT(*) FILTER (WHERE status = 'assigned') AS assigned,
@@ -82,7 +80,7 @@ class DashboardController extends Controller
                     ->selectRaw("DATE(created_at) AS day,
                         COUNT(*) FILTER (WHERE status IN ('completed', 'delivered')) AS completed,
                         COUNT(*) FILTER (WHERE status = 'pending') AS pending,
-                        COUNT(*) FILTER (WHERE status IN ('confirmed', 'assigned', 'picked_up', 'received_at_station', 'waiting_in_queue', 'refilling', 'ready_for_delivery', 'ready_for_pickup', 'out_for_delivery')) AS in_progress")
+                        COUNT(*) FILTER (WHERE status IN ('confirmed', 'assigned', 'picked_up', 'received_at_station', 'refilling', 'ready_for_delivery', 'ready_for_pickup', 'out_for_delivery')) AS in_progress")
                     ->groupBy('day')
                     ->get()
                     ->keyBy(fn ($row) => (string) $row->day);
@@ -90,7 +88,6 @@ class DashboardController extends Controller
                 $orderSummary = Order::query()->selectRaw("
                     COUNT(*) AS total,
                     SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
-                    SUM(CASE WHEN status = 'waiting_in_queue' THEN 1 ELSE 0 END) AS waiting_in_queue,
                     SUM(CASE WHEN status = 'refilling' THEN 1 ELSE 0 END) AS refilling,
                     SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed,
                     SUM(CASE WHEN status = 'assigned' THEN 1 ELSE 0 END) AS assigned,
@@ -126,7 +123,7 @@ class DashboardController extends Controller
                     ->selectRaw("DATE(created_at) AS day,
                         SUM(CASE WHEN status IN ('completed', 'delivered') THEN 1 ELSE 0 END) AS completed,
                         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
-                        SUM(CASE WHEN status IN ('confirmed', 'assigned', 'picked_up', 'received_at_station', 'waiting_in_queue', 'refilling', 'ready_for_delivery', 'ready_for_pickup', 'out_for_delivery') THEN 1 ELSE 0 END) AS in_progress")
+                        SUM(CASE WHEN status IN ('confirmed', 'assigned', 'picked_up', 'received_at_station', 'refilling', 'ready_for_delivery', 'ready_for_pickup', 'out_for_delivery') THEN 1 ELSE 0 END) AS in_progress")
                     ->groupBy('day')
                     ->get()
                     ->keyBy(fn ($row) => (string) $row->day);
@@ -136,14 +133,7 @@ class DashboardController extends Controller
             $totalOrders = (int) ($orderSummary->total ?? 0) + $walkInOrdersCount;
             $pendingOrders = (int) ($orderSummary->pending ?? 0);
 
-            $waitingInQueueCount = (int) ($orderSummary->waiting_in_queue ?? 0);
             $refillingCount = (int) ($orderSummary->refilling ?? 0);
-            $queueOrdersCount = $waitingInQueueCount + $refillingCount;
-
-            $queueGallons = (int) Order::query()
-                ->leftJoin('order_container_intakes', 'order_container_intakes.order_id', '=', 'orders.id')
-                ->whereIn('orders.status', ['waiting_in_queue', 'refilling'])
-                ->sum(DB::raw('COALESCE(order_container_intakes.accepted_count, orders.expected_empty_gallons, 0)'));
 
             $todayRevenue = (float) ($paymentSummary->total ?? 0);
             if ($todayRevenue <= 0) {
@@ -198,7 +188,6 @@ class DashboardController extends Controller
                 'assigned' => (int) ($orderSummary->assigned ?? 0),
                 'picked_up' => (int) ($orderSummary->picked_up ?? 0),
                 'received_at_station' => (int) ($orderSummary->received_at_station ?? 0),
-                'waiting_in_queue' => $waitingInQueueCount,
                 'refilling' => $refillingCount,
                 'ready_for_delivery' => (int) ($orderSummary->ready_for_delivery ?? 0),
                 'out_for_delivery' => (int) ($orderSummary->out_for_delivery ?? 0),
@@ -229,10 +218,7 @@ class DashboardController extends Controller
             return [
                 'totalOrders' => $totalOrders,
                 'pendingOrders' => $pendingOrders,
-                'waitingInQueueCount' => $waitingInQueueCount,
                 'refillingCount' => $refillingCount,
-                'queueOrdersCount' => $queueOrdersCount,
-                'queueGallons' => $queueGallons,
                 'todayRevenue' => $todayRevenue,
                 'activeDrivers' => $activeDrivers,
                 'deliveringDrivers' => $deliveringDrivers,
@@ -254,7 +240,7 @@ class DashboardController extends Controller
         // ---------------------------------------------------------------------
         // 2. LIVE OPERATIONAL ALERTS & INTAKE DISCREPANCIES (Cached for 60s)
         // ---------------------------------------------------------------------
-        $intakeDiscrepancies = Cache::store('file')->remember('admin:dashboard:intake-discrepancies', now()->addSeconds(60), function () {
+        $intakeDiscrepancies = Cache::remember('admin:dashboard:intake-discrepancies', now()->addSeconds(60), function () {
             return OrderContainerIntake::with([
                 'order:id,order_number,customer_id',
                 'order.customer:id,user_id',
@@ -276,36 +262,20 @@ class DashboardController extends Controller
         ])
             ->select(['id', 'order_number', 'customer_id', 'status', 'total_amount', 'created_at'])
             ->latest('created_at')
-            ->paginate(5, ['*'], 'orders_page')
+            ->simplePaginate(5, ['*'], 'orders_page')
             ->withQueryString();
 
         // ---------------------------------------------------------------------
-        // 4. FIFO REFILL QUEUE (PHYSICAL STATION QUEUE) (paginated, 5 per page)
+        // 4. Station refill operations (paginated, 5 per page)
         // ---------------------------------------------------------------------
-        $queueEntries = RefillQueueEntry::with([
-            'order.customer.user:id,name,phone',
-            'order.containerIntake'
+        $refillOperations = Order::with([
+            'customer.user:id,name',
+            'containerIntake:id,order_id,accepted_count,received_at',
         ])
-            ->whereIn('status', ['waiting', 'in_progress'])
-            ->orderBy('priority', 'desc')
-            ->orderBy('queued_at', 'asc')
-            ->paginate(5, ['*'], 'queue_page')
+            ->whereIn('status', ['received_at_station', 'refilling'])
+            ->latest('updated_at')
+            ->simplePaginate(5, ['id', 'order_number', 'customer_id', 'status', 'expected_empty_gallons', 'updated_at'], 'refill_page')
             ->withQueryString();
-
-        // Calculate queue waiting duration for each entry
-        $queueEntries->getCollection()->transform(function ($entry, $index) use ($queueEntries) {
-            $pos = ($queueEntries->firstItem() ?? 1) + $index;
-            $entry->queue_position = '#' . str_pad($pos, 3, '0', STR_PAD_LEFT);
-            if ($entry->queued_at) {
-                $diffMinutes = $entry->queued_at->diffInMinutes(now());
-                $hours = floor($diffMinutes / 60);
-                $mins = $diffMinutes % 60;
-                $entry->waiting_duration = $hours > 0 ? "{$hours}h {$mins}m" : "{$mins}m";
-            } else {
-                $entry->waiting_duration = 'Just now';
-            }
-            return $entry;
-        });
 
         // ---------------------------------------------------------------------
         // 5. DRIVER FLEET BOARD
@@ -315,7 +285,7 @@ class DashboardController extends Controller
         // ---------------------------------------------------------------------
         // 6. RECENT ACTIVITY FEED (Cached for 60s)
         // ---------------------------------------------------------------------
-        $recentActivities = Cache::store('file')->remember('admin:dashboard:recent-activities', now()->addSeconds(60), function () {
+        $recentActivities = Cache::remember('admin:dashboard:recent-activities', now()->addSeconds(60), function () {
             $recentHistory = OrderStatusHistory::with([
                 'order:id,order_number,customer_id',
                 'order.customer:id,user_id',
@@ -420,7 +390,6 @@ class DashboardController extends Controller
         $sharedData = app(\App\Services\AdminSharedDataService::class);
         $sharedData->provide([
             'pendingOrders' => $kpi['pendingOrders'],
-            'waitingInQueue' => $kpi['waitingInQueueCount'],
             'lowStock' => $kpi['lowStockCount'],
         ]);
         $sidebarCounts = $sharedData->getSidebarCounts($request->user());
@@ -429,8 +398,6 @@ class DashboardController extends Controller
             // KPI Data
             'totalOrders' => $kpi['totalOrders'],
             'pendingOrders' => $kpi['pendingOrders'],
-            'queueCount' => $kpi['queueOrdersCount'],
-            'queueGallons' => $kpi['queueGallons'],
             'todayRevenue' => $kpi['todayRevenue'],
             'activeDrivers' => $kpi['activeDrivers'],
             'deliveringDrivers' => $kpi['deliveringDrivers'],
@@ -447,7 +414,7 @@ class DashboardController extends Controller
 
             // Tables & Operational Lists
             'latestOrders' => $latestOrders,
-            'queueEntries' => $queueEntries,
+            'refillOperations' => $refillOperations,
 
             // Payments & Financials
             'todayCash' => $kpi['todayCash'],

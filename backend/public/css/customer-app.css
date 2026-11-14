@@ -1685,7 +1685,7 @@ body.customer-body {
 /* Status Badges */
 .badge-pending { background: #FEF3C7; color: #D97706; border: 1px solid #FBD79F; }
 .badge-confirmed { background: #E0F2FE; color: #0284C7; border: 1px solid #BAE6FD; }
-.badge-in_refill, .badge-waiting_in_queue, .badge-refilling { background: #EAF7FF; color: #0878C9; border: 1px solid #BCE3FD; }
+.badge-in_refill, .badge-refilling { background: #EAF7FF; color: #0878C9; border: 1px solid #BCE3FD; }
 .badge-ready, .badge-ready_for_delivery, .badge-ready_for_pickup { background: #EDE9FE; color: #7C3AED; border: 1px solid #DDD6FE; }
 .badge-out_for_delivery { background: #FEF3C7; color: #B45309; border: 1px solid #FCD34D; }
 .badge-delivered, .badge-completed, .badge-paid { background: #D1FAE5; color: #059669; border: 1px solid #A7F3D0; }

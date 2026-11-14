@@ -47,8 +47,8 @@ class CustomerSupportSeeder extends Seeder
             ],
             [
                 'category_id' => $generalCat->id,
-                'question' => 'How does the Refill Queue work?',
-                'answer' => 'Once your gallons are checked in at the refilling station, your order automatically enters the station refill queue. You can track live queue status and estimated wait time directly in the Queue tab.',
+                'question' => 'How is my refill order processed?',
+                'answer' => 'After your gallons are checked in and inspected at the station, staff process the refill. You can track your order status from your account.',
             ],
             [
                 'category_id' => $deliveryCat->id,

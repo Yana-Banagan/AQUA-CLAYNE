@@ -35,7 +35,6 @@ body.dashboard-body {
 .dashboard-content article,
 .dashboard-content .panel,
 .dashboard-content .card,
-.dashboard-content .refill-queue-page,
 .dashboard-content .deliveries-page,
 .dashboard-content .orders-page {
     min-width: 0;
@@ -62,7 +61,7 @@ input, select, textarea, .nav-link {
 /* -----------------------------------------------------------------------------
    1. UNIVERSAL TABLE CONTAINERS (DATA MANAGEMENT ACROSS ALL MODULES)
    Customers, Drivers, Products, Orders, Inventory, Maintenance,
-   Payments, Deliveries, Refill Queue, Reports
+   Payments, Deliveries, Reports
    ----------------------------------------------------------------------------- */
 .dashboard-content .data-table-wrap,
 .dashboard-content .table-responsive,
@@ -1025,8 +1024,7 @@ dialog.driver-register-dialog,
         height: 200px;
     }
 
-    /* 10. Staff Portal Usability: Refill Queue & Deliveries */
-    .refill-queue-header,
+    /* 10. Staff Portal Usability: Deliveries & Orders */
     .deliveries-header,
     .orders-header {
         min-height: 0 !important;
@@ -1036,7 +1034,6 @@ dialog.driver-register-dialog,
         align-items: stretch !important;
         gap: 10px !important;
     }
-    .refill-queue-header > div:last-child,
     .deliveries-header-actions,
     .header-action-group {
         width: 100% !important;
@@ -1044,7 +1041,6 @@ dialog.driver-register-dialog,
         flex-direction: column !important;
         gap: 8px !important;
     }
-    .refill-queue-header .queue-action-btn,
     .deliveries-header .btn-assign-driver,
     .orders-header .btn-queue-link {
         width: 100% !important;

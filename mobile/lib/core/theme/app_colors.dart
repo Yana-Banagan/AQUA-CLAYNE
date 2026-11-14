@@ -86,9 +86,8 @@ class AppColors {
       case 'PICKED_UP':
         return const Color(0xFF7B1FA2);
       case 'RECEIVED_AT_STATION':
-        return const Color(0xFF00838F);
       case 'WAITING_IN_QUEUE':
-        return warning;
+        return const Color(0xFF00838F);
       case 'REFILLING':
         return accent;
       case 'READY_FOR_DELIVERY':

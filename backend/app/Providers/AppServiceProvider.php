@@ -72,8 +72,8 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('public-api', fn (Request $request) => Limit::perMinute(120)->by($request->ip()));
 
         // Centralized shared administrative layout data.
-        // Uses AdminSharedDataService to retrieve all 6 counters in ONE combined
-        // query with in-memory memoization and zero duplicate queries.
+        // Uses AdminSharedDataService to retrieve sidebar counters in ONE query
+        // with in-memory memoization. Cached avatars avoid remote storage calls.
         View::composer('admin.layouts.app', function ($view) {
             try {
                 $sharedData = app(\App\Services\AdminSharedDataService::class);

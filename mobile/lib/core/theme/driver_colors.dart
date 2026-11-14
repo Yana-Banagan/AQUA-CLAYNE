@@ -48,12 +48,12 @@ class DriverColors {
   static Color statusColor(String status) {
     switch (status.toUpperCase()) {
       case 'PENDING':
-      case 'WAITING_IN_QUEUE':
         return warning;
       case 'CONFIRMED':
       case 'ASSIGNED':
       case 'OUT_FOR_DELIVERY':
         return primary;
+      case 'WAITING_IN_QUEUE':
       case 'PICKED_UP':
       case 'RECEIVED_AT_STATION':
       case 'REFILLING':

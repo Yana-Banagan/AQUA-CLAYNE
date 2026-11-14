@@ -609,8 +609,8 @@ function navigateTo(viewId, param = null, pushHistory = true) {
                     ) || null;
                     renderRecentOrderCard();
 
-                    const activeCount = AppState.orders.filter(o => ['pending', 'confirmed', 'assigned_to_driver', 'out_for_delivery', 'waiting_in_queue', 'refilling'].includes(o.status.toLowerCase())).length;
-                    const inProgressCount = AppState.orders.filter(o => ['confirmed', 'assigned_to_driver', 'waiting_in_queue', 'refilling', 'out_for_delivery'].includes(o.status.toLowerCase())).length;
+                    const activeCount = AppState.orders.filter(o => ['pending', 'confirmed', 'assigned_to_driver', 'out_for_delivery', 'received_at_station', 'refilling'].includes(o.status.toLowerCase())).length;
+                    const inProgressCount = AppState.orders.filter(o => ['confirmed', 'assigned_to_driver', 'received_at_station', 'refilling', 'out_for_delivery'].includes(o.status.toLowerCase())).length;
                     const completedCount = AppState.orders.filter(o => ['delivered', 'completed'].includes(o.status.toLowerCase())).length;
 
                     const activeEl = document.getElementById('statsActiveOrders');
@@ -2183,24 +2183,6 @@ function navigateTo(viewId, param = null, pushHistory = true) {
         }
     }
 
-    async function loadGallonsView() {
-        if (!AppState.token) return;
-        try {
-            const ordersRes = await apiRequest('/customer/orders', 'GET', null, true);
-            if (ordersRes?.data) {
-                AppState.orders = ordersRes.data;
-                const inQueueOrder = AppState.orders.find(o => ['waiting_in_queue', 'refilling', 'in_progress'].includes(o.status.toLowerCase()));
-                const queueHero = document.getElementById('queuePositionHero');
-                const queueExpl = document.getElementById('queueStatusExplanation');
-                if (inQueueOrder && queueHero && queueExpl) {
-                    const isRefilling = inQueueOrder.status.toLowerCase() === 'refilling';
-                    queueHero.textContent = isRefilling ? '#1 Refilling' : '#1 In Line';
-                    queueExpl.textContent = `Order #${inQueueOrder.order_number} is currently being processed in our automated sanitized refill station.`;
-                }
-            }
-        } catch (_) {}
-    }
-
         function openReportIssueModal(orderNum) {
         const numInput = document.getElementById('reportIssueOrderNum');
         if (numInput && orderNum) {
@@ -2355,7 +2337,7 @@ function navigateTo(viewId, param = null, pushHistory = true) {
         const statusLower = (order.status || '').toLowerCase();
         let activeIdx = 0;
         if (statusLower === 'confirmed') activeIdx = 1;
-        else if (['waiting_in_queue', 'refilling', 'in_refill', 'processing', 'in_progress'].includes(statusLower)) activeIdx = 2;
+        else if (['received_at_station', 'refilling', 'in_refill', 'processing', 'in_progress'].includes(statusLower)) activeIdx = 2;
         else if (['ready_for_delivery', 'ready_for_pickup', 'out_for_delivery'].includes(statusLower)) activeIdx = 3;
         else if (['delivered', 'completed'].includes(statusLower)) activeIdx = 4;
 
@@ -3705,7 +3687,6 @@ function navigateTo(viewId, param = null, pushHistory = true) {
         setOrderFilter,
         loadOrderDetail,
         loadTrackingView,
-        loadGallonsView,
         cancelOrder,
         toggleOrderDeliveryMethod,
         payOnlineNow,

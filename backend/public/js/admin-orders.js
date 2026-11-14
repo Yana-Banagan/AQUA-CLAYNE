@@ -591,7 +591,7 @@
             });
             window.addEventListener('aqua:realtime', (event) => {
                 const entity = event.detail?.entity_type;
-                if (['order', 'delivery', 'refill_queue', 'payment'].includes(entity)) this.schedule();
+                if (['order', 'delivery', 'payment'].includes(entity)) this.schedule();
             });
             window.addEventListener('aqua:realtime-status', (event) => {
                 this.connected = Boolean(event.detail?.connected);

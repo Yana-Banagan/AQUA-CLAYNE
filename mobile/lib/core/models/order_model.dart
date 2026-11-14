@@ -55,28 +55,6 @@ class OrderItemModel {
       };
 }
 
-class QueueInfoModel {
-  final String queueNumber;
-  final int position;
-  final String status;
-
-  const QueueInfoModel({
-    required this.queueNumber,
-    required this.position,
-    required this.status,
-  });
-
-  factory QueueInfoModel.fromMap(Map<String, dynamic> m) {
-    return QueueInfoModel(
-      queueNumber: m['queue_number']?.toString() ?? '-',
-      position: m['position'] is int
-          ? m['position'] as int
-          : int.tryParse(m['position']?.toString() ?? '0') ?? 0,
-      status: m['status']?.toString() ?? 'WAITING',
-    );
-  }
-}
-
 class OrderModel {
   final String id;
   final String qrCode;
@@ -94,7 +72,6 @@ class OrderModel {
   final String? notes;
   final List<OrderItemModel> items;
   final AddressModel? address;
-  final QueueInfoModel? queue;
   final Map<String, dynamic>? delivery;
   final String createdAt;
   final String? confirmedAt;
@@ -118,7 +95,6 @@ class OrderModel {
     this.notes,
     this.items = const [],
     this.address,
-    this.queue,
     this.delivery,
     required this.createdAt,
     this.confirmedAt,
@@ -129,8 +105,6 @@ class OrderModel {
   factory OrderModel.fromMap(Map<String, dynamic> m) {
     final rawItems = m['order_items'] as List? ?? m['items'] as List? ?? [];
     final addressMap = m['address'] as Map<String, dynamic>?;
-    final queueMap = (m['queue'] ?? m['refill_queue_entry'])
-        as Map<String, dynamic>?;
     final intakeMap = m['container_intake'] as Map<String, dynamic>?;
     final paymentMap = m['payment'] as Map<String, dynamic>?;
     final parsedDeliveryMethod =
@@ -167,7 +141,6 @@ class OrderModel {
           .map((i) => OrderItemModel.fromMap(i as Map<String, dynamic>))
           .toList(),
       address: addressMap != null ? AddressModel.fromMap(addressMap) : null,
-      queue: queueMap != null ? QueueInfoModel.fromMap(queueMap) : null,
       delivery: m['delivery'] as Map<String, dynamic>?,
       createdAt: m['created_at']?.toString() ?? '',
       confirmedAt: m['confirmed_at']?.toString(),
@@ -214,11 +187,6 @@ class OrderModel {
         'payment_status': paymentStatus,
         'items': items.map((item) => item.toMap()).toList(),
         if (address != null) 'address': address!.toMap(),
-        if (queue != null)
-          'refill_queue_entry': {
-            'queue_number': queue!.queueNumber,
-            'status': queue!.status,
-          },
         if (delivery != null) 'delivery': delivery,
       };
 
@@ -245,7 +213,6 @@ class OrderModel {
     String? notes,
     List<OrderItemModel>? items,
     AddressModel? address,
-    QueueInfoModel? queue,
     Map<String, dynamic>? delivery,
     String? createdAt,
     String? confirmedAt,
@@ -269,7 +236,6 @@ class OrderModel {
       notes: notes ?? this.notes,
       items: items ?? this.items,
       address: address ?? this.address,
-      queue: queue ?? this.queue,
       delivery: delivery ?? this.delivery,
       createdAt: createdAt ?? this.createdAt,
       confirmedAt: confirmedAt ?? this.confirmedAt,

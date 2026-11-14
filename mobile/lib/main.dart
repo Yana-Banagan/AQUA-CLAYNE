@@ -25,7 +25,6 @@ import 'customer/data/product_repository.dart';
 import 'customer/data/address_repository.dart';
 import 'customer/data/order_repository.dart';
 import 'customer/data/notification_repository.dart';
-import 'customer/data/queue_repository.dart';
 import 'customer/data/complaint_repository.dart';
 import 'customer/data/credit_repository.dart';
 import 'customer/data/payment_repository.dart';
@@ -35,7 +34,6 @@ import 'customer/providers/cart_provider.dart';
 import 'customer/providers/order_provider.dart';
 import 'customer/providers/address_provider.dart';
 import 'customer/providers/notification_provider.dart';
-import 'customer/providers/queue_provider.dart';
 import 'customer/providers/complaint_provider.dart';
 import 'customer/providers/credit_provider.dart';
 import 'customer/providers/payment_provider.dart';
@@ -118,7 +116,6 @@ class AquaClayneApp extends StatelessWidget {
         appContext.read<PaymentProvider>().clearSessionData();
         appContext.read<AddressProvider>().clearSessionData();
         appContext.read<CreditProvider>().clearSessionData();
-        appContext.read<QueueProvider>().clearSessionData();
         appContext.read<ComplaintProvider>().clearSessionData();
         if (expiredUser?.isCustomer == true) {
           appContext.read<CartProvider>().clearCart();
@@ -151,7 +148,6 @@ class AquaClayneApp extends StatelessWidget {
     final addressRepo = AddressRepository(apiClient);
     final orderRepo = OrderRepository(apiClient);
     final notificationRepo = NotificationRepository(apiClient);
-    final queueRepo = QueueRepository(apiClient);
     final complaintRepo = ComplaintRepository(apiClient);
     final creditRepo = CreditRepository(apiClient);
     final paymentRepo = PaymentRepository(apiClient);
@@ -176,7 +172,6 @@ class AquaClayneApp extends StatelessWidget {
         Provider<AddressRepository>.value(value: addressRepo),
         Provider<OrderRepository>.value(value: orderRepo),
         Provider<NotificationRepository>.value(value: notificationRepo),
-        Provider<QueueRepository>.value(value: queueRepo),
         Provider<ComplaintRepository>.value(value: complaintRepo),
         Provider<CreditRepository>.value(value: creditRepo),
         Provider<PaymentRepository>.value(value: paymentRepo),
@@ -192,9 +187,6 @@ class AquaClayneApp extends StatelessWidget {
         ChangeNotifierProvider<NotificationProvider>(
           create: (_) =>
               NotificationProvider(notificationRepo, realtimeService),
-        ),
-        ChangeNotifierProvider<QueueProvider>(
-          create: (_) => QueueProvider(queueRepo, realtimeService),
         ),
         ChangeNotifierProvider<ComplaintProvider>(
           create: (_) => ComplaintProvider(complaintRepo),

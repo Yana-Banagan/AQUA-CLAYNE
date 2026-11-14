@@ -719,7 +719,6 @@ class DeliveryController extends Controller
         // Sidebar counts for layout navigation badges
         $sidebarCounts = [
             'pendingOrders'       => Order::where('status', 'pending')->count(),
-            'waitingInQueue'      => Order::where('status', 'waiting_in_queue')->count(),
             'activeDeliveries'    => Delivery::whereIn('status', [
                 'assigned', 'en_route_for_pickup', 'picked_up', 'at_station', 'out_for_delivery',
             ])->count(),

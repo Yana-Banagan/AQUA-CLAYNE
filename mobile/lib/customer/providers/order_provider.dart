@@ -68,18 +68,6 @@ class OrderProvider extends ChangeNotifier {
       },
     ));
 
-    // Also listen for queue signals (queue position changes affect order UI)
-    _removeRealtimeListeners.add(_realtime.listenToEntity(
-      entityType: 'refill_queue',
-      onSignal: () {
-        debugPrint('[OrderProvider] Realtime queue signal — refreshing orders');
-        loadOrders();
-        // Reload active order detail if one is open
-        if (_detail != null) {
-          loadDetail(_detail!.id);
-        }
-      },
-    ));
 
     _removeRealtimeListeners.add(_realtime.listenToEntity(
       entityType: 'delivery',

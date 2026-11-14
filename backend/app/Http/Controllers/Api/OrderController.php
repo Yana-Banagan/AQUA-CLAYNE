@@ -7,7 +7,6 @@ use App\Http\Controllers\Api\PayMongoController;
 use App\Models\AuditLog;
 use App\Models\Order;
 use App\Models\Payment;
-use App\Models\RefillQueueEntry;
 use App\Services\DeliveryRestrictionService;
 use App\Services\OrderService;
 use App\Services\OrderWorkflowService;
@@ -206,7 +205,6 @@ class OrderController extends Controller
                 'address',
                 'delivery',
                 'containerIntake',
-                'refillQueueEntry',
                 'statusHistory'
             )
             ->latest()
@@ -273,7 +271,6 @@ class OrderController extends Controller
             'address',
             'delivery',
             'containerIntake',
-            'refillQueueEntry',
             'statusHistory'
         );
 
@@ -469,96 +466,4 @@ class OrderController extends Controller
         );
     }
 
-    /**
-     * Get queue details for a customer order.
-     */
-    public function queue(Request $request, Order $order)
-    {
-        abort_unless(
-            $order->customer_id === $request->user()->customer->id,
-            403
-        );
-
-        $order->load(['refillQueueEntry', 'containerIntake']);
-        $entry = $order->refillQueueEntry;
-
-        if (!$entry || !in_array($entry->status, ['waiting', 'in_progress'], true)) {
-            return $this->success([
-                'order_id' => $order->id,
-                'order_number' => $order->order_number,
-                'in_queue' => false,
-                'position' => 0,
-                'queue_number' => $entry?->queue_number ? (string) $entry->queue_number : '-',
-                'status' => $entry?->status ? strtoupper($entry->status) : 'NOT_IN_QUEUE',
-                'order_status' => $order->status,
-                'estimated_wait_minutes' => 0,
-                'expected_empty_gallons' => $order->expected_empty_gallons,
-                'received_empty_gallons' => $order->received_empty_gallons ?? $order->containerIntake?->received_count,
-                'accepted_empty_gallons' => $order->accepted_empty_gallons ?? $order->containerIntake?->accepted_count,
-            ]);
-        }
-
-        // Calculate FIFO position
-        if ($entry->status === 'in_progress') {
-            $position = 1;
-            $estimatedWait = 5;
-        } else {
-            $inProgressCount = RefillQueueEntry::where('status', 'in_progress')->count();
-            $waitingAhead = RefillQueueEntry::where('status', 'waiting')
-                ->where(function ($q) use ($entry) {
-                    $q->where('priority', '>', $entry->priority)
-                      ->orWhere(function ($sq) use ($entry) {
-                          $sq->where('priority', $entry->priority)
-                             ->where('queue_number', '<', $entry->queue_number);
-                      });
-                })
-                ->count();
-            $position = $inProgressCount + $waitingAhead + 1;
-            $estimatedWait = max(5, ($position - 1) * 15 + 10);
-        }
-
-        return $this->success([
-            'order_id' => $order->id,
-            'order_number' => $order->order_number,
-            'in_queue' => true,
-            'position' => $position,
-            'queue_number' => (string) $entry->queue_number,
-            'status' => strtoupper($entry->status),
-            'order_status' => $order->status,
-            'estimated_wait_minutes' => $estimatedWait,
-            'expected_empty_gallons' => $order->expected_empty_gallons,
-            'received_empty_gallons' => $order->received_empty_gallons ?? $order->containerIntake?->received_count,
-            'accepted_empty_gallons' => $order->accepted_empty_gallons ?? $order->containerIntake?->accepted_count,
-            'queued_at' => $entry->queued_at?->toIso8601String(),
-        ]);
-    }
-
-    /**
-     * Get active queue entry for the authenticated customer.
-     */
-    public function activeQueue(Request $request)
-    {
-        $customer = $request->user()->customer;
-        $activeOrder = $customer->orders()
-            ->whereHas('refillQueueEntry', function ($q) {
-                $q->whereIn('status', ['waiting', 'in_progress']);
-            })
-            ->latest()
-            ->first();
-
-        if (!$activeOrder) {
-            $latestActive = $customer->orders()
-                ->whereNotIn('status', ['completed', 'delivered', 'rejected', 'cancelled', 'pickup_failed', 'delivery_failed'])
-                ->latest()
-                ->first();
-
-            if ($latestActive) {
-                return $this->queue($request, $latestActive);
-            }
-
-            return $this->success(null, 'No active queue entry found.');
-        }
-
-        return $this->queue($request, $activeOrder);
-    }
 }

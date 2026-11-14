@@ -8,7 +8,7 @@
     <div>
         <p class="eyebrow">Alerts &amp; Activity</p>
         <h1>Notification Center</h1>
-        <p>Operational alerts, refill queue notifications, driver dispatch milestones, and system messages.</p>
+        <p>Operational alerts, station refill updates, driver dispatch milestones, and system messages.</p>
     </div>
     <div class="header-actions">
         <form method="POST" action="{{ route('admin.notifications.read-all') }}">

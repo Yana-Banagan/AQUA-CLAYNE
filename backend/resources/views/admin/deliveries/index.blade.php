@@ -226,7 +226,7 @@
             </div>
             <div class="dispatch-callout-text">
                 <h4>Physical Station Intake Mandatory</h4>
-                <p>Drivers collect customer-owned empty gallons in batches (max 30 gal capacity per vehicle). Once brought to the station, staff must complete physical intake inspection before gallons enter the Refill Queue.</p>
+                <p>Drivers collect customer-owned empty gallons in batches (max 30 gal capacity per vehicle). Once brought to the station, staff complete physical intake inspection before refilling begins.</p>
             </div>
         </div>
 
@@ -314,7 +314,7 @@
             @empty
                 <div class="delivery-card" style="grid-column: 1 / -1; text-align: center; padding: 36px 20px;">
                     <div style="color: #64748B; font-weight: 600;">No pending delivery routes.</div>
-                    <p style="margin: 6px 0 0; font-size: 13px; color: #94A3B8;">Completed orders in the Refill Queue will automatically appear here grouped into delivery routes.</p>
+                    <p style="margin: 6px 0 0; font-size: 13px; color: #94A3B8;">Completed station refills will appear here for delivery assignment.</p>
                 </div>
             @endforelse
         </div>
@@ -387,7 +387,7 @@
         @else
             <div class="delivery-card" style="text-align: center; padding: 36px 20px;">
                 <div style="color: #64748B; font-weight: 600;">No active delivery routes in transit.</div>
-                <p style="margin: 6px 0 0; font-size: 13px; color: #94A3B8;">Completed orders in the Refill Queue will automatically appear here grouped into delivery routes.</p>
+                <p style="margin: 6px 0 0; font-size: 13px; color: #94A3B8;">Completed station refills will appear here for delivery assignment.</p>
             </div>
         @endif
         {{ $activeDeliveryRoutes->links() }}
@@ -680,7 +680,7 @@
                     <ol class="flow-guide-list">
                         <li><strong>Pickup Batch:</strong> Two drivers collect empty gallons in batches.</li>
                         <li><strong>Intake:</strong> Station inspects and accepts customer gallons.</li>
-                        <li><strong>Refill Queue:</strong> Refilling fulfilled in first-in first-out queue.</li>
+                        <li><strong>Refill:</strong> Station staff process accepted gallons before preparing completed orders for delivery.</li>
                         <li><strong>Multi-Stop Route:</strong> Sequenced delivery with proof photo &amp; payment.</li>
                         <li><strong>Completion:</strong> Reconciled as paid online, recorded as debt, or cash collected.</li>
                     </ol>

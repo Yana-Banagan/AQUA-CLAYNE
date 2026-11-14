@@ -27,7 +27,7 @@ class StatusBadge extends StatelessWidget {
       case 'RECEIVED_AT_STATION':
         return 'At Station';
       case 'WAITING_IN_QUEUE':
-        return 'In Queue';
+        return 'At Station';
       case 'REFILLING':
         return 'Refilling';
       case 'READY_FOR_DELIVERY':

@@ -50,9 +50,7 @@ Instead:
 The existing business revision remains authoritative: a normal order is
 a **water refill service using customer-owned gallons**, not a sale of
 station-owned gallons. Customer-owned gallons are physically collected,
-received at the station, placed into the refill queue, refilled, and
-returned to the customer. The queue begins only after physical station
-intake. fileciteturn1file0L30-L61
+received and verified at the station, refilled, and returned to the customer. fileciteturn1file0L30-L61
 
 ------------------------------------------------------------------------
 
@@ -132,7 +130,7 @@ Driver pickup
    ↓
 Station intake
    ↓
-Refill queue
+Station refill operations
    ↓
 Refilling
    ↓
@@ -155,7 +153,6 @@ CONFIRMED
 ASSIGNED
 PICKED_UP
 RECEIVED_AT_STATION
-WAITING_IN_QUEUE
 REFILLING
 READY_FOR_DELIVERY
 OUT_FOR_DELIVERY
@@ -753,7 +750,7 @@ Order confirmed
 Driver assigned
 Empty gallons picked up
 Gallons received at station
-Order entered refill queue
+Station refill started
 Refill started
 Refill completed
 Out for delivery
@@ -789,7 +786,7 @@ PICKUP BATCHES
        ↓
 STATION INTAKE
        ↓
-REFILL QUEUE
+STATION REFILL OPERATIONS
        ↓
 READY ORDERS
        ↓
@@ -812,7 +809,7 @@ OPERATIONS
 ├── Dispatch Board
 │   ├── Pickup
 │   └── Delivery
-├── Refill Queue
+├── Station Refill Operations
 ├── Delivery Routes
 ├── Driver Board
 ├── Payments
@@ -837,7 +834,7 @@ Quantity
 Order Status
 Payment Status
 Pickup Status
-Queue Status
+Refill Status
 Delivery Status
 Assigned Driver / Route
 Requested Schedule
@@ -851,7 +848,7 @@ Ready for Pickup
 Unassigned
 Picked Up
 Waiting for Intake
-Waiting in Refill Queue
+Received at Station
 Refilling
 Ready for Delivery
 Unassigned Delivery
@@ -1177,7 +1174,7 @@ the driver must report the discrepancy.
 Do not silently change the order quantity.
 
 The existing business rule requires expected and actual quantities to be
-reconciled before queue entry. fileciteturn1file0L185-L200
+reconciled before refilling begins. fileciteturn1file0L185-L200
 
 ------------------------------------------------------------------------
 
@@ -1202,104 +1199,27 @@ Accepted
 Rejected/Damaged
 ```
 
-Only accepted gallons enter the refill queue.
+Refilling may begin only after accepted gallons are recorded during station intake.
 
 ------------------------------------------------------------------------
 
-# 33. REFILL QUEUE
+# 33. STATION REFILL OPERATIONS
 
-The refill queue remains a station-side operational module.
-
-It starts only after physical intake.
-
-Default:
+After physical intake, an order remains at the station until staff begin refilling it. The order record is the source of truth for its station-processing status.
 
 ``` text
-FIFO
+RECEIVED_AT_STATION
+        ?
+REFILLING
+        ?
+READY_FOR_DELIVERY
 ```
 
-meaning:
-
-``` text
-first verified at station
-        ↓
-first eligible for refill
-```
-
-The existing queue states remain:
-
-``` text
-WAITING
-IN_PROGRESS
-COMPLETED
-REMOVED
-```
-
-Only one active queue entry should exist per refill order.
-fileciteturn1file0L126-L159
+Only one order may be actively refilled at a time. Starting refilling validates finalized intake and accepted gallon counts in a transaction protected by the station-level database lock. Completion advances the order to `READY_FOR_DELIVERY` and retains normal status-history, audit, and notification records.
 
 ------------------------------------------------------------------------
 
-# 34. REFILL QUEUE ADMIN UI
-
-Example:
-
-``` text
-REFILL QUEUE
-
-#   Order      Customer       Qty   Status
-1   AC-1042    Juan           3     WAITING
-2   AC-1043    Maria          5     WAITING
-3   AC-1044    Pedro          2     REFILLING
-```
-
-Show:
-
-``` text
-Queue position
-Customer
-Order number
-Quantity
-Received at
-Waiting duration
-Priority
-Status
-```
-
-Actions:
-
-``` text
-START REFILL
-MARK READY
-VIEW HISTORY
-CHANGE PRIORITY
-```
-
-The existing Admin queue requirements already specify these operational
-fields/actions. fileciteturn1file0L270-L287
-
-------------------------------------------------------------------------
-
-# 35. QUEUE PRIORITY
-
-Manual priority changes must be controlled.
-
-Required audit fields:
-
-``` text
-Order
-Old Position
-New Position
-Changed By
-Reason
-Timestamp
-```
-
-No silent queue manipulation.
-
-fileciteturn1file0L161-L183
-
-------------------------------------------------------------------------
+# 34. DELIVERY ROUTES
 
 # 36. DELIVERY ROUTES
 
@@ -1668,7 +1588,7 @@ users
   │              │
   │              ├── physical intake
   │              │
-  │              ├── refill queue
+  │              ├── station refill operations
   │              │
   │              └── delivery stop
   │                     └── delivery route
@@ -1690,7 +1610,6 @@ pickup_batches
 pickup_batch_items
 physical_intakes
 physical_intake_items
-refill_queue
 delivery_routes
 delivery_stops
 ```
@@ -1764,8 +1683,6 @@ pickup_batch_items.order_id
 physical_intakes.order_id
 physical_intake_items.physical_intake_id
 
-refill_queue.order_id
-
 delivery_routes.driver_id
 delivery_stops.delivery_route_id
 delivery_stops.order_id
@@ -1803,7 +1720,7 @@ Order status changed
 Pickup assignment changed
 Pickup batch status changed
 Physical intake confirmed
-Queue position changed
+Station refill status changed
 Refill started
 Refill completed
 Delivery route changed
@@ -1839,7 +1756,6 @@ Confirmed
 Driver Assigned
 Picked Up
 Received at Station
-Waiting in Queue
 Refilling
 Ready for Delivery
 Out for Delivery
@@ -1847,7 +1763,6 @@ Delivered
 Completed
 ```
 
-The queue position is calculated/validated by the backend.
 fileciteturn1file0L250-L268
 
 ------------------------------------------------------------------------
@@ -1941,7 +1856,6 @@ Only authorized Admin users can:
 -   modify dispatch plans;
 -   confirm station intake where permitted;
 -   start/finish refill operations where permitted;
--   modify queue priority;
 -   create delivery routes;
 -   reassign routes;
 -   view payment operations;
@@ -1965,7 +1879,6 @@ pickup batch assignment
 driver reassignment
 intake confirmation
 quantity discrepancy
-queue priority change
 refill start
 refill completion
 delivery route creation
@@ -2080,10 +1993,10 @@ PhysicalIntakeService
     ↓
 Expected vs received
 
-RefillQueueService
+RefillOperationService
     ↓
-Queue
-Priority
+Validate intake
+Enforce single active refill
 Start refill
 Finish refill
 
@@ -2424,7 +2337,7 @@ EMPTY GALLONS COLLECTED
 STATION INTAKE
           │
           ▼
-REFILL QUEUE
+STATION REFILL OPERATIONS
           │
           ▼
 REFILLING
@@ -2516,7 +2429,6 @@ Delivery
 Driver
 Notification
 Audit
-Queue
 ```
 
 If an equivalent component exists:
@@ -2581,7 +2493,7 @@ notifications
 audit_logs
 ```
 
-and any existing queue/route/intake tables.
+and any existing route/intake tables.
 
 ------------------------------------------------------------------------
 
@@ -2649,7 +2561,7 @@ Implement/extend:
 DispatchService
 PickupService
 PhysicalIntakeService
-RefillQueueService
+RefillOperationService
 DeliveryRouteService
 ```
 
@@ -2664,7 +2576,7 @@ Dispatch Board
 Driver Board
 Pickup Batches
 Delivery Routes
-Refill Queue
+Station Refill Operations
 ```
 
 without removing the existing Orders/Payments/Credit modules.
@@ -2767,7 +2679,7 @@ Pickup batching
 ↓
 Station intake
 ↓
-Queue
+Station refill operations
 ↓
 Refilling
 ↓
@@ -2815,7 +2727,7 @@ Pickup Batch 3
    ↓
 Station intake
    ↓
-Refill queue
+Station refill operations
    ↓
 Ready orders
    ↓
@@ -2887,7 +2799,6 @@ Driver cannot modify payment status
 
 ``` text
 Unauthorized user cannot access Admin dispatch
-Unauthorized user cannot reorder queue
 ```
 
 ### PayMongo
@@ -2935,10 +2846,8 @@ This revision is complete only when:
 -   [ ] Driver can view assigned pickup work.
 -   [ ] Driver can record collected gallons.
 -   [ ] Station can confirm physical intake.
--   [ ] Orders enter refill queue only after intake.
--   [ ] FIFO queue works.
--   [ ] Controlled queue priority works.
--   [ ] Priority changes are audited.
+-   [ ] Orders can start refilling only after intake.
+-   [ ] Only one order can be actively refilled at a time.
 -   [ ] Admin can manage delivery routes.
 -   [ ] One route can contain multiple customers.
 -   [ ] Driver can complete multiple delivery stops.
@@ -2980,7 +2889,7 @@ This revision is complete only when:
                          │ Dispatch             │
                          │ Pickup               │
                          │ Intake               │
-                         │ Refill Queue         │
+                         │ Station Refill       │
                          │ Delivery Routes      │
                          │ Notifications        │
                          └──────┬───────┬───────┘
@@ -3005,7 +2914,7 @@ This revision is complete only when:
 │ Orders        │  │ Pickup Batches  │
 │ Dispatch      │  │ Intake          │
 │ Driver Board  │  │ Delivery Routes │
-│ Refill Queue  │  │ Stops           │
+│ Station Refill│  │ Stops           │
 │ Routes        │  │ Proof of Delivery│
 │ Payments      │  │ Profile         │
 └───────────────┘  └─────────────────┘
@@ -3044,7 +2953,7 @@ BATCHED PICKUP
     ↓
 PHYSICAL STATION INTAKE
     ↓
-REFILL QUEUE
+STATION REFILL OPERATIONS
     ↓
 REFILL
     ↓

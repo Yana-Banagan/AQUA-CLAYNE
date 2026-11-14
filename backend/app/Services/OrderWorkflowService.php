@@ -13,11 +13,10 @@ class OrderWorkflowService
 {
     private const TRANSITIONS = [
         'pending' => ['confirmed', 'rejected', 'cancelled'],
-        'confirmed' => ['assigned', 'received_at_station', 'waiting_in_queue', 'cancelled'],
+        'confirmed' => ['assigned', 'received_at_station', 'cancelled'],
         'assigned' => ['picked_up', 'pickup_failed', 'cancelled'],
         'picked_up' => ['received_at_station'],
-        'received_at_station' => ['waiting_in_queue', 'cancelled'],
-        'waiting_in_queue' => ['refilling', 'cancelled'],
+        'received_at_station' => ['refilling', 'cancelled'],
         'refilling' => ['ready_for_delivery', 'ready_for_pickup'],
         'ready_for_pickup' => ['completed', 'cancelled'],
         'ready_for_delivery' => ['out_for_delivery', 'cancelled'],
@@ -67,7 +66,6 @@ class OrderWorkflowService
                 'confirmed' => ['Order Confirmed', 'Your refill order has been confirmed.'],
                 'picked_up' => ['Empty Gallons Picked Up', 'Your empty gallons have been collected for refilling.'],
                 'received_at_station' => ['Gallons Received', 'Your gallons have been received at the station.'],
-                'waiting_in_queue' => ['Refill Queue Update', 'Your order has entered the refill queue.'],
                 'refilling' => ['Refill Started', 'Your gallons are now being refilled.'],
                 'ready_for_delivery' => ['Refill Ready', 'Your refilled gallons are ready for delivery.'],
                 'ready_for_pickup' => ['Order Ready for Pickup', 'Your order is ready! Please collect it from the Aqua Clayne station.'],

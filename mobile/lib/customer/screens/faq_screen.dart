@@ -25,8 +25,8 @@ class _FaqScreenState extends State<FaqScreen> {
       'Have your empty gallons ready at your designated delivery address. The assigned driver will inspect container condition and count the gallons before bringing them to the station.'
     ),
     (
-      'How does the Refill Queue work?',
-      'Once your gallons are checked in at the refilling station, your order automatically enters the station refill queue. You can track live queue status and estimated wait time directly in the Queue tab.'
+      'What happens after my empty gallons reach the station?',
+      'Station staff inspect and count your empty gallons before refilling begins. You can follow the order status in Order History.'
     ),
     (
       'When will my refilled water be delivered?',

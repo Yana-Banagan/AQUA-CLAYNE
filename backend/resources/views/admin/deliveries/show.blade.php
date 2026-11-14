@@ -65,7 +65,6 @@
                         'picked_up'            => 3,
                         'at_station'           => 4,
                         'received_at_station'  => 4,
-                        'waiting_in_queue'     => 4,
                         'refilling'            => 4,
                         'ready_for_delivery'   => 5,
                         'out_for_delivery'     => 6,
@@ -97,7 +96,7 @@
                                 ? $currentOrder->containerIntake->accepted_count . ' gallons accepted for refill'
                                 : ($weight >= 4 ? 'Gallons received at station' : 'Awaiting station arrival')],
                         [5, 'Refill Completed &amp; Ready for Delivery',
-                            $weight >= 5 ? 'Purified water refilling fulfilled in queue' : 'Pending refill queue'],
+                            $weight >= 5 ? 'Purified water refilling completed' : 'Pending station refilling'],
                         [6, 'Out for Return Delivery',
                             $weight >= 6 ? 'Driver dispatched with refilled gallons' : 'Awaiting dispatch'],
                         [7, 'Delivered to Customer',

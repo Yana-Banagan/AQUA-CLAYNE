@@ -2,15 +2,15 @@
 
 namespace Tests\Feature;
 
-use App\Models\ChatMessage;
+use App\Models\ChatConversation;
 use App\Models\Driver;
-use App\Models\Notification;
-use App\Models\Order;
 use App\Models\User;
 use App\Services\AdminSharedDataService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class AdminPerformanceOptimizationTest extends TestCase
@@ -43,7 +43,6 @@ class AdminPerformanceOptimizationTest extends TestCase
         $counts1 = $service->getSidebarCounts($this->adminUser);
         $this->assertIsArray($counts1);
         $this->assertArrayHasKey('pendingOrders', $counts1);
-        $this->assertArrayHasKey('waitingInQueue', $counts1);
         $this->assertArrayHasKey('activeDeliveries', $counts1);
         $this->assertArrayHasKey('lowStock', $counts1);
         $this->assertArrayHasKey('unreadNotifications', $counts1);
@@ -62,12 +61,12 @@ class AdminPerformanceOptimizationTest extends TestCase
         $service = new AdminSharedDataService();
         $service->provide([
             'pendingOrders' => 42,
-            'waitingInQueue' => 99,
+            'activeDeliveries' => 99,
         ]);
 
         $counts = $service->getSidebarCounts($this->adminUser);
         $this->assertEquals(42, $counts['pendingOrders']);
-        $this->assertEquals(99, $counts['waitingInQueue']);
+        $this->assertEquals(99, $counts['activeDeliveries']);
     }
 
     public function test_admin_status_counts_endpoint_returns_combined_data(): void
@@ -80,7 +79,6 @@ class AdminPerformanceOptimizationTest extends TestCase
                 'pending_orders',
                 'unread_chats',
                 'unread_notifications',
-                'waiting_in_queue',
                 'active_deliveries',
                 'low_stock',
                 'notifications',
@@ -104,7 +102,6 @@ class AdminPerformanceOptimizationTest extends TestCase
         $pages = [
             '/admin/dashboard',
             '/admin/orders',
-            '/admin/refill-queue',
             '/admin/deliveries',
             '/admin/customers',
             '/admin/complaints',
@@ -121,7 +118,24 @@ class AdminPerformanceOptimizationTest extends TestCase
         }
     }
 
-    public function test_deliveries_page_does_not_make_remote_avatar_signing_requests(): void
+    public function test_chat_conversations_are_paginated(): void
+    {
+        foreach (range(1, 31) as $index) {
+            $participant = User::factory()->create(['role' => 'customer', 'status' => 'active']);
+            ChatConversation::create([
+                'participant_id' => $participant->id,
+                'participant_role' => 'customer',
+                'last_message_at' => now()->subMinutes($index),
+            ]);
+        }
+
+        $this->actingAs($this->adminUser)
+            ->get('/admin/chat')
+            ->assertOk()
+            ->assertSee('Next');
+    }
+
+    public function test_admin_pages_do_not_make_remote_avatar_signing_requests(): void
     {
         Http::fake();
         $this->adminUser->forceFill(['avatar_path' => 'admin/avatar.png'])->save();
@@ -141,6 +155,9 @@ class AdminPerformanceOptimizationTest extends TestCase
         $response = $this->actingAs($this->adminUser)->get('/admin/deliveries');
 
         $response->assertOk();
+        $this->actingAs($this->adminUser)->get('/admin/dashboard')->assertOk();
+        $this->actingAs($this->adminUser)->get('/admin/chat')->assertOk();
+        $this->actingAs($this->adminUser)->get('/admin/settings')->assertOk();
 
         $staffUser = User::factory()->create([
             'role' => 'staff',
@@ -151,6 +168,42 @@ class AdminPerformanceOptimizationTest extends TestCase
         $this->actingAs($staffUser)->get('/admin/deliveries')->assertOk();
 
         $sentPaths = Http::recorded()->map(fn ($pair) => parse_url($pair[0]->url(), PHP_URL_PATH))->all();
-        $this->assertSame([], $sentPaths, 'The Deliveries page must not make remote HTTP requests while rendering.');
+        $this->assertSame([], $sentPaths, 'Admin pages must not make remote HTTP requests while rendering.');
+    }
+
+    public function test_admin_reports_handle_malformed_cached_collections_gracefully(): void
+    {
+        Cache::store('file')->put('admin:reports:all:all', [
+            'topServices' => 'bad cache payload',
+            'driverPerformances' => 'bad cache payload',
+        ]);
+
+        $this->actingAs($this->adminUser)
+            ->get('/admin/reports')
+            ->assertOk()
+            ->assertSee('No service sales data yet.');
+    }
+
+    public function test_admin_settings_and_reports_do_not_reference_queue_workflow(): void
+    {
+        $this->actingAs($this->adminUser)
+            ->get('/admin/settings')
+            ->assertOk()
+            ->assertDontSee('Queue Dispatch Policy')
+            ->assertDontSee('Operational Refill & Queue Parameters');
+
+        $this->actingAs($this->adminUser)
+            ->get('/admin/reports')
+            ->assertOk()
+            ->assertDontSee('Queue / Transit');
+    }
+
+    public function test_removed_station_queue_route_returns_not_found(): void
+    {
+        $this->assertFalse(Schema::hasTable('refill_queue_entries'));
+
+        $this->actingAs($this->adminUser)
+            ->get('/admin/refill-queue')
+            ->assertNotFound();
     }
 }

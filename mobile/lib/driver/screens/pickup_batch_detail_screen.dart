@@ -87,7 +87,7 @@ class _PickupBatchDetailScreenState extends State<PickupBatchDetailScreen> {
         title: const Text('Return to Station & Intake'),
         content: const Text(
           'Are you returning to the station with collected customer bottles? '
-          'Upon arrival, station staff will inspect empty containers before entering the refill queue.',
+          'Upon arrival, station staff will inspect empty containers before refilling begins.',
         ),
         actions: [
           TextButton(

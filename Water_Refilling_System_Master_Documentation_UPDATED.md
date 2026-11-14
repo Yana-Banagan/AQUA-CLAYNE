@@ -218,7 +218,7 @@ This guide took the Water Refilling Station Management System from an empty mach
 
 ---
 
-# 9. 2026 Business-Flow Revision — Customer-Owned Gallon Refill + Refill Queue
+# 9. 2026 Business-Flow Revision — Customer-Owned Gallon Refill + Station Operations
 
 > **This section supersedes the earlier generic “product sale / stock decrement” interpretation for normal refill orders.**
 > AQUA CLAYNE’s primary service flow is now defined as a **refill service using customer-owned empty gallons**. The station receives the customer’s own containers, refills them, and returns the same quantity to the customer.
@@ -278,13 +278,9 @@ STATION COUNTS / INSPECTS / ACCEPTS GALLONS
         ↓
 RECEIVED_AT_STATION
         ↓
-SYSTEM CREATES REFILL QUEUE ENTRY
+INTAKE VERIFIED
         ↓
-WAITING_IN_QUEUE
-        ↓
-ORDER REACHES FRONT OF QUEUE
-        ↓
-STATION STARTS REFILL
+STATION STAFF START REFILL
         ↓
 REFILLING
         ↓
@@ -314,64 +310,13 @@ PICKUP_FAILED
 DELIVERY_FAILED
 ```
 
-## 9.3 Refill Queue Rule
+## 9.3 Station Refill Operations
 
-The refill queue begins only **after the station physically receives and verifies the customer’s empty gallons**.
+After intake, the order remains at the station until staff start refilling it. The order status is the source of truth. Only one order may be actively refilled at a time.
 
-Default policy:
+## 9.4 Refill Start and Completion
 
-```text
-FIFO = First verified at station → first eligible for refill
-```
-
-The queue must not be created immediately when the customer places an order because the station has not yet received the physical containers.
-
-Each queue entry contains at minimum:
-
-- Order ID
-- Queue number / sequence
-- Queue status
-- Time received at station
-- Time queued
-- Refill started at
-- Refill completed at
-- Priority
-- Manual priority reason, when applicable
-
-Recommended queue states:
-
-```text
-WAITING
-IN_PROGRESS
-COMPLETED
-REMOVED
-```
-
-Only one active queue entry should exist for a refill order.
-
-## 9.4 Controlled Priority Changes
-
-An authorized admin may move an order in the queue only when there is a legitimate operational reason.
-
-Examples:
-
-- correction of an intake mistake;
-- urgent customer/service condition;
-- previous service failure;
-- station operational decision.
-
-Every manual priority change must create an audit record containing:
-
-```text
-Order
-Old Position
-New Position
-Changed By
-Reason
-Timestamp
-```
-
-Silent queue manipulation is not allowed.
+Starting a refill requires finalized intake and at least one accepted gallon. A station-level database lock prevents concurrent active refills. Completing the refill advances the order to `READY_FOR_DELIVERY` and retains normal status-history and audit records.
 
 ## 9.5 Physical Gallon Intake Rule
 
@@ -386,9 +331,9 @@ Accepted for refill: 3
 Damaged / rejected: 0
 ```
 
-The order cannot enter `WAITING_IN_QUEUE` until intake is confirmed.
+The order cannot enter `REFILLING` until intake is confirmed.
 
-If counts differ, the station must resolve the discrepancy before normal queue entry.
+If counts differ, the station must resolve the discrepancy before refilling can begin.
 
 ## 9.6 Revised Product / Inventory Meaning
 
@@ -447,7 +392,7 @@ Order confirmed
 Driver assigned for empty-gallon pickup
 Empty gallons picked up
 Gallons received at station
-Order entered refill queue
+Station refill started
 Refill started
 Refill completed / ready for delivery
 Out for delivery
@@ -456,33 +401,28 @@ Payment recorded
 Balance updated
 ```
 
-The mobile UI may display queue position later, but queue position is always calculated/validated by the backend.
+The mobile UI displays order status from the backend and does not calculate station processing position.
 
 ## 9.10 Admin Web Additions
 
-The Admin Web must include a **Refill Queue** operational page showing:
+The Admin Web must include station refill operations showing:
 
-- Waiting orders
+- Orders received at the station
 - Orders currently refilling
 - Ready-for-delivery orders
-- Total gallons waiting
-- Queue position
 - Customer
 - Order number
 - Quantity
 - Received-at time
-- Waiting duration
 - Start Refill action
 - Mark Refill Ready action
-- Controlled priority action
-- Queue history
 
 Recommended navigation:
 
 ```text
 OPERATIONS
 ├── Orders
-├── Refill Queue
+├── Station Refill Operations
 ├── Deliveries
 ├── Payments
 └── Credit / Debt
@@ -494,16 +434,14 @@ The backend implementation must add or adapt:
 
 - customer-owned container metadata on orders;
 - physical intake records;
-- refill queue records;
-- queue service;
+- direct station refill workflow;
 - revised order status transitions;
 - intake-confirmation endpoint;
 - start-refill endpoint;
 - finish-refill endpoint;
-- queue list/reorder endpoints for Admin;
 - new realtime events;
 - new notifications;
-- audit logging for queue changes;
+- audit logging for refill transitions;
 - revised order creation logic so customer-owned gallons are not treated as station gallon sales.
 
 The separate `AQUA_CLAYNE_Backend_Master_Specification.md` defines these backend changes in full.
@@ -520,7 +458,6 @@ CONFIRMED
 ASSIGNED
 PICKED_UP
 RECEIVED_AT_STATION
-WAITING_IN_QUEUE
 REFILLING
 READY_FOR_DELIVERY
 OUT_FOR_DELIVERY
@@ -547,8 +484,8 @@ Where an earlier phase says that checkout behaves like a normal product sale and
 
 - the primary AQUA CLAYNE transaction is a **water refill service**;
 - the customer normally supplies the gallon;
-- the station receives, queues, refills, and returns those customer-owned gallons;
-- queueing begins only after physical station intake;
+- the station receives, verifies, refills, and returns those customer-owned gallons;
+- refilling begins only after physical station intake;
 - station-owned gallon/RFID assets remain separately managed.
 
 This revision should be used as the current business rule when continuing backend and frontend development.

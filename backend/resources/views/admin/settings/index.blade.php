@@ -71,12 +71,12 @@
 
             <!-- Group 2: Operational Refill Rules (Section 34) -->
             <article class="detail-section">
-                <h3>Operational Refill &amp; Queue Parameters</h3>
+                <h3>Operational Station Intake &amp; Refill Parameters</h3>
                 
                 <div class="field">
                     <label>Active Business Workflow Model</label>
                     <input type="text" value="{{ $settings['business_model'] }}" readonly style="background: var(--surface-soft); font-weight: 700; color: var(--navy);">
-                    <small>Enforces that customer-owned empty containers are received at station before queue entry.</small>
+                    <small>Requires customer-owned empty containers to be received and reconciled at station before refill begins.</small>
                 </div>
 
                 <div class="form-grid">
@@ -86,8 +86,8 @@
                     </div>
                     
                     <div class="field">
-                        <label>Queue Dispatch Policy</label>
-                        <input type="text" value="FIFO (First-In, First-Out)" readonly style="background: var(--surface-soft);">
+                        <label>Station Processing Policy</label>
+                        <input type="text" value="Single refill floor, FIFO by accepted intake" readonly style="background: var(--surface-soft);">
                     </div>
                 </div>
             </article>

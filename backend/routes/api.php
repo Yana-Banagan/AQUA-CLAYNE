@@ -221,24 +221,6 @@ Route::prefix('v1')->group(function () {
             [PayMongoController::class, 'simulateSuccess']
         );
 
-        /*
-         * Customer Queue
-         */
-        Route::get(
-            '/queue',
-            [OrderController::class, 'activeQueue']
-        );
-
-        Route::get(
-            '/orders/{order}/queue',
-            [OrderController::class, 'queue']
-        );
-
-        Route::get(
-            '/customer/orders/{order}/queue',
-            [OrderController::class, 'queue']
-        );
-
         Route::get('/notifications', [NotificationController::class, 'index']);
         Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
         Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);

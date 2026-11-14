@@ -9,7 +9,6 @@ import '../../customer/providers/notification_provider.dart';
 import '../../customer/providers/order_provider.dart';
 import '../../customer/providers/cart_provider.dart';
 import '../../customer/providers/payment_provider.dart';
-import '../../customer/providers/queue_provider.dart';
 import '../../customer/providers/complaint_provider.dart';
 import 'addresses_screen.dart';
 import 'change_password_screen.dart';
@@ -108,7 +107,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         context.read<CreditProvider>().clearSessionData();
       } catch (_) {}
       try {
-        context.read<QueueProvider>().clearSessionData();
       } catch (_) {}
       try {
         context.read<ComplaintProvider>().clearSessionData();

@@ -74,17 +74,6 @@
         setValue('intake-accepted', Math.max(0, received - damaged));
     };
 
-    window.openPriorityModal = function (orderId, orderCode, currentPosition, currentPriority) {
-        setText('priority-order-code', `#${orderCode}`);
-        setText('priority-current-pos', `#${currentPosition}`);
-        setValue('priority-select', currentPriority);
-
-        const form = byId('priority-form');
-        if (form) form.action = `/admin/refill-queue/${orderId}/priority`;
-
-        window.openModal?.('priority-modal');
-    };
-
     document.addEventListener('DOMContentLoaded', () => {
         ['intake-received', 'intake-damaged'].forEach((id) => {
             byId(id)?.addEventListener('input', window.calculateIntakeCounts);

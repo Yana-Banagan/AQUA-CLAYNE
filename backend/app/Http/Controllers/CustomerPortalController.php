@@ -49,11 +49,11 @@ class CustomerPortalController extends Controller
 
         if ($customer) {
             $activeOrdersCount = $customer->orders()
-                ->whereIn('status', ['pending', 'confirmed', 'assigned_to_driver', 'out_for_delivery', 'waiting_in_queue', 'refilling'])
+                ->whereIn('status', ['pending', 'confirmed', 'assigned_to_driver', 'out_for_delivery', 'received_at_station', 'refilling'])
                 ->count();
 
             $inProgressCount = $customer->orders()
-                ->whereIn('status', ['confirmed', 'assigned_to_driver', 'waiting_in_queue', 'refilling', 'out_for_delivery'])
+                ->whereIn('status', ['confirmed', 'assigned_to_driver', 'received_at_station', 'refilling', 'out_for_delivery'])
                 ->count();
 
             $completedOrdersCount = $customer->orders()
@@ -76,7 +76,7 @@ class CustomerPortalController extends Controller
                     $tagUid = 'AC-GAL-' . str_pad($ord->order_number, 4, '0', STR_PAD_LEFT) . '-' . str_pad($i, 2, '0', STR_PAD_LEFT);
                     $statusLabel = 'Verified & In Circulation';
                     $statusClass = 'badge-delivered';
-                    if (in_array($ord->status, ['waiting_in_queue', 'refilling'])) {
+                    if (in_array($ord->status, ['received_at_station', 'refilling'])) {
                         $statusLabel = 'In Refill Station';
                         $statusClass = 'badge-refilling';
                     } elseif ($ord->status === 'out_for_delivery') {
@@ -260,11 +260,6 @@ class CustomerPortalController extends Controller
     public function profile(Request $request)
     {
         return $this->index($request, 'profile');
-    }
-
-    public function queue(Request $request)
-    {
-        return $this->index($request, 'queue');
     }
 
     /**

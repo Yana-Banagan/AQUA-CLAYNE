@@ -85,7 +85,7 @@ class _StationIntakeScreenState extends State<StationIntakeScreen> {
                   ),
                   SizedBox(height: 4),
                   Text(
-                    'Please hand over the collected customer gallons\nto station staff for inspection and refill queueing.',
+                    'Please hand over the collected customer gallons\nto station staff for inspection before refilling.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,

@@ -107,14 +107,13 @@
                         <span>Assign Driver</span>
                     </button>
                 @else
-                    <!-- QUEUE FOR STATION REFILL ACTION -->
-                    <a href="{{ route('admin.refill-queue.index') }}" class="btn-action-primary">
+                    <a href="#station-intake-form" class="btn-action-primary">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <polyline points="23 4 23 10 17 10"></polyline>
                             <polyline points="1 20 1 14 7 14"></polyline>
                             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
                         </svg>
-                        <span>Station Refill Queue</span>
+                        <span>Record Station Intake</span>
                     </a>
                 @endif
 
@@ -143,23 +142,33 @@
                     <span>View Delivery Assignment</span>
                 </a>
 
-            @elseif(in_array(strtolower($order->status), ['received_at_station', 'waiting_in_queue', 'refilling']))
-                <!-- VIEW STATION REFILL QUEUE -->
-                <a href="{{ route('admin.refill-queue.index') }}" class="btn-action-secondary">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <polyline points="23 4 23 10 17 10"></polyline>
-                        <polyline points="1 20 1 14 7 14"></polyline>
-                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                    </svg>
-                    <span>Station Refill Queue</span>
+            @elseif($order->status === 'received_at_station' && $order->containerIntake?->completed_at && $order->containerIntake?->accepted_count > 0)
+                <form method="POST" action="{{ route('admin.orders.refill.start', $order->id) }}" class="inline-action-form">
+                    @csrf
+                    <button type="submit" class="btn-action-primary">
+                        <span>Start Refill</span>
+                    </button>
+                </form>
+
+            @elseif($order->status === 'received_at_station')
+                <a href="#intake-resolution-form" class="btn-action-secondary">
+                    <span>Resolve Intake</span>
                 </a>
+
+            @elseif($order->status === 'refilling')
+                <form method="POST" action="{{ route('admin.orders.refill.complete', $order->id) }}" class="inline-action-form">
+                    @csrf
+                    <button type="submit" class="btn-action-primary">
+                        <span>Complete Refill</span>
+                    </button>
+                </form>
             @endif
 
         </div>
     </div>
 
     <!-- Intake Discrepancy Banner if active -->
-    @if($order->containerIntake && ($order->containerIntake->expected_count != $order->containerIntake->received_count || $order->containerIntake->rejected_count > 0))
+    @if($order->containerIntake && !$order->containerIntake->completed_at)
         <aside class="show-alert-banner banner-danger" role="alert">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
@@ -171,6 +180,60 @@
                 <span>Expected {{ $order->containerIntake->expected_count }} gallons from customer, but received {{ $order->containerIntake->received_count }} gallons ({{ $order->containerIntake->damaged_count }} damaged / rejected). Please resolve with customer before station refill.</span>
             </div>
         </aside>
+    @endif
+
+    @if(in_array($order->status, ['picked_up', 'confirmed'], true) && !$order->containerIntake && ($order->status === 'picked_up' || $order->isStationPickup()))
+        <form id="station-intake-form" method="POST" action="{{ route('admin.orders.intake', $order->id) }}" class="orders-card show-card">
+            @csrf
+            <div class="show-card-head">
+                <h3 class="show-card-title">Record Station Intake</h3>
+            </div>
+            <div class="show-row-grid">
+                <label>Received gallons
+                    <input type="number" name="received_count" min="0" required value="{{ $order->expected_empty_gallons }}">
+                </label>
+                <label>Accepted for refill
+                    <input type="number" name="accepted_count" min="0" required value="{{ $order->expected_empty_gallons }}">
+                </label>
+                <label>Damaged gallons
+                    <input type="number" name="damaged_count" min="0" value="0">
+                </label>
+                <label>Rejected gallons
+                    <input type="number" name="rejected_count" min="0" value="0">
+                </label>
+                <label class="show-row">Condition notes
+                    <textarea name="condition_notes" rows="2"></textarea>
+                </label>
+            </div>
+            <button type="submit" class="btn-action-primary">Confirm Intake</button>
+        </form>
+    @endif
+
+    @if($order->containerIntake && !$order->containerIntake->completed_at)
+        <form id="intake-resolution-form" method="POST" action="{{ route('admin.orders.intake.resolve', $order->id) }}" class="orders-card show-card">
+            @csrf
+            <div class="show-card-head">
+                <h3 class="show-card-title">Resolve Intake Discrepancy</h3>
+            </div>
+            <div class="show-row-grid">
+                <label>Received gallons
+                    <input type="number" name="received_count" min="0" required value="{{ $order->containerIntake->received_count }}">
+                </label>
+                <label>Accepted for refill
+                    <input type="number" name="accepted_count" min="1" required value="{{ $order->containerIntake->accepted_count }}">
+                </label>
+                <label>Damaged gallons
+                    <input type="number" name="damaged_count" min="0" value="{{ $order->containerIntake->damaged_count }}">
+                </label>
+                <label>Rejected gallons
+                    <input type="number" name="rejected_count" min="0" value="{{ $order->containerIntake->rejected_count }}">
+                </label>
+                <label class="show-row">Resolution reason
+                    <textarea name="resolution_reason" rows="2" required></textarea>
+                </label>
+            </div>
+            <button type="submit" class="btn-action-primary">Resolve and Continue</button>
+        </form>
     @endif
 
     <!-- ===================================================================

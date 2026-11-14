@@ -31,11 +31,12 @@ class ChatController extends Controller
             ->when($unread, fn ($q) => $q->whereHas('messages', fn ($m) => $m->whereNotIn('sender_role', ['admin', 'staff'])->whereNull('read_at')))
             ->when($search !== '', fn ($q) => $q->whereHas('participant', fn ($u) => $u->whereRaw('LOWER(name) LIKE ?', ['%' . strtolower($search) . '%'])->orWhereRaw('LOWER(email) LIKE ?', ['%' . strtolower($search) . '%'])))
             ->orderByDesc('last_message_at')
-            ->get();
+            ->simplePaginate(30)
+            ->withQueryString();
 
         $selected = $request->filled('conversation')
             ? ChatConversation::with('participant')->findOrFail($request->query('conversation'))
-            : $conversations->first();
+            : $conversations->getCollection()->first();
 
         if ($selected) {
             $selected->messages()
@@ -78,11 +79,7 @@ class ChatController extends Controller
             return;
         }
 
-        try {
-            $user->setAttribute('avatar_url', $storage->signedProfilePhotoUrl((string) $user->id, $user->avatar_path));
-        } catch (\Throwable) {
-            $user->setAttribute('avatar_url', null);
-        }
+        $user->setAttribute('avatar_url', $storage->cachedProfilePhotoUrl((string) $user->id, $user->avatar_path));
     }
 
     public function reply(Request $request, ChatConversation $conversation, ChatService $chat, NotificationService $notifications)

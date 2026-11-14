@@ -604,7 +604,7 @@ class _CheckoutAddressScreenState extends State<CheckoutAddressScreen> {
               const SizedBox(height: 8),
               _buildStepRow('2', 'Bring your clean empty gallons to the Aqua Clayne station counter.'),
               const SizedBox(height: 8),
-              _buildStepRow('3', 'Track queue status in real time and collect your filled water containers once ready!'),
+              _buildStepRow('3', 'Track station refill status in real time and collect your filled water containers once ready!'),
             ],
           ),
         ),

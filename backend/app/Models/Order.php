@@ -108,11 +108,6 @@ class Order extends Model
         return $this->hasOne(OrderContainerIntake::class);
     }
 
-    public function refillQueueEntry(): HasOne
-    {
-        return $this->hasOne(RefillQueueEntry::class);
-    }
-
     public function pickupBatchItem(): HasOne
     {
         return $this->hasOne(PickupBatchItem::class);

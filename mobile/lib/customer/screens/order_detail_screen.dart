@@ -5,7 +5,6 @@ import '../../core/api/api_client.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/utils/url_helper.dart';
 import '../../customer/providers/order_provider.dart';
-import '../../customer/providers/queue_provider.dart';
 import '../../customer/providers/notification_provider.dart';
 import '../../customer/providers/address_provider.dart';
 import '../../core/models/order_model.dart';
@@ -145,7 +144,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     if (!mounted) return;
     await Future.wait([
       context.read<OrderProvider>().loadDetail(widget.orderId),
-      context.read<QueueProvider>().loadForOrder(widget.orderId),
       context.read<NotificationProvider>().load(),
     ]);
     if (mounted && context.read<OrderProvider>().detail?.paymentStatus.toUpperCase() == 'PAID') {
@@ -219,8 +217,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         return 'Your empty gallons have been picked up.';
       case 'RECEIVED_AT_STATION':
         return 'Your gallons have arrived at the station.';
-      case 'WAITING_IN_QUEUE':
-        return 'Your gallons are waiting in the refill queue.';
       case 'REFILLING':
         return 'Your gallons are currently being refilled.';
       case 'READY_FOR_PICKUP':
@@ -325,8 +321,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
               // 2. Scrollable Body
               Expanded(
-                child: Consumer2<OrderProvider, QueueProvider>(
-                  builder: (context, orderProv, queueProv, _) {
+                child: Consumer<OrderProvider>(
+                  builder: (context, orderProv, _) {
                     if (orderProv.loading && orderProv.detail == null) {
                       return _buildLoadingSkeleton();
                     }
@@ -374,12 +370,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
                             _buildCombinedOrderSummary(context, order),
                             const SizedBox(height: 14),
-
-                            // Refill Queue Card (when applicable)
-                            if (_shouldShowQueue(order.status)) ...[
-                              _buildQueueCard(order, queueProv),
-                              const SizedBox(height: 14),
-                            ],
 
                             // Completed Order Banner
                             if (order.status.toUpperCase() == 'COMPLETED') ...[
@@ -1041,82 +1031,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                 ? '${order.acceptedEmptyGallons}'
                 : 'Pending inspection',
           ),
-        ],
-      ),
-    );
-  }
-
-  // ── 7. Refill Queue Card ───────────────────────────────────────────────────
-  Widget _buildQueueCard(OrderModel order, QueueProvider qp) {
-    final position = order.queue?.position ?? (qp.position > 0 ? qp.position : 1);
-    final queueNumber = order.queue?.queueNumber ??
-        (qp.queueNumber.isNotEmpty ? qp.queueNumber : 'Q-${order.orderNumber}');
-    final status = order.queue?.status ?? (qp.status.isNotEmpty ? qp.status : 'Waiting');
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFEAF7FF), Color(0xFFDCF1FE)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFBCE1F9)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: const Color(0xFF0878C9).withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                '#$position',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0878C9),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Refill Queue Position',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF6F8BA3),
-                  ),
-                ),
-                Text(
-                  queueNumber,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF064B87),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Status: $status',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF4A6B82),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          StatusBadge(status: status),
         ],
       ),
     );
@@ -2130,16 +2044,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     );
   }
 
-  bool _shouldShowQueue(String status) {
-    return [
-      'RECEIVED_AT_STATION',
-      'WAITING_IN_QUEUE',
-      'REFILLING',
-      'READY_FOR_DELIVERY',
-      'READY_FOR_PICKUP',
-    ].contains(status.toUpperCase());
-  }
-
   String _canonicalStatusLabel(String s) {
     switch (s.toUpperCase()) {
       case 'PENDING':
@@ -2152,8 +2056,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         return 'Empty Gallons Collected';
       case 'RECEIVED_AT_STATION':
         return 'Received at Station';
-      case 'WAITING_IN_QUEUE':
-        return 'In Refill Queue';
       case 'REFILLING':
         return 'Refilling Now';
       case 'READY_FOR_PICKUP':

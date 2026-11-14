@@ -993,59 +993,6 @@ body.admin-body {
     margin-bottom: 26px;
 }
 
-/* ==========================================================================
-   Refill Queue Dashboard Component
-   ========================================================================== */
-.queue-widget-head {
-    display: flex;
-    gap: 12px;
-    background: var(--surface-soft);
-    padding: 12px 16px;
-    border-radius: var(--radius-md);
-    margin-bottom: 16px;
-    align-items: center;
-    flex-wrap: wrap;
-}
-
-.queue-kpi {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding-right: 16px;
-    border-right: 1px solid var(--border);
-}
-
-.queue-kpi:last-child {
-    border-right: 0;
-}
-
-.queue-kpi-badge {
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 700;
-}
-
-.queue-kpi-badge.waiting {
-    background: var(--warning-light);
-    color: #c47c05;
-}
-
-.queue-kpi-badge.refilling {
-    background: var(--purple-light);
-    color: var(--purple);
-}
-
-.queue-kpi-badge.ready {
-    background: var(--success-light);
-    color: var(--success);
-}
-
-.queue-kpi-badge.gallons {
-    background: var(--primary-light);
-    color: var(--primary);
-}
-
 /* Lifecycle Pipeline Chart */
 .lifecycle-chart {
     display: flex;
@@ -1179,7 +1126,7 @@ body.admin-body {
 }
 
 /* All Statuses - Unified Blue Theme */
-.status-warning, .status-pending, .status-waiting_in_queue, .status-waiting,
+.status-warning, .status-pending, .status-waiting,
 .status-info, .status-confirmed, .status-received_at_station,
 .status-blue, .status-assigned, .status-out_for_delivery, .status-en_route_for_pickup,
 .status-purple, .status-picked_up, .status-refilling, .status-in_progress,

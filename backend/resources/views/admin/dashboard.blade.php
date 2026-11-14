@@ -86,7 +86,6 @@
                     'assigned' => '#2563EB',
                     'picked_up' => '#8B5CF6',
                     'received_at_station' => '#14B8A6',
-                    'waiting_in_queue' => '#0EA5E9',
                     'refilling' => '#0284C7',
                     'ready_for_delivery' => '#22B5F3',
                     'out_for_delivery' => '#0879C9',
@@ -97,7 +96,7 @@
                 $statusLabels = [
                     'pending' => 'Pending', 'confirmed' => 'Confirmed', 'assigned' => 'Assigned',
                     'picked_up' => 'Picked Up', 'received_at_station' => 'Received at Station',
-                    'waiting_in_queue' => 'Waiting in Queue', 'refilling' => 'Refilling',
+                    'refilling' => 'Refilling',
                     'ready_for_delivery' => 'Ready for Delivery', 'out_for_delivery' => 'Out for Delivery',
                     'delivered' => 'Delivered', 'completed' => 'Completed', 'exceptions' => 'Exceptions',
                 ];
@@ -130,13 +129,13 @@
     </section>
 
     <!-- ===================================================================
-         6 & 7. LATEST ORDERS + PHYSICAL REFILL QUEUE — SAME ROW
+         6 & 7. LATEST ORDERS + STATION REFILL OPERATIONS — SAME ROW
     =================================================================== -->
     <section class="dashboard-workspace" aria-label="Orders and operations workspace">
-        <div class="orders-queue-row">
+        <div class="orders-operations-row">
 
         <!-- ── LEFT: LATEST ORDERS ──────────────────────────────────── -->
-        <section class="card orders-section orders-queue-card" aria-labelledby="latestOrdersHeading">
+        <section class="card orders-section" aria-labelledby="latestOrdersHeading">
             <div class="section-header">
                 <div>
                     <h3 id="latestOrdersHeading" class="section-title">Latest Orders</h3>
@@ -209,8 +208,8 @@
             <!-- Table Pagination -->
             <div class="table-pagination-footer oq-pagination-footer">
                 <div class="pagination-info">
-                    @if ($latestOrders->total() > 0)
-                        Showing <strong>{{ $latestOrders->firstItem() }}</strong>–<strong>{{ $latestOrders->lastItem() }}</strong> of <strong>{{ $latestOrders->total() }}</strong> orders
+                    @if ($latestOrders->count() > 0)
+                        Showing <strong>{{ $latestOrders->firstItem() }}</strong>–<strong>{{ $latestOrders->lastItem() }}</strong> recent orders
                     @else
                         No orders found
                     @endif
@@ -223,16 +222,6 @@
                             <a class="oq-page-btn" href="{{ $latestOrders->previousPageUrl() }}" aria-label="Previous page">‹</a>
                         @endif
 
-                        @for ($p = 1; $p <= $latestOrders->lastPage(); $p++)
-                            @if ($p == $latestOrders->currentPage())
-                                <span class="oq-page-btn oq-page-btn--active" aria-current="page">{{ $p }}</span>
-                            @elseif ($p <= 2 || $p > $latestOrders->lastPage() - 1 || abs($p - $latestOrders->currentPage()) <= 1)
-                                <a class="oq-page-btn" href="{{ $latestOrders->url($p) }}">{{ $p }}</a>
-                            @elseif (($p == 3 && $latestOrders->currentPage() > 3) || ($p == $latestOrders->lastPage() - 1 && $latestOrders->currentPage() < $latestOrders->lastPage() - 2))
-                                <span class="oq-page-ellipsis">…</span>
-                            @endif
-                        @endfor
-
                         @if ($latestOrders->hasMorePages())
                             <a class="oq-page-btn" href="{{ $latestOrders->nextPageUrl() }}" aria-label="Next page">›</a>
                         @else
@@ -243,109 +232,70 @@
             </div>
         </section>
 
-        <!-- ── RIGHT: PHYSICAL REFILL QUEUE ─────────────────────────── -->
-        <section class="card queue-section orders-queue-card" aria-labelledby="queueHeading">
+        <!-- ── RIGHT: STATION REFILL OPERATIONS ─────────────────────── -->
+        <section class="card orders-operations-card" aria-labelledby="refillOperationsHeading">
             <div class="section-header">
                 <div>
-                    <div class="queue-title-wrap">
-                        <h3 id="queueHeading" class="section-title">Physical Refill Queue</h3>
-                        <span class="badge-queue-active">FIFO Verified</span>
-                    </div>
-                    <p class="section-subtitle">
-                        <strong>{{ $queueCount }}</strong> active &middot; <strong>{{ $queueGallons }}</strong> gals waiting
-                    </p>
+                    <h3 id="refillOperationsHeading" class="section-title">Station Refill Operations</h3>
+                    <p class="section-subtitle">Monitor gallon intake and active refilling.</p>
                 </div>
-                <a href="{{ route('admin.refill-queue.index') }}" class="btn-primary-subtle">
-                    <span>Manage Queue</span>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <polyline points="9 18 15 12 9 6"></polyline>
-                    </svg>
-                </a>
+                <a href="{{ route('admin.orders.index', ['status' => 'received_at_station']) }}" class="btn-primary-subtle">View Orders</a>
             </div>
 
             <div class="orders-table-wrapper oq-table-wrapper">
-                <table class="orders-table queue-table oq-table">
+                <table class="orders-table oq-table">
                     <thead>
                         <tr>
-                            <th scope="col">#</th>
                             <th scope="col">Order</th>
                             <th scope="col">Customer</th>
                             <th scope="col">Gals</th>
-                            <th scope="col">Wait</th>
                             <th scope="col">Status</th>
                             <th scope="col">Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse ($queueEntries as $entry)
+                        @forelse ($refillOperations as $operation)
                             @php
-                                $qOrder = $entry->order;
-                                $qCustomer = $qOrder?->customer?->user?->name ?? 'Customer';
-                                $qGallons = $qOrder?->containerIntake?->accepted_count ?? $qOrder?->expected_empty_gallons ?? 1;
+                                $customerName = $operation->customer?->user?->name ?? 'Customer';
+                                $gallons = $operation->containerIntake?->accepted_count ?? $operation->expected_empty_gallons;
                             @endphp
                             <tr>
-                                <td class="td-queue-num">
-                                    <span class="queue-pos-badge">{{ $entry->queue_position }}</span>
-                                </td>
                                 <td class="td-order-num">
-                                    <strong>{{ $qOrder?->order_number ?? ('ORD-' . strtoupper(substr($entry->order_id, 0, 8))) }}</strong>
+                                    <strong>{{ $operation->order_number ?: ('ORD-' . strtoupper(substr($operation->id, 0, 8))) }}</strong>
                                 </td>
                                 <td class="td-customer oq-customer">
-                                    <span class="oq-customer-name">{{ $qCustomer }}</span>
+                                    <span class="oq-customer-name">{{ $customerName }}</span>
                                 </td>
-                                <td class="td-qty">
-                                    <strong>{{ $qGallons }}</strong>
-                                </td>
-                                <td class="td-wait">
-                                    <span class="wait-badge">{{ $entry->waiting_duration }}</span>
-                                </td>
+                                <td class="td-qty"><strong>{{ $gallons }}</strong></td>
                                 <td class="td-status">
-                                    <span class="status-badge status-{{ $entry->status == 'in_progress' ? 'refilling' : 'waiting-in-queue' }}">
-                                        {{ $entry->status == 'in_progress' ? 'Refilling' : 'Waiting' }}
+                                    <span class="status-badge status-{{ str_replace('_', '-', $operation->status) }}">
+                                        {{ ucwords(str_replace('_', ' ', $operation->status)) }}
                                     </span>
                                 </td>
                                 <td class="td-action">
-                                    <a href="{{ route('admin.orders.show', $entry->order_id) }}" class="btn-table-view">View</a>
+                                    <a href="{{ route('admin.orders.show', $operation->id) }}" class="btn-table-view">View</a>
                                 </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="table-empty-row">Queue is clear — no gallons waiting.</td>
+                                <td colspan="5" class="table-empty-row">No orders currently require station refilling.</td>
                             </tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
 
-            <!-- Table Pagination -->
             <div class="table-pagination-footer oq-pagination-footer">
-                <div class="pagination-info">
-                    @if ($queueEntries->total() > 0)
-                        Showing <strong>{{ $queueEntries->firstItem() }}</strong>–<strong>{{ $queueEntries->lastItem() }}</strong> of <strong>{{ $queueEntries->total() }}</strong> queued
-                    @else
-                        <span>Queue is clear &mdash; 0 waiting</span>
-                    @endif
-                </div>
-                @if ($queueEntries->hasPages())
-                    <nav class="oq-pagination" aria-label="Refill queue pagination">
-                        @if ($queueEntries->onFirstPage())
+                <div class="pagination-info">Showing up to five orders with station activity</div>
+                @if ($refillOperations->hasPages())
+                    <nav class="oq-pagination" aria-label="Station refill operations pagination">
+                        @if ($refillOperations->onFirstPage())
                             <span class="oq-page-btn oq-page-btn--disabled" aria-disabled="true">‹</span>
                         @else
-                            <a class="oq-page-btn" href="{{ $queueEntries->previousPageUrl() }}" aria-label="Previous page">‹</a>
+                            <a class="oq-page-btn" href="{{ $refillOperations->previousPageUrl() }}" aria-label="Previous page">‹</a>
                         @endif
-
-                        @for ($p = 1; $p <= $queueEntries->lastPage(); $p++)
-                            @if ($p == $queueEntries->currentPage())
-                                <span class="oq-page-btn oq-page-btn--active" aria-current="page">{{ $p }}</span>
-                            @elseif ($p <= 2 || $p > $queueEntries->lastPage() - 1 || abs($p - $queueEntries->currentPage()) <= 1)
-                                <a class="oq-page-btn" href="{{ $queueEntries->url($p) }}">{{ $p }}</a>
-                            @elseif (($p == 3 && $queueEntries->currentPage() > 3) || ($p == $queueEntries->lastPage() - 1 && $queueEntries->currentPage() < $queueEntries->lastPage() - 2))
-                                <span class="oq-page-ellipsis">…</span>
-                            @endif
-                        @endfor
-
-                        @if ($queueEntries->hasMorePages())
-                            <a class="oq-page-btn" href="{{ $queueEntries->nextPageUrl() }}" aria-label="Next page">›</a>
+                        @if ($refillOperations->hasMorePages())
+                            <a class="oq-page-btn" href="{{ $refillOperations->nextPageUrl() }}" aria-label="Next page">›</a>
                         @else
                             <span class="oq-page-btn oq-page-btn--disabled" aria-disabled="true">›</span>
                         @endif
@@ -354,7 +304,7 @@
             </div>
         </section>
 
-        </div>{{-- /.orders-queue-row --}}
+        </div>{{-- /.orders-operations-row --}}
 
         <!-- ── BOTTOM: 6-CARD OPERATIONAL BENTO GRID ────────────────── -->
         <section class="dashboard-bento-grid" aria-label="Operational Insights and Quick Actions">
@@ -766,13 +716,13 @@
                             </div>
                             <span class="bento-quick-label">Add Customer</span>
                         </a>
-                        <a href="{{ route('admin.refill-queue.index') }}" class="bento-quick-tile">
+                        <a href="{{ route('admin.orders.index', ['status' => 'received_at_station']) }}" class="bento-quick-tile">
                             <div class="bento-quick-icon">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
                                 </svg>
                             </div>
-                            <span class="bento-quick-label">Refill Station</span>
+                            <span class="bento-quick-label">Station Refilling</span>
                         </a>
                         <a href="{{ route('admin.reports.index') }}" class="bento-quick-tile">
                             <div class="bento-quick-icon">

@@ -20,7 +20,7 @@ class SettingController extends Controller
             'station_latitude' => config('services.station.latitude'),
             'station_longitude' => config('services.station.longitude'),
             'operating_hours' => 'Mon - Sat: 7:00 AM - 7:00 PM | Sun: 8:00 AM - 5:00 PM',
-            'business_model' => 'Customer-Owned Gallon Refill Service (FIFO Queue)',
+            'business_model' => 'Customer-Owned Gallon Refill Service',
             'daily_refill_capacity' => '500',
             'fcm_enabled' => true,
             'realtime_enabled' => true,
@@ -28,7 +28,7 @@ class SettingController extends Controller
 
         $user = auth()->user();
         $adminAvatarUrl = $user?->avatar_path
-            ? $storage->signedProfilePhotoUrl($user->id, $user->avatar_path)
+            ? $storage->cachedProfilePhotoUrl($user->id, $user->avatar_path)
             : null;
 
         return view('admin.settings.index', compact('settings', 'adminAvatarUrl'));

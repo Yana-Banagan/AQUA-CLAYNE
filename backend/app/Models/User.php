@@ -52,14 +52,11 @@ class User extends Authenticatable
                 : null;
         }
 
-        try {
-            return app(SupabaseStorageService::class)
-                ->signedProfilePhotoUrl((string) $this->id, $this->avatar_path);
-        } catch (\Throwable) {
-            return $this->relationLoaded('socialAccounts')
+        return app(SupabaseStorageService::class)
+            ->cachedProfilePhotoUrl((string) $this->id, $this->avatar_path)
+            ?? ($this->relationLoaded('socialAccounts')
                 ? $this->socialAccounts->first()?->avatar_url
-                : null;
-        }
+                : null);
     }
 
     public function socialAccounts(): HasMany

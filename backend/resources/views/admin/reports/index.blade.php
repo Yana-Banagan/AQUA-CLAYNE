@@ -97,7 +97,7 @@
                         <td><span class="status-badge status-success">Completed</span></td>
                     </tr>
                     <tr>
-                        <td><strong>Currently In-Progress (Queue / Transit)</strong></td>
+                        <td><strong>Currently In-Progress (Station Workflow / Transit)</strong></td>
                         <td><strong>{{ $ordersByStatus['in_progress'] }}</strong></td>
                         <td><span class="status-badge status-purple">Active</span></td>
                     </tr>

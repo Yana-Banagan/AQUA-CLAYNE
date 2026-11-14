@@ -385,8 +385,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     matchesStatus = true;
                 } else if (activeFilter === 'pending') {
                     matchesStatus = (rowStatus === 'pending');
-                } else if (activeFilter === 'waiting_in_queue') {
-                    matchesStatus = (rowStatus === 'waiting_in_queue' || rowStatus === 'received_at_station');
                 } else if (activeFilter === 'refilling') {
                     matchesStatus = (rowStatus === 'refilling');
                 } else if (activeFilter === 'out_for_delivery') {

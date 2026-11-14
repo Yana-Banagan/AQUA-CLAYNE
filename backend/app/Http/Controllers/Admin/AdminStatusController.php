@@ -17,7 +17,6 @@ class AdminStatusController extends Controller
                 'pending_orders' => 0,
                 'unread_chats' => 0,
                 'unread_notifications' => 0,
-                'waiting_in_queue' => 0,
                 'active_deliveries' => 0,
                 'low_stock' => 0,
                 'notifications' => [],

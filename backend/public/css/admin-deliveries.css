@@ -684,7 +684,6 @@ select.filter-input { cursor: pointer; }
 /* At station & ready states → cyan */
 .status-at_station,
 .status-received_at_station,
-.status-waiting_in_queue,
 .status-refilling,
 .status-ready_for_delivery { background: #CFFAFE; color: #0E7490; }
 
@@ -1325,7 +1324,7 @@ select.form-control { cursor: pointer; }
 
 /* ==========================================================================
    20. DARK MODE — [data-theme="dark"] on <html>
-       Mirrors the pattern used in admin-refill-queue.css
+       Matches the operational card styling used across admin pages
    ========================================================================== */
 
 [data-theme="dark"] .deliveries-page {
@@ -1522,7 +1521,6 @@ select.form-control { cursor: pointer; }
 [data-theme="dark"] .status-out_for_delivery    { background: rgba(109, 40, 217, 0.2); color: #C4B5FD; }
 [data-theme="dark"] .status-at_station,
 [data-theme="dark"] .status-received_at_station,
-[data-theme="dark"] .status-waiting_in_queue,
 [data-theme="dark"] .status-refilling,
 [data-theme="dark"] .status-ready_for_delivery  { background: rgba(14, 116, 144, 0.2); color: #67E8F9; }
 [data-theme="dark"] .status-delivered,

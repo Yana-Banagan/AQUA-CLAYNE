@@ -2,9 +2,9 @@
 ## Complete Backend Master Specification
 ### Laravel + Supabase PostgreSQL + Sanctum + Realtime + Storage + Firebase FCM
 
-> **Document purpose:** This is the canonical backend blueprint for AQUA CLAYNE after the revised business-flow decision that customers normally provide their own empty gallons and the station performs a pickup → intake → queue → refill → return-delivery workflow.
+> **Document purpose:** This is the canonical backend blueprint for AQUA CLAYNE after the revised business-flow decision that customers normally provide their own empty gallons and the station performs a pickup → intake → refill → return-delivery workflow.
 >
-> **Frontend scope:** The Admin Web and Flutter applications consume this backend, but this document focuses on backend architecture, database design, APIs, services, authorization, state transitions, transactions, queue logic, notifications, security, testing, and deployment.
+> **Frontend scope:** The Admin Web and Flutter applications consume this backend, but this document focuses on backend architecture, database design, APIs, services, authorization, state transitions, transactions, station-refill logic, notifications, security, testing, and deployment.
 
 ---
 
@@ -16,7 +16,7 @@ The Laravel backend is the single trusted business-logic layer for:
 - Customer Flutter app
 - Driver Flutter app
 
-No client is allowed to decide authorization, role, ownership, queue position, order status, payment completion, or delivery completion on its own.
+No client is allowed to decide authorization, role, ownership, station processing status, order status, payment completion, or delivery completion on its own.
 
 ```text
 ADMIN WEB (session auth) ───────┐
@@ -82,7 +82,7 @@ Admin may:
 - confirm/reject/cancel orders;
 - assign/reassign drivers;
 - receive customer gallons at the station;
-- manage the refill queue;
+- manage station refill operations;
 - start/finish refilling;
 - verify/record payments;
 - manage customer credit;
@@ -103,7 +103,7 @@ Customer may:
 - place own orders;
 - view/cancel own orders when allowed;
 - view own payments and balance;
-- receive own delivery/queue information;
+- receive own delivery and order-status information;
 - submit complaints;
 - use FAQs;
 - receive notifications.
@@ -202,7 +202,7 @@ ProductService
 OrderService
 OrderStatusService
 ContainerIntakeService
-RefillQueueService
+RefillOperationService
 DeliveryService
 PaymentService
 CreditService
@@ -271,8 +271,6 @@ PICKED_UP
    ↓
 RECEIVED_AT_STATION
    ↓
-WAITING_IN_QUEUE
-   ↓
 REFILLING
    ↓
 READY_FOR_DELIVERY
@@ -307,8 +305,7 @@ Clients send an intended action; the backend decides whether the resulting trans
 | CONFIRMED | ASSIGNED, CANCELLED | Admin |
 | ASSIGNED | PICKED_UP, PICKUP_FAILED, CANCELLED | Driver/Admin |
 | PICKED_UP | RECEIVED_AT_STATION | Admin/authorized station staff |
-| RECEIVED_AT_STATION | WAITING_IN_QUEUE | System after valid intake |
-| WAITING_IN_QUEUE | REFILLING, CANCELLED* | Admin/Station |
+| RECEIVED_AT_STATION | REFILLING | Admin/Station after valid intake |
 | REFILLING | READY_FOR_DELIVERY | Admin/Station |
 | READY_FOR_DELIVERY | OUT_FOR_DELIVERY | Assigned Driver |
 | OUT_FOR_DELIVERY | DELIVERED, DELIVERY_FAILED | Driver |
@@ -411,17 +408,17 @@ received_count >= 0
 returned_count <= accepted_count
 ```
 
-The order may enter the refill queue only when the intake record is valid and finalized.
+Refilling may begin only when the intake record is valid and finalized.
 
 ---
 
-# 11. Refill Queue
+# 11. Station Refill Operations
 
 ## 11.1 Purpose
 
-The station may receive more refill orders than it can process simultaneously.
-
-Queue entry happens only after physical intake.
+Station staff process an order directly after physical intake. The order remains
+`RECEIVED_AT_STATION` until refilling starts; no separate station refill operation, position,
+priority, or order status history is stored.
 
 ```text
 PICKED_UP
@@ -430,122 +427,28 @@ RECEIVED_AT_STATION
    ↓
 INTAKE VERIFIED
    ↓
-QUEUE ENTRY CREATED
+REFILLING
    ↓
-WAITING_IN_QUEUE
+READY_FOR_DELIVERY
 ```
 
-## 11.2 Table
+## 11.2 Transaction Safety
 
-Recommended table:
-
-```text
-refill_queue_entries
-```
-
-Columns:
-
-```text
-id uuid PK
-order_id uuid FK unique
-queue_number bigint
-status varchar
-priority integer default 0
-queued_at timestamp
-started_at timestamp nullable
-completed_at timestamp nullable
-removed_at timestamp nullable
-manual_priority_reason text nullable
-created_by uuid FK users nullable
-updated_by uuid FK users nullable
-created_at
-updated_at
-```
-
-Recommended queue status:
-
-```text
-WAITING
-IN_PROGRESS
-COMPLETED
-REMOVED
-```
-
-Use a DB uniqueness rule so one order cannot have multiple active queue entries.
-
-## 11.3 Default Ordering
-
-Normal ordering:
-
-```sql
-ORDER BY priority DESC, queued_at ASC, queue_number ASC
-```
-
-Default priority is `0`.
-
-This preserves FIFO unless an authorized priority adjustment exists.
-
-## 11.4 Queue Number
-
-`queue_number` is a stable intake sequence/identifier.
-
-Do not use visible position itself as the permanent ID because positions change as earlier entries complete.
-
-For display:
-
-```text
-Queue Number: Q-000125
-Current Position: 4
-```
-
-Current position should be calculated from active queue ordering.
-
-## 11.5 Queue Transaction Safety
-
-Creating an intake + queue entry must be transactional.
-
-Starting refill should use locking or another concurrency-safe method so two admins cannot start the same queue item simultaneously.
-
-Recommended pattern:
+Starting a refill is transactional and uses a database advisory lock so only one
+eligible order can be actively refilled at a time.
 
 ```text
 DB transaction
   ↓
-SELECT queue entry FOR UPDATE
+acquire station refill lock
   ↓
-validate status = WAITING
-  ↓
-update queue = IN_PROGRESS
+validate order.status = RECEIVED_AT_STATION
+validate finalized intake and accepted_count > 0
   ↓
 update order = REFILLING
   ↓
 history + audit + realtime
   ↓
-commit
-```
-
-## 11.6 Queue Priority Change
-
-Only Admin.
-
-Request:
-
-```json
-{
-  "priority": 10,
-  "reason": "Correction of station intake sequence"
-}
-```
-
-Backend must:
-
-```text
-validate reason
-lock entry
-record previous effective order/priority
-update priority
-write audit log
-emit realtime event
 commit
 ```
 
@@ -558,23 +461,21 @@ commit
 Admin action:
 
 ```text
-POST /admin/refill-queue/{order}/start
+POST /admin/orders/{order}/refill/start
 ```
 
 Preconditions:
 
 ```text
-order.status = WAITING_IN_QUEUE
-queue.status = WAITING
+order.status = RECEIVED_AT_STATION
 valid intake exists
 accepted_count > 0
+no other order is actively refilling
 ```
 
 Effects:
 
 ```text
-queue.status = IN_PROGRESS
-queue.started_at = now
 order.status = REFILLING
 status history created
 audit created
@@ -587,29 +488,24 @@ customer notification optional/required by product decision
 Admin action:
 
 ```text
-POST /admin/refill-queue/{order}/complete
+POST /admin/orders/{order}/refill/complete
 ```
 
 Preconditions:
 
 ```text
 order.status = REFILLING
-queue.status = IN_PROGRESS
 ```
 
 Effects:
 
 ```text
-queue.status = COMPLETED
-queue.completed_at = now
 order.status = READY_FOR_DELIVERY
 history created
 audit created
 realtime signal
 driver/customer notification
 ```
-
-The next waiting order becomes first in the calculated queue automatically; no permanent row-number rewriting is necessary.
 
 ---
 
@@ -946,7 +842,6 @@ orders
 order_items
 order_status_history        NEW/RECOMMENDED
 order_container_intakes     NEW
-refill_queue_entries        NEW
 ```
 
 ## Payments / Credit
@@ -1045,7 +940,6 @@ Order
 ├── OrderItems
 ├── StatusHistory
 ├── ContainerIntake
-├── RefillQueueEntry
 ├── Payment(s)
 └── Delivery
 
@@ -1103,16 +997,11 @@ Useful response fields:
 {
   "id": "uuid",
   "order_number": "ORD-2026-00125",
-  "status": "WAITING_IN_QUEUE",
+  "status": "RECEIVED_AT_STATION",
   "container_ownership": "CUSTOMER_OWNED",
   "expected_empty_gallons": 3,
   "received_empty_gallons": 3,
   "accepted_empty_gallons": 3,
-  "queue": {
-    "queue_number": "Q-000125",
-    "position": 4,
-    "status": "WAITING"
-  },
   "payment_status": "PENDING",
   "delivery": {
     "status": "AT_STATION",
@@ -1121,7 +1010,7 @@ Useful response fields:
 }
 ```
 
-Only include queue information when a valid queue entry exists.
+
 
 ---
 
@@ -1167,7 +1056,6 @@ Recommended groups:
 /admin/payments
 /admin/credit
 /admin/deliveries
-/admin/refill-queue
 /admin/gallons
 /admin/rfid
 /admin/complaints
@@ -1192,9 +1080,8 @@ POST /admin/deliveries/{delivery}/reassign
 POST /admin/deliveries/{delivery}/eta
 
 POST /admin/orders/{order}/intake
-POST /admin/refill-queue/{order}/start
-POST /admin/refill-queue/{order}/complete
-POST /admin/refill-queue/{order}/priority
+POST /admin/orders/{order}/refill/start
+POST /admin/orders/{order}/refill/complete
 ```
 
 ---
@@ -1222,8 +1109,7 @@ transaction
   create/update intake
   set order = RECEIVED_AT_STATION
   finalize intake
-  create queue entry
-  set order = WAITING_IN_QUEUE
+  retain order = RECEIVED_AT_STATION until refill starts
   history
   audit
   realtime
@@ -1280,8 +1166,6 @@ Recommended new signals:
 ```text
 order.created
 order.updated
-queue.created
-queue.updated
 refill.started
 refill.completed
 delivery.updated
@@ -1308,7 +1192,7 @@ Order confirmed
 Driver assigned
 Empty gallons picked up
 Gallons received at station
-Added to refill queue
+Received at station
 Refill started
 Ready for delivery
 Out for delivery
@@ -1342,7 +1226,7 @@ Product price/availability changes
 Order confirm/reject/cancel
 Driver assign/reassign
 Station gallon intake
-Queue priority changes
+Station refill start/completion
 Refill start/complete
 Payment verification/change
 Credit changes
@@ -1464,18 +1348,18 @@ Driver Performance
 RFID / Gallons
 Inventory
 Maintenance
-Refill Queue Performance
+Station Refill Performance
 ```
 
-New useful queue metrics:
+Useful station refill metrics:
 
 ```text
-Average queue waiting time
+Average time from station intake to refill start
 Average refill duration
-Gallons waiting
+Gallons received at station
 Orders completed per day
-Longest waiting order
-Queue throughput
+Longest station-processing delay
+Refill throughput
 ```
 
 Exports may support:
@@ -1514,13 +1398,13 @@ accepted_count <= received_count
 damaged_count + rejected_count <= received_count
 ```
 
-## Queue
+## Refill
 
 ```text
 valid finalized intake exists
-order not already queued
-order status valid
-priority change reason required when manual
+accepted_count > 0
+order status is RECEIVED_AT_STATION
+no other order is actively refilling
 ```
 
 ## Payment
@@ -1542,9 +1426,9 @@ Mandatory transactional operations:
 Customer order creation
 Order confirmation where inventory/capacity reservation changes
 Driver assignment/reassignment
-Station intake + queue creation
-Queue start refill
-Queue complete refill
+Station intake
+Station refill start
+Station refill completion
 Payment recording
 Credit debit/repayment
 Order completion
@@ -1561,7 +1445,7 @@ Never perform half of a business operation and leave the rest committed.
 Critical race conditions:
 
 ```text
-Two admins starting same queue item
+Concurrent station refill start attempts
 Duplicate intake submission
 Duplicate driver assignment
 Double payment submission
@@ -1609,7 +1493,7 @@ Recommended JSON:
   "message": "This order is not eligible to start refilling.",
   "errors": {
     "status": [
-      "Expected WAITING_IN_QUEUE."
+      "Expected RECEIVED_AT_STATION."
     ]
   }
 }
@@ -1732,7 +1616,6 @@ Use PHP enums or equivalent centralized constants.
 UserRole
 OrderStatus
 DeliveryStatus
-QueueStatus
 PaymentStatus
 PaymentMethod
 ContainerOwnership
@@ -1753,7 +1636,6 @@ The revised flow likely requires migrations equivalent to:
 add_refill_fields_to_orders_table
 create_order_status_history_table
 create_order_container_intakes_table
-create_refill_queue_entries_table
 add_pickup_refill_status_support_to_deliveries
 ```
 
@@ -1769,8 +1651,6 @@ Important DB constraints:
 orders.expected_empty_gallons >= 1
 intake counts >= 0
 unique intake per order
-unique queue entry per order
-queue priority integer
 foreign keys indexed
 payment amount >= 0
 credit balances constrained as business rules permit
@@ -1809,21 +1689,9 @@ Never rely on sequential public IDs as authorization.
 
 ---
 
-# 50. Queue Position Calculation
+# 50. Station Refill Concurrency
 
-A queue number is stable; position is dynamic.
-
-Pseudo-query:
-
-```text
-active waiting entries
-order by priority DESC, queued_at ASC, queue_number ASC
-enumerate 1..N
-```
-
-If one refill station can process multiple orders simultaneously, allow multiple `IN_PROGRESS` entries based on configured station capacity.
-
-Do not artificially force exactly one `IN_PROGRESS` order unless that reflects actual station capacity.
+The application permits only one active refill operation at a time. A PostgreSQL advisory lock serializes start requests; order state and finalized intake are revalidated inside the transaction.
 
 ---
 
@@ -1952,8 +1820,8 @@ Provide aggregate queries/endpoints for:
 Total Sales
 Total Orders
 Pending Orders
-Waiting Queue Orders
-Gallons Waiting in Queue
+Orders Received at Station
+Gallons Awaiting Refill
 Currently Refilling
 Ready for Delivery
 Active Deliveries
@@ -2087,9 +1955,6 @@ Customer cannot view another customer's order
 Driver cannot view another driver's delivery
 Order total ignores forged client total
 Intake cannot be submitted before PICKED_UP
-Queue cannot be created twice
-Queue obeys FIFO at equal priority
-Priority change requires reason
 Two simultaneous start-refill calls do not both succeed
 Refill cannot finish before start
 Out-for-delivery cannot happen before READY_FOR_DELIVERY
@@ -2122,8 +1987,8 @@ A canonical test scenario:
 13. Driver A confirms 3 empty gallons collected.
 14. Admin/station receives 3 gallons.
 15. Backend creates intake.
-16. Backend creates queue entry.
-17. Customer order shows WAITING_IN_QUEUE.
+16. Backend finalizes intake.
+17. Customer order remains RECEIVED_AT_STATION until refilling starts.
 18. Admin starts refill.
 19. Order becomes REFILLING.
 20. Admin completes refill.
@@ -2184,7 +2049,7 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 php artisan migrate --force
-queue worker configured if background jobs used
+background worker configured if background jobs used
 scheduler configured if maintenance/cleanup jobs used
 logs monitored
 database backups configured
@@ -2218,7 +2083,7 @@ Clean old realtime signal rows
 Flag overdue maintenance
 Send scheduled announcements
 Recalculate/monitor delayed deliveries
-Optional queue wait-time alerts
+Optional station-processing delay alerts
 ```
 
 ---
@@ -2233,7 +2098,7 @@ payments
 credit
 delivery history
 intake records
-queue history
+order status history
 RFID transactions
 complaints
 maintenance
@@ -2251,9 +2116,8 @@ The final AQUA CLAYNE backend follows these rules:
 1. **Laravel is the authority.**
 2. **Customer orders are refill-service requests, not automatically gallon sales.**
 3. **Customer-owned gallons are physically received and reconciled.**
-4. **Queue entry occurs only after station intake.**
-5. **Queue defaults to FIFO.**
-6. **Manual priority changes require authorization, reason, and audit.**
+4. **Station refilling starts only after verified intake.**
+5. **Only one order is actively refilled at a time.**
 7. **Status transitions are server-enforced.**
 8. **Drivers only see assigned work.**
 9. **Customers only see their own data.**
@@ -2287,10 +2151,9 @@ STATION / ADMIN
 Receives and verifies gallon count
         ↓
 LARAVEL
-Creates intake + refill queue entry
+Creates intake and makes the order eligible for station refill
         ↓
-REFILL QUEUE
-FIFO unless audited priority override
+STATION REFILL OPERATIONS
         ↓
 STATION
 Starts refill

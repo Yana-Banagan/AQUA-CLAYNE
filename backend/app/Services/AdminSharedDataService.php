@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\ChatMessage;
 use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
@@ -30,7 +29,6 @@ class AdminSharedDataService
      */
     public const DEFAULT_COUNTS = [
         'pendingOrders' => 0,
-        'waitingInQueue' => 0,
         'activeDeliveries' => 0,
         'lowStock' => 0,
         'unreadNotifications' => 0,
@@ -76,13 +74,12 @@ class AdminSharedDataService
 
         // Fetch or compute combined status counts cached for 10 seconds.
         $cacheKey = "admin:shared-counts:{$userId}";
-        $rawCounts = Cache::store('file')->remember($cacheKey, now()->addSeconds(10), function () use ($userId, $isAdminOrStaff) {
+        $rawCounts = Cache::remember($cacheKey, now()->addSeconds(10), function () use ($userId, $isAdminOrStaff) {
             return $this->executeCombinedCountQuery($userId, $isAdminOrStaff);
         });
 
         $this->sidebarCounts = array_merge([
             'pendingOrders' => (int) ($rawCounts['pending_orders'] ?? 0),
-            'waitingInQueue' => (int) ($rawCounts['waiting_queue'] ?? 0),
             'activeDeliveries' => (int) ($rawCounts['active_deliveries'] ?? 0),
             'lowStock' => (int) ($rawCounts['low_stock'] ?? 0),
             'unreadNotifications' => (int) ($rawCounts['unread_notifications'] ?? 0),
@@ -105,7 +102,6 @@ class AdminSharedDataService
         $sql = "
             SELECT
                 (SELECT COUNT(*) FROM orders WHERE status = 'pending') AS pending_orders,
-                (SELECT COUNT(*) FROM refill_queue_entries WHERE status = 'waiting') AS waiting_queue,
                 (SELECT COUNT(*) FROM deliveries WHERE status IN ('assigned', 'en_route', 'en_route_for_pickup', 'picked_up', 'at_station', 'out_for_delivery')) AS active_deliveries,
                 (SELECT COUNT(*) FROM inventory WHERE quantity_on_hand <= reorder_level) AS low_stock,
                 (SELECT COUNT(*) FROM notifications WHERE user_id = :userId AND is_read = false) AS unread_notifications,
@@ -116,7 +112,6 @@ class AdminSharedDataService
             $row = DB::selectOne($sql, ['userId' => $userId]);
             return [
                 'pending_orders' => (int) ($row->pending_orders ?? 0),
-                'waiting_queue' => (int) ($row->waiting_queue ?? 0),
                 'active_deliveries' => (int) ($row->active_deliveries ?? 0),
                 'low_stock' => (int) ($row->low_stock ?? 0),
                 'unread_notifications' => (int) ($row->unread_notifications ?? 0),
@@ -126,7 +121,6 @@ class AdminSharedDataService
             \Illuminate\Support\Facades\Log::warning('Combined status count query failed: ' . $e->getMessage());
             return [
                 'pending_orders' => 0,
-                'waiting_queue' => 0,
                 'active_deliveries' => 0,
                 'low_stock' => 0,
                 'unread_notifications' => 0,
@@ -146,7 +140,6 @@ class AdminSharedDataService
                 'pending_orders' => 0,
                 'unread_chats' => 0,
                 'unread_notifications' => 0,
-                'waiting_in_queue' => 0,
                 'active_deliveries' => 0,
                 'low_stock' => 0,
                 'notifications' => [],
@@ -159,7 +152,6 @@ class AdminSharedDataService
             'pending_orders' => $counts['pendingOrders'],
             'unread_chats' => $counts['unreadChats'],
             'unread_notifications' => $counts['unreadNotifications'],
-            'waiting_in_queue' => $counts['waitingInQueue'],
             'active_deliveries' => $counts['activeDeliveries'],
             'low_stock' => $counts['lowStock'],
             'notifications' => $includeNotifications ? $this->getRecentNotifications($user) : [],
@@ -208,12 +200,8 @@ class AdminSharedDataService
             return null;
         }
 
-        try {
-            $this->adminAvatarUrl = app(SupabaseStorageService::class)
-                ->signedProfilePhotoUrl((string) $user->id, $user->avatar_path);
-        } catch (\Throwable) {
-            $this->adminAvatarUrl = null;
-        }
+        $this->adminAvatarUrl = app(SupabaseStorageService::class)
+            ->cachedProfilePhotoUrl((string) $user->id, $user->avatar_path);
 
         return $this->adminAvatarUrl;
     }
@@ -224,7 +212,7 @@ class AdminSharedDataService
     public static function invalidate(?string $userId = null): void
     {
         try {
-            $cache = Cache::store('file');
+            $cache = Cache::store();
             if ($userId) {
                 $cache->forget("admin:shared-counts:{$userId}");
                 $cache->forget("admin-status-counts:{$userId}");

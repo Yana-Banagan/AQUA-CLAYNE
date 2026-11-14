@@ -112,7 +112,6 @@ class _RefillStatusScreenState extends State<RefillStatusScreen> {
   List<Widget> _steps(String currentStatus) {
     const steps = [
       ('RECEIVED_AT_STATION', 'Received at Station'),
-      ('WAITING_IN_QUEUE', 'In Queue'),
       ('REFILLING', 'Refilling'),
       ('READY_FOR_DELIVERY', 'Ready for Delivery'),
       ('OUT_FOR_DELIVERY', 'Out for Delivery'),
@@ -204,9 +203,9 @@ class _StatusBanner extends StatelessWidget {
     final color = DriverColors.statusColor(upper);
 
     final (icon, message) = switch (upper) {
-      'WAITING_IN_QUEUE' => (
+      'RECEIVED_AT_STATION' => (
           Icons.hourglass_top,
-          'Your order is waiting in the refill queue.'
+          'Your gallons have been received at the station.'
         ),
       'REFILLING' => (
           Icons.water_drop,

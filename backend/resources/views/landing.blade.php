@@ -158,7 +158,7 @@
                         </div>
                         <div class="highlight-item">
                             <span class="highlight-dot"></span>
-                            <span>Verified FIFO Queue</span>
+                            <span>Verified Station Intake</span>
                         </div>
                         <div class="highlight-item">
                             <span class="highlight-dot"></span>
@@ -536,7 +536,7 @@
                             <div class="service-footer-badge">Doorstep Coordination</div>
                         </div>
 
-                        <!-- Service 4: Refill Queue Management -->
+                        <!-- Service 4: Station Refill Operations -->
                         <div class="service-card">
                             <div class="service-icon-box">
                                 <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -548,11 +548,11 @@
                                     <line x1="3" y1="18" x2="3.01" y2="18"></line>
                                 </svg>
                             </div>
-                            <h3 class="service-title">4. Refill Queue Management</h3>
+                            <h3 class="service-title">4. Station Refill Operations</h3>
                             <p class="service-desc">
-                                Customer-owned empty gallons are received and physically verified at the station before entering the queue, ensuring strict FIFO sequence tracking and authorized supervisor priority handling.
+                                Customer-owned empty gallons are received and physically verified at the station before staff begin refilling and prepare completed orders for delivery.
                             </p>
-                            <div class="service-footer-badge">Station Intake Queue</div>
+                            <div class="service-footer-badge">Verified Station Intake</div>
                         </div>
 
                         <!-- Service 5: Order and Delivery Updates -->
@@ -904,7 +904,7 @@
                                     <div class="app-order-status-card">
                                         <div class="app-card-top">
                                             <span class="app-card-title">Active Order #AC-8492</span>
-                                            <span class="app-queue-pill">Queue #03</span>
+                                            <span class="app-station-pill">Refilling</span>
                                         </div>
                                         <div class="app-progress-bar">
                                             <div class="app-progress-fill" style="width: 75%;"></div>

@@ -32,13 +32,8 @@
             <button type="button" class="btn-queue-link" id="confirmAllOrders" data-url="{{ route('admin.orders.confirm-all') }}" data-count="{{ $stats['pending'] }}">
                 Confirm All Orders
             </button>
-            <a href="{{ route('admin.refill-queue.index') }}" class="btn-queue-link">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <polyline points="23 4 23 10 17 10"></polyline>
-                    <polyline points="1 20 1 14 7 14"></polyline>
-                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                </svg>
-                <span>Station Refill Queue</span>
+            <a href="{{ route('admin.orders.index', ['status' => 'received_at_station']) }}" class="btn-queue-link">
+                <span>Station Refill Operations</span>
             </a>
         </div>
     </div>
@@ -141,7 +136,6 @@
                     <option value="assigned" {{ $status === 'assigned' ? 'selected' : '' }}>Assigned</option>
                     <option value="picked_up" {{ $status === 'picked_up' ? 'selected' : '' }}>Picked Up</option>
                     <option value="received_at_station" {{ $status === 'received_at_station' ? 'selected' : '' }}>Received at Station</option>
-                    <option value="waiting_in_queue" {{ $status === 'waiting_in_queue' ? 'selected' : '' }}>Waiting in Queue</option>
                     <option value="refilling" {{ $status === 'refilling' ? 'selected' : '' }}>Refilling</option>
                     <option value="ready_for_delivery" {{ $status === 'ready_for_delivery' ? 'selected' : '' }}>Ready for Delivery</option>
                     <option value="ready_for_pickup" {{ $status === 'ready_for_pickup' ? 'selected' : '' }}>Ready for Pickup</option>
@@ -361,28 +355,24 @@
                                         </button>
                                     @endif
                                 @elseif(strtolower($order->status) === 'picked_up')
-                                    <form method="POST" action="{{ route('admin.refill-queue.start', $order->id) }}" class="inline-action-form" data-live-refill-action>
-                                        @csrf
-                                        <button type="submit" class="btn-workflow-action btn-refill">
-                                        <span>Refill</span>
-                                        </button>
-                                    </form>
+                                    <a href="{{ route('admin.orders.show', $order->id) }}#station-intake-form" class="btn-workflow-action btn-refill">
+                                        <span>Record Intake</span>
+                                    </a>
                                 @elseif(strtolower($order->status) === 'received_at_station')
-                                    <form method="POST" action="{{ route('admin.refill-queue.start', $order->id) }}" class="inline-action-form" data-live-refill-action>
-                                        @csrf
-                                        <button type="submit" class="btn-workflow-action btn-refill">
-                                            <span>Refill</span>
-                                        </button>
-                                    </form>
-                                @elseif(strtolower($order->status) === 'waiting_in_queue')
-                                    <form method="POST" action="{{ route('admin.refill-queue.start', $order->id) }}" class="inline-action-form" data-live-refill-action>
-                                        @csrf
-                                        <button type="submit" class="btn-workflow-action btn-refill" onclick="return confirm('Start refilling order {{ $orderNum }}?');">
-                                            <span>Refill</span>
-                                        </button>
-                                    </form>
+                                    @if($order->containerIntake?->completed_at && $order->containerIntake?->accepted_count > 0)
+                                        <form method="POST" action="{{ route('admin.orders.refill.start', $order->id) }}" class="inline-action-form" data-live-refill-action>
+                                            @csrf
+                                            <button type="submit" class="btn-workflow-action btn-refill">
+                                                <span>Start Refill</span>
+                                            </button>
+                                        </form>
+                                    @else
+                                        <a href="{{ route('admin.orders.show', $order->id) }}" class="btn-workflow-action btn-refill">
+                                            <span>Resolve Intake</span>
+                                        </a>
+                                    @endif
                                 @elseif(strtolower($order->status) === 'refilling')
-                                    <form method="POST" action="{{ route('admin.refill-queue.complete', $order->id) }}" class="inline-action-form" data-live-refill-action>
+                                    <form method="POST" action="{{ route('admin.orders.refill.complete', $order->id) }}" class="inline-action-form" data-live-refill-action>
                                         @csrf
                                         <button type="submit" class="btn-workflow-action btn-ready" onclick="return confirm('Mark order {{ $orderNum }} as ready?');">
                                             <span>Ready</span>
@@ -644,49 +634,6 @@
                 </footer>
             </form>
         </section>
-    </div>
-
-    <div class="modal-backdrop orders-intake-backdrop" id="ordersIntakeModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="ordersIntakeTitle">
-        <div class="modal orders-intake-modal">
-            <div class="modal-header">
-                <h3 class="modal-title" id="ordersIntakeTitle">Physical Gallon Intake</h3>
-                <button type="button" class="modal-close-btn" data-orders-intake-close aria-label="Close modal">&times;</button>
-            </div>
-
-            <form id="ordersIntakeForm">
-                <input type="hidden" id="ordersIntakeOrderId">
-                <div class="modal-body">
-                    <div class="orders-intake-summary">
-                        <div><span>Order Number:</span><strong id="ordersIntakeOrderNumber"></strong></div>
-                        <div><span>Customer:</span><strong id="ordersIntakeCustomer"></strong></div>
-                    </div>
-
-                    <div class="orders-intake-grid">
-                        <label>Expected Gallons
-                            <input type="number" id="ordersIntakeExpected" readonly>
-                        </label>
-                        <label>Received Gallons <span>*</span>
-                            <input type="number" id="ordersIntakeReceived" min="0" required>
-                        </label>
-                        <label>Accepted for Refill <span>*</span>
-                            <input type="number" id="ordersIntakeAccepted" min="0" required>
-                        </label>
-                        <label>Damaged / Rejected
-                            <input type="number" id="ordersIntakeDamaged" min="0" value="0">
-                        </label>
-                    </div>
-
-                    <label class="orders-intake-notes">Condition Notes
-                        <textarea id="ordersIntakeNotes" rows="2" placeholder="e.g. Slim 5-gallon blue containers received clean with caps."></textarea>
-                    </label>
-                    <p class="orders-intake-notice">Customer-owned empty gallons will enter the FIFO refill queue immediately after verification without a discrepancy.</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn-table-action" data-orders-intake-close>Cancel</button>
-                    <button type="submit" class="btn-workflow-action btn-refill" id="ordersIntakeSubmit">Confirm Intake &amp; Enter Queue</button>
-                </div>
-            </form>
-        </div>
     </div>
 
 @endsection

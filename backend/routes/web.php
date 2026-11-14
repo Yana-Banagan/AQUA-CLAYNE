@@ -4,7 +4,6 @@ use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Admin\LoginController;
 use App\Http\Controllers\Admin\DashboardController;
-use App\Http\Controllers\Admin\RefillQueueController;
 use App\Http\Controllers\Admin\RefillOperationController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\DeliveryController;
@@ -74,7 +73,6 @@ Route::prefix('customer')->group(function () {
     Route::get('/faqs', [CustomerPortalController::class, 'faqs'])->name('customer.faqs');
     Route::get('/chat', [CustomerPortalController::class, 'chat'])->name('customer.chat');
     Route::get('/profile', [CustomerPortalController::class, 'profile'])->name('customer.profile');
-    Route::get('/queue', [CustomerPortalController::class, 'queue'])->name('customer.queue');
     Route::match(['get', 'post'], '/logout', [CustomerPortalController::class, 'logout'])->name('customer.logout');
 });
 
@@ -267,7 +265,7 @@ Route::middleware(['auth', 'role:admin,staff'])
 
         /*
         |--------------------------------------------------------------------------
-        | OPERATIONS: ORDERS & REFILL QUEUE
+        | OPERATIONS: ORDERS & REFILL
         |--------------------------------------------------------------------------
         */
 
@@ -318,52 +316,22 @@ Route::middleware(['auth', 'role:admin,staff'])
         ])->name('orders.walk-in.store');
 
 
-        /*
-        |--------------------------------------------------------------------------
-        | REFILL QUEUE
-        |--------------------------------------------------------------------------
-        */
-
-        Route::get('/refill-queue/status', [
-            RefillQueueController::class,
-            'status'
-        ])->name('refill-queue.status');
-
-
-        Route::get('/refill-queue', [
-            RefillQueueController::class,
-            'index'
-        ])->name('refill-queue.index');
-
-
-        Route::post('/refill-queue/{order}/start', [
+        Route::post('/orders/{order}/refill/start', [
             RefillOperationController::class,
             'start'
-        ])->name('refill-queue.start');
+        ])->name('orders.refill.start');
 
 
-        Route::post('/refill-queue/{order}/complete', [
+        Route::post('/orders/{order}/refill/complete', [
             RefillOperationController::class,
             'complete'
-        ])->name('refill-queue.complete');
+        ])->name('orders.refill.complete');
 
 
-        Route::post('/refill-queue/{order}/priority', [
-            RefillOperationController::class,
-            'priority'
-        ])->name('refill-queue.priority');
-
-
-        Route::post('/refill-queue/{order}/resolve-intake', [
+        Route::post('/orders/{order}/intake/resolve', [
             RefillOperationController::class,
             'resolveIntake'
-        ])->name('refill-queue.resolve-intake');
-
-
-        Route::post('/refill-queue/{order}/remove', [
-            RefillOperationController::class,
-            'remove'
-        ])->name('refill-queue.remove');
+        ])->name('orders.intake.resolve');
 
 
         /*

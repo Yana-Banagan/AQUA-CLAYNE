@@ -16,7 +16,7 @@ class RealtimeEventService
         // Keep this list aligned with the database check constraint.
         if (!in_array(
             $entityType,
-            ['order', 'delivery', 'refill_queue', 'notification', 'payment', 'pickup_batch', 'delivery_route', 'chat', 'rfid'],
+            ['order', 'delivery', 'notification', 'payment', 'pickup_batch', 'delivery_route', 'chat', 'rfid'],
             true
         )) {
             return;
@@ -41,15 +41,13 @@ class RealtimeEventService
             // Invalidate centralized shared administrative counters
             \App\Services\AdminSharedDataService::invalidate();
 
-            if (in_array($entityType, ['order', 'payment', 'refill_queue', 'delivery', 'pickup_batch', 'delivery_route'], true)) {
+            if (in_array($entityType, ['order', 'payment', 'delivery', 'pickup_batch', 'delivery_route'], true)) {
                 $cache->forget('admin:dashboard:station-kpis');
                 $cache->forget('admin:dashboard:intake-discrepancies');
                 $cache->forget('admin:dashboard:recent-activities');
                 $cache->forget('admin:deliveries:stats');
                 $cache->forget('admin:deliveries:dispatch-bundle');
                 $cache->forget('admin-pending-orders-count');
-                $cache->forget('refill-queue:summary-stats');
-                $cache->forget('refill-queue:quick-status');
             }
 
             if (in_array($entityType, ['delivery', 'pickup_batch', 'delivery_route'], true)) {

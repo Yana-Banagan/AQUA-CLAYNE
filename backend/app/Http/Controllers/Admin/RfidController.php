@@ -53,8 +53,8 @@ class RfidController extends Controller
         $devicesOnline = $deviceService->getOnlineDevicesCount();
         $devicesOffline = $deviceService->getOfflineDevicesCount();
 
-        // Gallons currently at station (refill queue + intake in progress)
-        $gallonsAtStation = Order::whereIn('status', ['received_at_station', 'waiting_in_queue', 'refilling'])
+        // Gallons currently at the station for intake or refilling
+        $gallonsAtStation = Order::whereIn('status', ['received_at_station', 'refilling'])
             ->sum('expected_empty_gallons');
 
         // Gallons in delivery transit

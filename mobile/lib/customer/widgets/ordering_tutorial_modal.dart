@@ -897,7 +897,7 @@ class _OrderingTutorialModalState extends State<OrderingTutorialModal> {
             _trackingTimelineItem(
               icon: Icons.check_circle_rounded,
               title: 'Order Confirmed',
-              subtitle: 'Queued for washing & refill',
+              subtitle: 'Received at station for refill',
               color: const Color(0xFF2E7D32),
               isDone: true,
             ),

@@ -15,6 +15,23 @@ use Illuminate\Support\Facades\Cache;
 
 class ReportController extends Controller
 {
+    protected function normalizeReportCollection(array $reportData, string $key): array
+    {
+        $value = $reportData[$key] ?? [];
+
+        if (!is_iterable($value)) {
+            $reportData[$key] = collect();
+            return $reportData;
+        }
+
+        $reportData[$key] = collect($value)
+            ->filter(fn ($item) => is_object($item) || is_array($item))
+            ->map(fn ($item) => is_array($item) ? (object) $item : $item)
+            ->values();
+
+        return $reportData;
+    }
+
     public function index(Request $request)
     {
         $range = $request->get('range', 'all'); // 'today', 'week', 'month', 'all'
@@ -65,7 +82,7 @@ class ReportController extends Controller
                 COALESCE(SUM(CASE WHEN status IN ('completed', 'delivered') AND payment_method = 'cash' THEN total_amount ELSE 0 END), 0) AS cash_rev,
                 COALESCE(SUM(CASE WHEN status IN ('completed', 'delivered') AND payment_method IN ('credit', 'debt') THEN total_amount ELSE 0 END), 0) AS credit_rev,
                 SUM(CASE WHEN status IN ('completed', 'delivered') THEN 1 ELSE 0 END) AS completed_count,
-                SUM(CASE WHEN status IN ('assigned', 'picked_up', 'received_at_station', 'waiting_in_queue', 'refilling', 'ready_for_delivery', 'ready_for_pickup', 'out_for_delivery') THEN 1 ELSE 0 END) AS in_progress_count,
+                SUM(CASE WHEN status IN ('assigned', 'picked_up', 'received_at_station', 'refilling', 'ready_for_delivery', 'ready_for_pickup', 'out_for_delivery') THEN 1 ELSE 0 END) AS in_progress_count,
                 SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
                 SUM(CASE WHEN status IN ('cancelled', 'rejected') THEN 1 ELSE 0 END) AS cancelled_count,
                 SUM(CASE WHEN delivery_method != 'station_pickup' THEN 1 ELSE 0 END) AS home_delivery_count,
@@ -114,8 +131,42 @@ class ReportController extends Controller
             ];
         });
 
+        if (!is_array($reportData)) {
+            $reportData = [];
+        }
+
+        $defaultReportData = [
+            'totalRevenue' => 0.0,
+            'cashRevenue' => 0.0,
+            'creditRevenue' => 0.0,
+            'ordersByStatus' => [
+                'completed' => 0,
+                'in_progress' => 0,
+                'pending' => 0,
+                'cancelled' => 0,
+            ],
+            'deliveryMethodStats' => [
+                'home_delivery' => 0,
+                'station_pickup' => 0,
+            ],
+            'topServices' => collect(),
+            'totalOutstandingCredit' => 0.0,
+            'activeCreditAccounts' => 0,
+            'driverPerformances' => collect(),
+        ];
+
+        foreach (['ordersByStatus', 'deliveryMethodStats'] as $key) {
+            if (!is_array($reportData[$key] ?? null)) {
+                $reportData[$key] = $defaultReportData[$key];
+            }
+        }
+
+        $reportData = array_replace_recursive($defaultReportData, $reportData);
+
+        $reportData = $this->normalizeReportCollection($reportData, 'topServices');
+        $reportData = $this->normalizeReportCollection($reportData, 'driverPerformances');
+
         return view('admin.reports.index', array_merge($reportData, compact('range', 'method')));
     }
-    
 }
 
