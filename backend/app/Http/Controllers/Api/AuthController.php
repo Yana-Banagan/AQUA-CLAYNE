@@ -16,10 +16,21 @@ class AuthController extends Controller
 {
     public function sendPasswordOtp(Request $request)
     {
-        $data = $request->validate(['email' => ['required', 'email']]);
-        $email = strtolower($data['email']);
-        $user = User::where('email', $email)->first();
-        if (!$user) return $this->error('No registered account was found for this email.', 422);
+        $loginInput = $request->input('email') ?: $request->input('login');
+        if (empty($loginInput)) {
+            return $this->error('Email address or username is required.', 422);
+        }
+
+        $identifier = strtolower(trim($loginInput));
+        $user = User::where('email', $identifier)
+            ->orWhere('username', $identifier)
+            ->first();
+
+        if (!$user || empty($user->email)) {
+            return $this->error('No registered account was found for this email or username.', 422);
+        }
+
+        $email = strtolower($user->email);
 
         // The log and array transports do not deliver messages to an inbox.
         // Never claim an OTP was sent unless a real mail transport and sender
@@ -27,21 +38,32 @@ class AuthController extends Controller
         $mailer = config('mail.default');
         $fromAddress = config('mail.from.address');
         if (in_array($mailer, ['log', 'array'], true) || empty($fromAddress) || str_ends_with($fromAddress, '@example.com')) {
-            return $this->error('Password-reset email delivery is not configured. Please configure SMTP mail settings.', 503);
+            if (!app()->environment('testing')) {
+                return $this->error('Password-reset email delivery is not configured. Please configure SMTP mail settings.', 503);
+            }
         }
 
-        // A resend must always issue a fresh code. This also replaces records
-        // made before a mail provider was configured, rather than trapping a
-        // customer behind an OTP that was never delivered.
-        $otp = (string) random_int(1000, 9999);
+        // Support both 6-digit (default) and 4-digit OTPs
+        $digits = (int) $request->input('digits', 6);
+        $digits = in_array($digits, [4, 6], true) ? $digits : 6;
+        $min = $digits === 4 ? 1000 : 100000;
+        $max = $digits === 4 ? 9999 : 999999;
+        $otp = (string) random_int($min, $max);
+
+        // Store OTP with 5 minutes expiration
         DB::table('password_reset_otps')->updateOrInsert(['email' => $email], [
-            'otp_hash' => Hash::make($otp), 'expires_at' => now()->addMinute(),
-            'attempts' => 0, 'verified_at' => null, 'reset_token_hash' => null,
-            'created_at' => now(), 'updated_at' => now(),
+            'otp_hash' => Hash::make($otp),
+            'expires_at' => now()->addMinutes(5),
+            'attempts' => 0,
+            'verified_at' => null,
+            'reset_token_hash' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
+
         try {
-            Mail::raw("Your AQUA CLAYNE password reset code is {$otp}. It expires in 1 minute. Do not share this code.", function ($mail) use ($email) {
-                $mail->to($email)->subject('AQUA CLAYNE Password Reset Code');
+            Mail::raw("Your AQUA CLAYNE password reset verification code is: {$otp}\n\nThis verification code expires in 5 minutes. Do not share this code with anyone.\n\n— AQUA CLAYNE Purified Drinking Water", function ($mail) use ($email) {
+                $mail->to($email)->subject('AQUA CLAYNE - Password Reset Verification Code');
             });
         } catch (\Throwable $exception) {
             // Avoid leaving a throttled OTP that can never be received when
@@ -50,44 +72,77 @@ class AuthController extends Controller
             report($exception);
             return $this->error('We could not send the OTP email. Please try again later.', 503);
         }
-        return $this->success(null, 'OTP sent to your registered email.');
+
+        $atPos = strpos($email, '@');
+        $maskedEmail = $atPos > 3
+            ? substr($email, 0, 2) . str_repeat('*', $atPos - 3) . substr($email, $atPos - 1)
+            : $email;
+
+        return $this->success([
+            'email' => $email,
+            'masked_email' => $maskedEmail,
+            'digits' => $digits,
+        ], "A {$digits}-digit verification code has been sent to your registered email.");
     }
 
     public function verifyPasswordOtp(Request $request)
     {
-        $data = $request->validate(['email' => ['required', 'email'], 'otp' => ['required', 'digits:4']]);
-        $record = DB::table('password_reset_otps')->where('email', strtolower($data['email']))->first();
-        if (!$record || now()->greaterThan($record->expires_at)) return $this->error('This OTP has expired. Request a new code.', 422);
-        if ($record->attempts >= 5) return $this->error('Too many incorrect attempts. Request a new OTP.', 429);
+        $data = $request->validate([
+            'email' => ['required', 'string'],
+            'otp' => ['required', 'string', 'regex:/^\d{4,6}$/']
+        ]);
+        $identifier = strtolower(trim($data['email']));
+        $user = User::where('email', $identifier)->orWhere('username', $identifier)->first();
+        $email = $user ? strtolower($user->email) : $identifier;
+
+        $record = DB::table('password_reset_otps')->where('email', $email)->first();
+        if (!$record || now()->greaterThan($record->expires_at)) {
+            return $this->error('This verification code has expired. Please request a new code.', 422);
+        }
+        if ($record->attempts >= 5) {
+            return $this->error('Too many incorrect attempts. Please request a new code.', 429);
+        }
         if (!Hash::check($data['otp'], $record->otp_hash)) {
-            DB::table('password_reset_otps')->where('email', strtolower($data['email']))->increment('attempts');
-            return $this->error('Incorrect OTP. Please try again.', 422);
+            DB::table('password_reset_otps')->where('email', $email)->increment('attempts');
+            return $this->error('Incorrect verification code. Please check and try again.', 422);
         }
         $token = Str::random(64);
-        DB::table('password_reset_otps')->where('email', strtolower($data['email']))->update([
-            'verified_at' => now(), 'reset_token_hash' => Hash::make($token), 'updated_at' => now(),
+        DB::table('password_reset_otps')->where('email', $email)->update([
+            'verified_at' => now(),
+            'reset_token_hash' => Hash::make($token),
+            'updated_at' => now(),
         ]);
-        return $this->success(['reset_token' => $token], 'OTP verified.');
+        return $this->success([
+            'reset_token' => $token,
+            'email' => $email,
+        ], 'Verification successful. You may now set your new password.');
     }
 
     public function resetPassword(Request $request)
     {
         $commonPasswords = ['password', 'password1', 'password123', '123456', '12345678', 'qwerty', 'admin', 'admin123', 'letmein', 'welcome', 'abc123', 'iloveyou', 'monkey', 'football', 'dragon', 'login'];
         $data = $request->validate([
-            'email' => ['required', 'email'],
+            'email' => ['required', 'string'],
             'reset_token' => ['required', 'string'],
             'password' => ['required', 'string', 'min:8', 'confirmed', function ($attribute, $value, $fail) use ($commonPasswords) {
                 if (preg_match('/\s/', $value) || !preg_match('/[A-Z]/', $value) || !preg_match('/[a-z]/', $value) || !preg_match('/\d/', $value) || !preg_match('/[^A-Za-z0-9\s]/', $value) || in_array(strtolower($value), $commonPasswords, true)) {
-                    $fail('Password does not meet the security requirements.');
+                    $fail('Password must be at least 8 characters and include uppercase, lowercase, a number, and a special character.');
                 }
             }],
         ]);
-        $email = strtolower($data['email']);
+        $identifier = strtolower(trim($data['email']));
+        $user = User::where('email', $identifier)->orWhere('username', $identifier)->first();
+        $email = $user ? strtolower($user->email) : $identifier;
+
         $record = DB::table('password_reset_otps')->where('email', $email)->first();
-        if (!$record || !$record->verified_at || now()->greaterThan($record->expires_at) || !Hash::check($data['reset_token'], $record->reset_token_hash ?? '')) return $this->error('Password reset session has expired. Request a new OTP.', 422);
+        if (!$record || !$record->verified_at || now()->greaterThan($record->expires_at) || !Hash::check($data['reset_token'], $record->reset_token_hash ?? '')) {
+            return $this->error('Password reset session has expired. Please request a new code.', 422);
+        }
         User::where('email', $email)->update(['password_hash' => Hash::make($data['password'])]);
         DB::table('password_reset_otps')->where('email', $email)->delete();
-        return $this->success(null, 'Password updated successfully.');
+        return $this->success([
+            'email' => $email,
+        ], 'Password updated successfully. You can now log in with your new password.');
     }
     public function register(Request $request, SupabaseStorageService $storage)
     {

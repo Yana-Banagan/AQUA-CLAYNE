@@ -22,7 +22,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- Stylesheet -->
-    <link rel="stylesheet" href="{{ asset('css/admin-login.css') }}?v=20261101-1">
+    <link rel="stylesheet" href="{{ asset('css/admin-login.css') }}?v={{ time() }}">
 </head>
 <body>
 
@@ -134,20 +134,13 @@
                         </p>
                     </div>
 
-                    <!-- INTERACTIVE PASSWORD RESET NOTICE -->
-                    <div id="forgotNotice" class="info-notice" role="alert" tabindex="-1">
+                    <!-- DYNAMIC SUCCESS ALERT (PASSWORD RESET NOTIFICATION) -->
+                    <div id="loginSuccessAlert" class="alert alert-success" role="status" style="display: none;">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="16" x2="12" y2="12"></line>
-                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
                         </svg>
-                        <span>To reset your password, please contact the Aqua Clayne station administrator or support team at (049) 501-2345.</span>
-                        <button type="button" id="closeNoticeBtn" class="info-notice-close" aria-label="Close message">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                        </button>
+                        <span id="loginSuccessMessage">Password reset successful! Please log in with your new password.</span>
                     </div>
 
                     <!-- LARAVEL VALIDATION ERRORS -->
@@ -346,8 +339,194 @@
 
     </div>
 
+    <!-- ===================================================================
+         PASSWORD RESET MULTI-STEP MODAL (OTP WORKFLOW)
+    =================================================================== -->
+    <div class="forgot-modal-backdrop" id="forgotModalBackdrop" aria-hidden="true" style="display: none;">
+        <div class="forgot-modal-card" role="dialog" aria-modal="true" aria-labelledby="forgotModalTitle">
+            <!-- Close Button -->
+            <button type="button" class="forgot-modal-close" id="forgotModalCloseBtn" aria-label="Close dialog">&times;</button>
+
+            <!-- Brand Icon -->
+            <div class="forgot-modal-header-icon" id="forgotModalIcon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0066CC" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+            </div>
+
+            <!-- Dynamic Alert Message -->
+            <div id="forgotModalAlert" class="forgot-alert" role="alert" style="display: none;"></div>
+
+            <!-- STEP 1: REQUEST OTP (ENTER EMAIL) -->
+            <div class="forgot-step-panel" id="forgotStep1" data-step="1">
+                <h3 class="forgot-step-title" id="forgotModalTitle">Reset Password</h3>
+                <p class="forgot-step-subtitle">
+                    Enter your registered email address or username to receive a 6-digit verification code.
+                </p>
+                <form id="forgotStep1Form" onsubmit="return false;">
+                    <div class="forgot-form-group">
+                        <label for="forgotEmailInput" class="forgot-label">Email Address or Username</label>
+                        <div class="forgot-input-wrap">
+                            <span class="forgot-input-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="7" r="4"></circle>
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                </svg>
+                            </span>
+                            <input
+                                type="text"
+                                id="forgotEmailInput"
+                                class="forgot-input"
+                                placeholder="Enter your email or username"
+                                required
+                                autocomplete="username"
+                            >
+                        </div>
+                    </div>
+
+                    <button type="submit" id="btnSendOtp" class="forgot-btn-primary">
+                        <span class="btn-text">Send OTP</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- STEP 2: VERIFY 6-DIGIT OTP -->
+            <div class="forgot-step-panel" id="forgotStep2" data-step="2" style="display: none;">
+                <h3 class="forgot-step-title">Enter Verification Code</h3>
+                <p class="forgot-step-subtitle">
+                    We sent a 6-digit verification code to <strong id="forgotDisplayEmail" style="color: #0066CC; word-break: break-all;"></strong>.
+                </p>
+                <form id="forgotStep2Form" onsubmit="return false;">
+                    <!-- 6 Individual Digit Boxes -->
+                    <div class="otp-boxes-container" id="otpBoxesContainer" role="group" aria-label="6-digit verification code">
+                        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-box" id="otpDigit1" data-index="0" autocomplete="one-time-code" required>
+                        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-box" id="otpDigit2" data-index="1" required>
+                        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-box" id="otpDigit3" data-index="2" required>
+                        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-box" id="otpDigit4" data-index="3" required>
+                        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-box" id="otpDigit5" data-index="4" required>
+                        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp-box" id="otpDigit6" data-index="5" required>
+                    </div>
+
+                    <!-- 1-Minute Resend Countdown Timer -->
+                    <div class="otp-timer-wrap">
+                        <span id="otpTimerText">Resend code in <strong id="otpCountdown">01:00</strong></span>
+                        <button type="button" id="btnResendOtp" class="forgot-link-btn" style="display: none;">
+                            Didn't receive code? <strong>Resend OTP</strong>
+                        </button>
+                    </div>
+
+                    <button type="submit" id="btnVerifyOtp" class="forgot-btn-primary" style="margin-top: 18px;">
+                        <span class="btn-text">Verify Code</span>
+                    </button>
+
+                    <div style="text-align: center; margin-top: 14px;">
+                        <button type="button" class="forgot-link-btn" id="btnBackToStep1">
+                            &larr; Change email address
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- STEP 3: CREATE NEW PASSWORD -->
+            <div class="forgot-step-panel" id="forgotStep3" data-step="3" style="display: none;">
+                <h3 class="forgot-step-title">Create New Password</h3>
+                <p class="forgot-step-subtitle">
+                    Enter your new secure password below to complete the reset.
+                </p>
+                <form id="forgotStep3Form" onsubmit="return false;">
+                    <div class="forgot-form-group">
+                        <label for="newPasswordInput" class="forgot-label">New Password</label>
+                        <div class="forgot-input-wrap has-toggle">
+                            <span class="forgot-input-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                </svg>
+                            </span>
+                            <input
+                                type="password"
+                                id="newPasswordInput"
+                                class="forgot-input"
+                                placeholder="At least 8 characters"
+                                required
+                                autocomplete="new-password"
+                            >
+                            <button type="button" class="forgot-toggle-pw" id="toggleNewPw" aria-label="Show password">
+                                <svg class="eye-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                <svg class="eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="forgot-form-group" style="margin-top: 14px;">
+                        <label for="confirmPasswordInput" class="forgot-label">Confirm New Password</label>
+                        <div class="forgot-input-wrap has-toggle">
+                            <span class="forgot-input-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                </svg>
+                            </span>
+                            <input
+                                type="password"
+                                id="confirmPasswordInput"
+                                class="forgot-input"
+                                placeholder="Re-enter new password"
+                                required
+                                autocomplete="new-password"
+                            >
+                            <button type="button" class="forgot-toggle-pw" id="toggleConfirmPw" aria-label="Show password">
+                                <svg class="eye-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                <svg class="eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="password-guidelines">
+                        <small>Must be 8+ characters with uppercase, lowercase, number, and symbol.</small>
+                    </div>
+
+                    <button type="submit" id="btnSavePassword" class="forgot-btn-primary" style="margin-top: 18px;">
+                        <span class="btn-text">Save New Password</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- STEP 4: SUCCESS AND REDIRECT TO LOGIN -->
+            <div class="forgot-step-panel" id="forgotStep4" data-step="4" style="display: none; text-align: center;">
+                <div class="success-icon-wrap">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                </div>
+                <h3 class="forgot-step-title" style="margin-top: 14px;">Password Reset Successful!</h3>
+                <p class="forgot-step-subtitle" style="margin-bottom: 22px;">
+                    Your password has been updated successfully. You can now log in with your new credentials.
+                </p>
+                <button type="button" id="btnProceedToLogin" class="forgot-btn-primary">
+                    Log In Now
+                </button>
+            </div>
+
+        </div>
+    </div>
+
     <!-- JavaScript -->
-    <script src="{{ asset('js/admin-login.js') }}?v=20261101-1" defer></script>
+    <script src="{{ asset('js/admin-login.js') }}?v={{ time() }}" defer></script>
 
 </body>
 </html>

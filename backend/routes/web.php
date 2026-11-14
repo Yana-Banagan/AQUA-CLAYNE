@@ -188,6 +188,11 @@ Route::post('/login', [LoginController::class, 'login'])->name('login.submit');
 Route::get('/admin/login', [LoginController::class, 'showLoginForm'])->name('admin.login');
 Route::post('/admin/login', [LoginController::class, 'login'])->name('admin.login.submit');
 
+// Password Reset OTP Web Endpoints
+Route::post('/auth/password/otp', [\App\Http\Controllers\Api\AuthController::class, 'sendPasswordOtp'])->name('password.otp.send');
+Route::post('/auth/password/verify-otp', [\App\Http\Controllers\Api\AuthController::class, 'verifyPasswordOtp'])->name('password.otp.verify');
+Route::post('/auth/password/reset', [\App\Http\Controllers\Api\AuthController::class, 'resetPassword'])->name('password.otp.reset');
+
 Route::middleware('guest')->group(function () {
     // Social Authentication (Google & Facebook)
     Route::get('/auth/{provider}/redirect', [LoginController::class, 'redirectToProvider'])->name('auth.social.redirect');
