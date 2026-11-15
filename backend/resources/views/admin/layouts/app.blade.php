@@ -645,8 +645,12 @@
                 });
             }
 
-            function refreshAdminCounts() {
+            var lastRefreshTime = 0;
+            function refreshAdminCounts(force) {
                 if (document.visibilityState !== 'visible' || inFlight) return;
+                var now = Date.now();
+                if (force !== true && (now - lastRefreshTime < 15000)) return;
+                lastRefreshTime = now;
                 inFlight = true;
                 var controller = new AbortController();
                 var timeout = window.setTimeout(function () { controller.abort(); }, 8000);
@@ -693,12 +697,12 @@
 
             function debounceRefreshAdminCounts() {
                 if (debounceTimer) window.clearTimeout(debounceTimer);
-                debounceTimer = window.setTimeout(refreshAdminCounts, 250);
+                debounceTimer = window.setTimeout(function () { refreshAdminCounts(true); }, 250);
             }
 
             window.AquaStatusManager = {
                 refresh: debounceRefreshAdminCounts,
-                refreshNow: refreshAdminCounts,
+                refreshNow: function () { refreshAdminCounts(true); },
                 loadNotifications: loadRecentNotifications
             };
 

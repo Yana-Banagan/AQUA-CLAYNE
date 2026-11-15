@@ -280,7 +280,7 @@ class DashboardController extends Controller
         // ---------------------------------------------------------------------
         // 5. DRIVER FLEET BOARD
         // ---------------------------------------------------------------------
-        $driverBoard = app(\App\Services\DispatchService::class)->getDriverStatuses();
+        $driverBoard = app(\App\Services\DispatchService::class)->getDriverStatuses(includeAvatars: false);
 
         // ---------------------------------------------------------------------
         // 6. RECENT ACTIVITY FEED (Cached for 60s)

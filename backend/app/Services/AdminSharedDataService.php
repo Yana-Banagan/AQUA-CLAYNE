@@ -72,9 +72,9 @@ class AdminSharedDataService
         $userId = (string) $user->getAuthIdentifier();
         $isAdminOrStaff = in_array($user->role, ['admin', 'staff'], true);
 
-        // Fetch or compute combined status counts cached for 10 seconds.
+        // Fetch or compute combined status counts cached for 30 seconds.
         $cacheKey = "admin:shared-counts:{$userId}";
-        $rawCounts = Cache::remember($cacheKey, now()->addSeconds(10), function () use ($userId, $isAdminOrStaff) {
+        $rawCounts = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($userId, $isAdminOrStaff) {
             return $this->executeCombinedCountQuery($userId, $isAdminOrStaff);
         });
 

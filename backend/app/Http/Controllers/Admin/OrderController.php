@@ -117,7 +117,7 @@ class OrderController extends Controller
         $tomorrow = $todayStart->copy()->addDay();
         $isPgsql = \Illuminate\Support\Facades\DB::getDriverName() === 'pgsql';
 
-        $orderStatsBundle = \Illuminate\Support\Facades\Cache::store('file')->remember('admin:orders:stats', now()->addSeconds(15), function () use ($todayStart, $tomorrow, $isPgsql) {
+        $orderStatsBundle = \Illuminate\Support\Facades\Cache::store('file')->remember('admin:orders:stats', now()->addSeconds(30), function () use ($todayStart, $tomorrow, $isPgsql) {
             if ($isPgsql) {
                 $walkInSummaryRow = WalkInOrder::query()->selectRaw(
                     'COUNT(*) AS total, COALESCE(SUM(amount), 0) AS payments, COUNT(*) FILTER (WHERE created_at >= ? AND created_at < ?) AS today_count, COALESCE(SUM(amount) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS today_payments',

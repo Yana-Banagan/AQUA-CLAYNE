@@ -17,6 +17,7 @@ use App\Services\RfidRegistrationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -34,43 +35,55 @@ class RfidController extends Controller
         }
 
         // ------------------------------------------------------------------
-        // 1. REALTIME KPI STATS
+        // 1. REALTIME KPI STATS (Consolidated & cached for 30s)
         // ------------------------------------------------------------------
-        $totalCustomerTags = CustomerContainerRfidTag::count();
-        $totalStationTags = RfidTag::count();
-        $totalTags = $totalCustomerTags + $totalStationTags;
+        $rfidBundle = Cache::store('file')->remember('admin:rfid:stats', now()->addSeconds(30), function () use ($deviceService) {
+            $tagStats = CustomerContainerRfidTag::selectRaw("
+                COUNT(*) AS total_customer,
+                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active_customer,
+                SUM(CASE WHEN status IN ('inactive', 'replaced') THEN 1 ELSE 0 END) AS inactive_customer
+            ")->first();
 
-        $activeTags = CustomerContainerRfidTag::where('status', 'active')->count() + $totalStationTags;
-        $inactiveTags = CustomerContainerRfidTag::whereIn('status', ['inactive', 'replaced'])->count();
-        $containerCount = CustomerContainer::count();
-        $deviceCount = RfidDevice::count();
-        $transactionCount = RfidTransaction::count();
+            $totalStationTags = RfidTag::count();
+            $totalCustomerTags = (int) ($tagStats?->total_customer ?? 0);
+            $totalTags = $totalCustomerTags + $totalStationTags;
+            $activeTags = (int) ($tagStats?->active_customer ?? 0) + $totalStationTags;
+            $inactiveTags = (int) ($tagStats?->inactive_customer ?? 0);
 
-        $unassignedContainers = CustomerContainer::where('status', 'active')
-            ->whereDoesntHave('activeTag')
-            ->count();
+            $containerCount = CustomerContainer::count();
+            $deviceCount = RfidDevice::count();
+            $transactionCount = RfidTransaction::count();
 
-        $devicesOnline = $deviceService->getOnlineDevicesCount();
-        $devicesOffline = $deviceService->getOfflineDevicesCount();
+            $unassignedContainers = CustomerContainer::where('status', 'active')
+                ->whereDoesntHave('activeTag')
+                ->count();
 
-        // Gallons currently at the station for intake or refilling
-        $gallonsAtStation = Order::whereIn('status', ['received_at_station', 'refilling'])
-            ->sum('expected_empty_gallons');
+            $devicesOnline = $deviceService->getOnlineDevicesCount();
+            $devicesOffline = $deviceService->getOfflineDevicesCount();
 
-        // Gallons in delivery transit
-        $gallonsInDelivery = Order::whereIn('status', ['out_for_delivery', 'picked_up'])
-            ->sum('expected_empty_gallons');
+            $orderStats = Order::selectRaw("
+                SUM(CASE WHEN status IN ('received_at_station', 'refilling') THEN expected_empty_gallons ELSE 0 END) AS gallons_at_station,
+                SUM(CASE WHEN status IN ('out_for_delivery', 'picked_up') THEN expected_empty_gallons ELSE 0 END) AS gallons_in_delivery
+            ")->first();
 
-        $stats = [
-            'totalTags' => $totalTags,
-            'activeTags' => $activeTags,
-            'inactiveTags' => $inactiveTags,
-            'unassignedContainers' => $unassignedContainers,
-            'devicesOnline' => $devicesOnline,
-            'devicesOffline' => $devicesOffline,
-            'gallonsAtStation' => (int) $gallonsAtStation,
-            'gallonsInDelivery' => (int) $gallonsInDelivery,
-        ];
+            $stats = [
+                'totalTags' => $totalTags,
+                'activeTags' => $activeTags,
+                'inactiveTags' => $inactiveTags,
+                'unassignedContainers' => $unassignedContainers,
+                'devicesOnline' => $devicesOnline,
+                'devicesOffline' => $devicesOffline,
+                'gallonsAtStation' => (int) ($orderStats?->gallons_at_station ?? 0),
+                'gallonsInDelivery' => (int) ($orderStats?->gallons_in_delivery ?? 0),
+            ];
+
+            return compact('stats', 'containerCount', 'deviceCount', 'transactionCount');
+        });
+
+        $stats = $rfidBundle['stats'];
+        $containerCount = $rfidBundle['containerCount'];
+        $deviceCount = $rfidBundle['deviceCount'];
+        $transactionCount = $rfidBundle['transactionCount'];
 
         // ------------------------------------------------------------------
         // 2. TAGS QUERY
@@ -80,7 +93,6 @@ class RfidController extends Controller
 
         $tagsQuery = CustomerContainerRfidTag::with([
             'container.customer.user',
-            'transactions' => fn($q) => $q->latest('scanned_at')->limit(1),
         ])->latest('registered_at');
 
         if ($tagStatus && $tagStatus !== 'all') {

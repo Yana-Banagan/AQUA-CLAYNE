@@ -401,7 +401,9 @@ class DeliveryController extends Controller
                     'batch_number' => $b->batch_number,
                     'area' => $b->area,
                     'total_expected_gallons' => $b->total_expected_gallons,
+                    'total_collected_gallons' => $b->total_expected_gallons,
                     'status' => $b->status,
+                    'completed_at' => $b->completed_at ?? $b->updated_at,
                     'updated_at' => $b->updated_at,
                     'driver' => $b->driver ? (object) [
                         'user' => $b->driver->user ? (object) ['name' => $b->driver->user->name] : null,
@@ -422,6 +424,7 @@ class DeliveryController extends Controller
                     'area' => $r->area,
                     'total_gallons' => $r->total_gallons,
                     'status' => $r->status,
+                    'completed_at' => $r->completed_at ?? $r->updated_at,
                     'updated_at' => $r->updated_at,
                     'driver' => $r->driver ? (object) [
                         'user' => $r->driver->user ? (object) ['name' => $r->driver->user->name] : null,

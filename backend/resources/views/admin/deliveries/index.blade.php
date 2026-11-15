@@ -956,9 +956,9 @@
                                             <td><strong>{{ $hb->batch_number }}</strong></td>
                                             <td>{{ $hb->driver?->user?->name ?? 'Driver' }}</td>
                                             <td>{{ $hb->area }}</td>
-                                            <td>{{ $hb->total_collected_gallons }} gal</td>
+                                            <td>{{ $hb->total_collected_gallons ?? $hb->total_expected_gallons ?? 0 }} gal</td>
                                             <td><span class="delivery-status status-delivered">{{ ucfirst($hb->status) }}</span></td>
-                                            <td>{{ $hb->completed_at ? \Illuminate\Support\Carbon::parse($hb->completed_at)->format('M d, g:i A') : '—' }}</td>
+                                            <td>{{ ($hb->completed_at ?? $hb->updated_at ?? null) ? \Illuminate\Support\Carbon::parse($hb->completed_at ?? $hb->updated_at)->format('M d, g:i A') : '—' }}</td>
                                         </tr>
                                     @endforeach
                                     @foreach($historyRoutes as $hr)
@@ -967,9 +967,9 @@
                                             <td><strong>{{ $hr->route_number }}</strong></td>
                                             <td>{{ $hr->driver?->user?->name ?? 'Driver' }}</td>
                                             <td>{{ $hr->area }}</td>
-                                            <td>{{ $hr->total_gallons }} gal</td>
+                                            <td>{{ $hr->total_gallons ?? 0 }} gal</td>
                                             <td><span class="delivery-status status-delivered">{{ ucfirst($hr->status) }}</span></td>
-                                            <td>{{ $hr->completed_at ? \Illuminate\Support\Carbon::parse($hr->completed_at)->format('M d, g:i A') : '—' }}</td>
+                                            <td>{{ ($hr->completed_at ?? $hr->updated_at ?? null) ? \Illuminate\Support\Carbon::parse($hr->completed_at ?? $hr->updated_at)->format('M d, g:i A') : '—' }}</td>
                                         </tr>
                                     @endforeach
                                 </tbody>
