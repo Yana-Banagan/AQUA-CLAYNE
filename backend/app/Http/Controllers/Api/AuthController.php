@@ -43,9 +43,9 @@ class AuthController extends Controller
             }
         }
 
-        // Support both 6-digit (default) and 4-digit OTPs
-        $digits = (int) $request->input('digits', 6);
-        $digits = in_array($digits, [4, 6], true) ? $digits : 6;
+        // Support both 4-digit (default for mobile app) and 6-digit (for web) OTPs
+        $digits = (int) $request->input('digits', 4);
+        $digits = in_array($digits, [4, 6], true) ? $digits : 4;
         $min = $digits === 4 ? 1000 : 100000;
         $max = $digits === 4 ? 9999 : 999999;
         $otp = (string) random_int($min, $max);

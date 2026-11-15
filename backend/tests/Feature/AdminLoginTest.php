@@ -100,4 +100,39 @@ class AdminLoginTest extends TestCase
         $this->assertTrue(Hash::check($newPassword, $user->password_hash));
         $this->assertDatabaseMissing('password_reset_otps', ['email' => 'client@aquaclayne.com']);
     }
+
+    public function test_mobile_api_password_reset_otp_defaults_to_4_digits_for_play_store_app(): void
+    {
+        Mail::fake();
+
+        $user = User::factory()->create([
+            'email' => 'customer@aquaclayne.com',
+            'password_hash' => Hash::make('OldPassword123!'),
+        ]);
+
+        // Request without digits param (exactly what the published Play Store app sends)
+        $otpResponse = $this->postJson('/api/v1/auth/password/otp', [
+            'email' => 'customer@aquaclayne.com',
+        ]);
+
+        $otpResponse->assertStatus(200);
+        $otpResponse->assertJsonPath('data.digits', 4);
+
+        // Verify OTP can be verified with 4 digits
+        $testOtp = '1234';
+        DB::table('password_reset_otps')->where('email', 'customer@aquaclayne.com')->update([
+            'otp_hash' => Hash::make($testOtp),
+            'expires_at' => now()->addMinutes(5),
+            'attempts' => 0,
+        ]);
+
+        $verifyResponse = $this->postJson('/api/v1/auth/password/verify-otp', [
+            'email' => 'customer@aquaclayne.com',
+            'otp' => $testOtp,
+        ]);
+
+        $verifyResponse->assertStatus(200);
+        $resetToken = $verifyResponse->json('data.reset_token');
+        $this->assertNotEmpty($resetToken);
+    }
 }
