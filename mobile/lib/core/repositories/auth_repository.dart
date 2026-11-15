@@ -106,7 +106,10 @@ class AuthRepository {
   }
 
   Future<void> sendPasswordOtp(String email) async {
-    await api.post('/auth/password/otp', {'email': email}, auth: false);
+    await api.post('/auth/password/otp', {
+      'email': email,
+      'digits': 4,
+    }, auth: false);
   }
 
   Future<String> verifyPasswordOtp(String email, String otp) async {
