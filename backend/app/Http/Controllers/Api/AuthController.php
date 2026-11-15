@@ -33,13 +33,14 @@ class AuthController extends Controller
         $email = strtolower($user->email);
 
         // The log and array transports do not deliver messages to an inbox.
-        // Never claim an OTP was sent unless a real mail transport and sender
-        // address are configured.
+        // Never claim an OTP was sent unless a real mail transport or HTTPS API key
+        // and sender address are configured.
         $mailer = config('mail.default');
         $fromAddress = config('mail.from.address');
-        if (in_array($mailer, ['log', 'array'], true) || empty($fromAddress) || str_ends_with($fromAddress, '@example.com')) {
+        $hasHttpsMailer = !empty(env('BREVO_API_KEY')) || !empty(env('RESEND_API_KEY'));
+        if (!$hasHttpsMailer && (in_array($mailer, ['log', 'array'], true) || empty($fromAddress) || str_ends_with($fromAddress, '@example.com'))) {
             if (!app()->environment('testing')) {
-                return $this->error('Password-reset email delivery is not configured. Please configure SMTP mail settings.', 503);
+                return $this->error('Password-reset email delivery is not configured. Please configure SMTP or HTTPS email settings.', 503);
             }
         }
 
@@ -62,9 +63,7 @@ class AuthController extends Controller
         ]);
 
         try {
-            Mail::raw("Your AQUA CLAYNE password reset verification code is: {$otp}\n\nThis verification code expires in 5 minutes. Do not share this code with anyone.\n\n— AQUA CLAYNE Purified Drinking Water", function ($mail) use ($email) {
-                $mail->to($email)->subject('AQUA CLAYNE - Password Reset Verification Code');
-            });
+            app(\App\Services\EmailDeliveryService::class)->sendPasswordResetOtp($email, $otp);
         } catch (\Throwable $exception) {
             // Avoid leaving a throttled OTP that can never be received when
             // the provider rejects the message.
