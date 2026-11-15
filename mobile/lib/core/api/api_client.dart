@@ -51,7 +51,7 @@ class ApiClient {
   // mobile connections and a cold Laravel server can legitimately take longer.
   // Keep requests alive long enough to complete instead of showing a false
   // “server took too long” error.
-  static const Duration _requestTimeout = Duration(seconds: 15);
+  static const Duration _requestTimeout = Duration(seconds: 30);
   static const Duration _uploadTimeout = Duration(seconds: 45);
   // Long enough to cover a dashboard tab transition, but short enough that
   // status changes still appear promptly if a realtime signal is missed.
